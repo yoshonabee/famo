@@ -97,3 +97,47 @@ func TestLocalAccessGuards(t *testing.T) {
 		}
 	}
 }
+
+func TestSettingsAPIAndCreateDefaults(t *testing.T) {
+	store, err := tasks.Open(filepath.Join(t.TempDir(), "settings.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	h := New(store, fstest.MapFS{})
+	call := func(method, path string, body any) *httptest.ResponseRecorder {
+		raw, _ := json.Marshal(body)
+		r := httptest.NewRequest(method, path, bytes.NewReader(raw))
+		r.Host = "localhost:8787"
+		r.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, r)
+		return w
+	}
+	res := call("GET", "/api/settings", nil)
+	if res.Code != 200 {
+		t.Fatal(res.Body)
+	}
+	var cfg tasks.Settings
+	json.Unmarshal(res.Body.Bytes(), &cfg)
+	cfg.DefaultType = "communication"
+	cfg.DefaultPriority = 2
+	res = call("POST", "/api/settings", cfg)
+	if res.Code != 200 {
+		t.Fatal(res.Body)
+	}
+	if res = call("POST", "/api/settings", cfg); res.Code != 409 {
+		t.Fatalf("settings conflict: %d", res.Code)
+	}
+	res = call("POST", "/api/tasks", map[string]any{"title": "預設值", "description": "描述內容"})
+	var task tasks.Task
+	json.Unmarshal(res.Body.Bytes(), &task)
+	if res.Code != 201 || task.Type != "communication" || task.Priority != 2 || task.Stage != "草擬" || task.Description != "描述內容" {
+		t.Fatalf("defaults: %s", res.Body)
+	}
+	res = call("POST", "/api/tasks", map[string]any{"title": "明確的零", "priority": 0})
+	json.Unmarshal(res.Body.Bytes(), &task)
+	if res.Code != 201 || task.Priority != 0 {
+		t.Fatalf("explicit zero: %s", res.Body)
+	}
+}

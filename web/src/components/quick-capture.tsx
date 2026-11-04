@@ -22,8 +22,6 @@ export function useQuickCapture(onCapture: () => void) {
     mutationFn: (title: string) =>
       request<Task>('/tasks', {
         title,
-        type: 'general',
-        priority: 1,
         source: 'ui',
       }),
     retry: false,

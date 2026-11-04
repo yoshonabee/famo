@@ -10,7 +10,7 @@ test('直接編輯標題、Enter 儲存、Escape 取消，空白後再 Backspace
         title: 'Markdown 直接改字',
         type: 'general',
         priority: 1,
-        context: '保留的背景',
+        description: '保留的背景',
       },
     })
   ).json()
@@ -70,63 +70,43 @@ test('直接編輯標題、Enter 儲存、Escape 取消，空白後再 Backspace
   await expect(row).not.toBeVisible()
 })
 
-test('子步驟的改字與刪除只影響子步驟；完成狀態可從列表及詳情恢復', async ({
+test('舊步驟保留，但列表改字與完成只操作整件任務', async ({
   page,
   request,
 }) => {
-  const parent = await (
+  const task = await (
     await request.post('/api/tasks', {
       data: {
-        title: 'Markdown parent',
+        title: '封存步驟的任務',
         steps: ['第一個小步驟', '第二個小步驟'],
-        context: 'parent context',
+        description: '保留任務描述',
       },
     })
   ).json()
   await page.goto('/')
-  const row = page.locator(`[data-task-id="${parent.id}"]`)
+  const row = page.locator(`[data-task-id="${task.id}"]`)
   const title = row.locator('input.todo-title')
-  await title.click()
-  await title.fill('改過的小步驟')
+  await expect(title).toHaveValue('封存步驟的任務')
+  await expect(row.locator('.progress-chip,.parent-chip')).toHaveCount(0)
+  await title.fill('任務新名稱')
   await title.press('Enter')
-  await expect(title).toHaveAttribute(
-    'aria-label',
-    '編輯步驟標題：改過的小步驟',
-  )
-  let saved = await (await request.get(`/api/tasks/${parent.id}`)).json()
-  expect(saved.title).toBe('Markdown parent')
-  expect(saved.context).toBe('parent context')
-  await title.click()
-  await title.fill('')
-  await title.press('Backspace')
-  await expect(title).toHaveValue('第二個小步驟')
-  saved = await (await request.get(`/api/tasks/${parent.id}`)).json()
-  expect(saved.steps).toHaveLength(1)
-  await row.getByRole('checkbox', { name: '完成步驟：第二個小步驟' }).click()
-  await row.getByRole('checkbox', { name: '恢復步驟：第二個小步驟' }).click()
-  await expect(
-    row.getByRole('checkbox', { name: '完成步驟：第二個小步驟' }),
-  ).not.toBeChecked()
-  await row.getByRole('button', { name: '任務詳情：Markdown parent' }).click()
-  const dialog = page.getByRole('dialog')
-  await dialog.getByRole('button', { name: '完成整件任務' }).click()
-  await dialog.getByRole('button', { name: '關閉', exact: true }).click()
-  await page.getByRole('button', { name: '已完成', exact: false }).click()
-  await row.getByRole('checkbox', { name: '恢復任務：Markdown parent' }).click()
+  await expect(title).toHaveAttribute('aria-label', '編輯任務標題：任務新名稱')
+  await row.getByRole('checkbox', { name: '完成任務：任務新名稱' }).click()
   await expect(row).not.toBeVisible()
+  let saved = await (await request.get(`/api/tasks/${task.id}`)).json()
+  expect(saved.completed_at).toBeTruthy()
+  expect(saved.steps).toEqual(task.steps)
+  await page.getByRole('button', { name: '已完成', exact: false }).click()
+  await row.getByRole('checkbox', { name: '恢復任務：任務新名稱' }).click()
   await page.getByRole('button', { name: '我的工作台', exact: false }).click()
-  await expect(title).toHaveValue('第二個小步驟')
-  await row.getByRole('button', { name: '任務詳情：Markdown parent' }).click()
-  await dialog.getByRole('button', { name: '完成整件任務' }).click()
-  await dialog
-    .getByRole('button', { name: '恢復為未完成', exact: true })
-    .click()
+  await expect(title).toHaveValue('任務新名稱')
+  saved = await (await request.get(`/api/tasks/${task.id}`)).json()
+  expect(saved.completed_at).toBeNull()
+  expect(saved.steps).toEqual(task.steps)
+  await row.getByRole('button', { name: '任務詳情：任務新名稱' }).click()
   await expect(
-    dialog.getByText('parent context', { exact: true }),
-  ).toBeVisible()
-  await expect(
-    dialog.getByRole('button', { name: '完成整件任務' }),
-  ).toBeVisible()
+    page.getByRole('dialog').getByText('全部步驟', { exact: false }),
+  ).toHaveCount(0)
 })
 
 test('列內草稿遇到版本衝突保留文字，不覆寫新資料', async ({

@@ -3,6 +3,7 @@ export type Link = { type: string; url: string }
 export type Task = {
   id: string
   title: string
+  description: string
   goal: string
   context: string
   acceptance: string
@@ -28,7 +29,22 @@ export type Task = {
     version: number
   }[]
 }
-export type Workflow = { id: string; name: string; stages: string[] }
+export type Option = {
+  id: string
+  name: string
+  color: string
+  disabled: boolean
+}
+export type Workflow = Option & { stages: Option[]; default_stage: string }
+export type ColorPreset = { name: string; color: string }
+export type Settings = {
+  color_presets: ColorPreset[]
+  version: number
+  workflows: Workflow[]
+  priorities: Option[]
+  default_type: string
+  default_priority: number
+}
 export type Action = {
   op:
     | 'complete_step'
@@ -49,6 +65,8 @@ export type Action = {
   stage?: string
   links?: Link[]
   title?: string
+  description?: string
+  type?: string
   goal?: string
   context?: string
   acceptance?: string
@@ -92,7 +110,6 @@ export function orderSubset(tasks: Task[], ids: string[]) {
   let index = 0
   return tasks.map((t) => (selected.has(t.id) ? ordered[index++] : t))
 }
-export const currentStep = (t: Task) => t.steps.find((s) => !s.completed_at)
 export type Group = 'ready' | 'waiting' | 'review'
 export function groupOf(t: Task, now: number): Group {
   if (t.review_at && new Date(t.review_at).getTime() <= now) return 'review'

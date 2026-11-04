@@ -6,12 +6,17 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
+	"sync"
 	"time"
 
 	_ "modernc.org/sqlite"
 )
 
-type Store struct{ db *sql.DB }
+type Store struct {
+	db *sql.DB
+	mu sync.Mutex
+}
 
 func Open(path string) (*Store, error) {
 	db, err := sql.Open("sqlite", path)
@@ -27,7 +32,7 @@ func Open(path string) (*Store, error) {
 		db.Close()
 		return nil, err
 	}
-	return &Store{db}, nil
+	return &Store{db: db}, nil
 }
 func migrate(db *sql.DB) error {
 	tx, err := db.Begin()
@@ -39,7 +44,7 @@ func migrate(db *sql.DB) error {
 	if err = tx.QueryRow(`PRAGMA user_version`).Scan(&version); err != nil {
 		return err
 	}
-	if version > 3 {
+	if version > 4 {
 		return fmt.Errorf("資料庫版本 %d 高於此程式支援版本", version)
 	}
 	_, err = tx.Exec(`
@@ -68,7 +73,63 @@ func migrate(db *sql.DB) error {
 			return err
 		}
 	}
-	if _, err = tx.Exec(`PRAGMA user_version=3;`); err != nil {
+	if version < 4 {
+		if _, err = tx.Exec(`CREATE TABLE IF NOT EXISTS settings (id INTEGER PRIMARY KEY CHECK(id=1), version INTEGER NOT NULL, document JSON NOT NULL);`); err != nil {
+			return err
+		}
+		defaults := defaultSettings()
+		raw, _ := json.Marshal(defaults)
+		if _, err = tx.Exec(`INSERT OR IGNORE INTO settings VALUES(1,1,?)`, string(raw)); err != nil {
+			return err
+		}
+		rows, e := tx.Query(`SELECT id,document FROM tasks`)
+		if e != nil {
+			return e
+		}
+		type migrated struct {
+			id  string
+			raw string
+		}
+		updates := []migrated{}
+		for rows.Next() {
+			var key, raw string
+			if e = rows.Scan(&key, &raw); e != nil {
+				rows.Close()
+				return e
+			}
+			var doc map[string]any
+			if e = json.Unmarshal([]byte(raw), &doc); e != nil {
+				rows.Close()
+				return e
+			}
+			if _, ok := doc["description"]; !ok {
+				parts := []string{}
+				for _, field := range []struct{ key, label string }{{"goal", "目標"}, {"context", "背景脈絡"}, {"acceptance", "驗收條件"}} {
+					if value, ok := doc[field.key].(string); ok && strings.TrimSpace(value) != "" {
+						parts = append(parts, field.label+"\n"+value)
+					}
+				}
+				doc["description"] = strings.Join(parts, "\n\n")
+			}
+			updated, e := json.Marshal(doc)
+			if e != nil {
+				rows.Close()
+				return e
+			}
+			updates = append(updates, migrated{key, string(updated)})
+		}
+		e = rows.Err()
+		rows.Close()
+		if e != nil {
+			return e
+		}
+		for _, u := range updates {
+			if _, err = tx.Exec(`UPDATE tasks SET document=? WHERE id=?`, u.raw, u.id); err != nil {
+				return err
+			}
+		}
+	}
+	if _, err = tx.Exec(`PRAGMA user_version=4;`); err != nil {
 		return err
 	}
 	return tx.Commit()
@@ -158,8 +219,27 @@ func (s *Store) Get(ctx context.Context, id string) (Task, error) {
 	return t, err
 }
 func (s *Store) Create(ctx context.Context, in CreateInput) (Task, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	cfg, err := s.Settings(ctx)
+	if err != nil {
+		return Task{}, err
+	}
+	if in.Type == "" {
+		in.Type = cfg.DefaultType
+	}
+	if in.Stage == "" {
+		for _, w := range cfg.Workflows {
+			if w.ID == in.Type {
+				in.Stage = w.DefaultStage
+			}
+		}
+	}
 	t, err := newTask(in, time.Now().UTC())
 	if err != nil {
+		return Task{}, fmt.Errorf("%w：%v", ErrInvalid, err)
+	}
+	if err = cfg.validateTask(t, nil); err != nil {
 		return Task{}, fmt.Errorf("%w：%v", ErrInvalid, err)
 	}
 	raw, err := json.Marshal(t)
@@ -173,6 +253,8 @@ func (s *Store) Create(ctx context.Context, in CreateInput) (Task, error) {
 	return t, err
 }
 func (s *Store) Act(ctx context.Context, id string, a Action) (Task, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	t, err := s.Get(ctx, id)
 	if err != nil {
 		return Task{}, err
@@ -180,7 +262,15 @@ func (s *Store) Act(ctx context.Context, id string, a Action) (Task, error) {
 	if a.Version != t.Version {
 		return Task{}, ErrConflict
 	}
+	before := t
+	cfg, err := s.Settings(ctx)
+	if err != nil {
+		return Task{}, err
+	}
 	if err = apply(&t, a, time.Now().UTC()); err != nil {
+		return Task{}, fmt.Errorf("%w：%v", ErrInvalid, err)
+	}
+	if err = cfg.validateTask(t, &before); err != nil {
 		return Task{}, fmt.Errorf("%w：%v", ErrInvalid, err)
 	}
 	raw, err := json.Marshal(t)

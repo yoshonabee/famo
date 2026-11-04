@@ -20,7 +20,7 @@ func openTest(t *testing.T) *Store {
 }
 func createTest(t *testing.T, s *Store) Task {
 	t.Helper()
-	task, err := s.Create(context.Background(), CreateInput{Title: "修復登入", Priority: 2, Goal: "使用者能登入", Context: "Slack 討論中的問題", Acceptance: "測試通過", Steps: []string{"修復並開 PR", "確認 CI"}})
+	task, err := s.Create(context.Background(), CreateInput{Title: "修復登入", Type: "development", Priority: 2, Goal: "使用者能登入", Context: "Slack 討論中的問題", Acceptance: "測試通過", Steps: []string{"修復並開 PR", "確認 CI"}})
 	if err != nil {
 		t.Fatal(err)
 	}

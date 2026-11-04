@@ -2,17 +2,15 @@ import { useRef, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { ApiError, request, type Action, type Task } from '@/lib/api'
 
-type Edit = { task: Task; title: string; stepId?: string }
+type Edit = { task: Task; title: string }
 
 export function TodoTitle({
   task,
   title,
-  stepId,
   onDeleted,
 }: {
   task: Task
   title: string
-  stepId?: string
   onDeleted: () => void
 }) {
   const client = useQueryClient()
@@ -37,7 +35,6 @@ export function TodoTitle({
         op,
         version: snapshot.task.version,
         source: 'ui',
-        step_id: snapshot.stepId,
         ...(op === 'rename' ? { title: updatedTitle } : {}),
       }),
     onSuccess: (updated) => {
@@ -56,7 +53,7 @@ export function TodoTitle({
   })
   function begin() {
     if (edit.current) return
-    edit.current = { task, title, stepId }
+    edit.current = { task, title }
     setDraft(title)
     setError('')
     cancelling.current = false
@@ -106,7 +103,7 @@ export function TodoTitle({
       <input
         ref={input}
         className="todo-title"
-        aria-label={`編輯${stepId ? '步驟' : '任務'}標題：${title}`}
+        aria-label={`編輯任務標題：${title}`}
         value={draft ?? title}
         maxLength={200}
         readOnly={action.isPending}

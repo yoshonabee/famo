@@ -21,7 +21,34 @@ func New(store *tasks.Store, assets fs.FS) http.Handler {
 	r.Use(localOnly)
 	api := func(r chi.Router) {
 		r.Get("/health", func(w http.ResponseWriter, r *http.Request) { write(w, 200, map[string]string{"status": "ok"}) })
-		r.Get("/workflows", func(w http.ResponseWriter, r *http.Request) { write(w, 200, tasks.Workflows) })
+		r.Get("/settings", func(w http.ResponseWriter, r *http.Request) {
+			cfg, err := store.Settings(r.Context())
+			if err != nil {
+				fail(w, err)
+				return
+			}
+			write(w, 200, cfg)
+		})
+		r.Post("/settings", func(w http.ResponseWriter, r *http.Request) {
+			var cfg tasks.Settings
+			if !decode(w, r, &cfg) {
+				return
+			}
+			saved, err := store.SaveSettings(r.Context(), cfg)
+			if err != nil {
+				fail(w, err)
+				return
+			}
+			write(w, 200, saved)
+		})
+		r.Get("/workflows", func(w http.ResponseWriter, r *http.Request) {
+			cfg, err := store.Settings(r.Context())
+			if err != nil {
+				fail(w, err)
+				return
+			}
+			write(w, 200, cfg.Workflows)
+		})
 		r.Get("/tasks", func(w http.ResponseWriter, r *http.Request) {
 			list, err := store.List(r.Context())
 			if err != nil {
@@ -31,11 +58,24 @@ func New(store *tasks.Store, assets fs.FS) http.Handler {
 			write(w, 200, list)
 		})
 		r.Post("/tasks", func(w http.ResponseWriter, r *http.Request) {
-			var in tasks.CreateInput
+			var in struct {
+				tasks.CreateInput
+				Priority *int `json:"priority"`
+			}
 			if !decode(w, r, &in) {
 				return
 			}
-			t, err := store.Create(r.Context(), in)
+			cfg, err := store.Settings(r.Context())
+			if err != nil {
+				fail(w, err)
+				return
+			}
+			if in.Priority == nil {
+				in.CreateInput.Priority = cfg.DefaultPriority
+			} else {
+				in.CreateInput.Priority = *in.Priority
+			}
+			t, err := store.Create(r.Context(), in.CreateInput)
 			if err != nil {
 				fail(w, err)
 				return

@@ -20,12 +20,14 @@ type Workflow struct {
 	Stages []string `json:"stages"`
 }
 
+// Workflows only seeds new databases. Runtime validation uses stored Settings.
 var Workflows = []Workflow{
 	{"development", "開發", []string{"待開始", "開發中", "PR review", "部署", "驗收"}},
 	{"communication", "溝通", []string{"草擬", "已送出", "已確認"}},
 	{"general", "一般", []string{"待開始", "處理中", "確認"}},
 }
 
+// Step is retained for existing API clients and archived task data.
 type Step struct {
 	ID          string     `json:"id"`
 	Title       string     `json:"title"`
@@ -45,6 +47,7 @@ type Event struct {
 type Task struct {
 	ID            string         `json:"id"`
 	Title         string         `json:"title"`
+	Description   string         `json:"description"`
 	Goal          string         `json:"goal"`
 	Context       string         `json:"context"`
 	Acceptance    string         `json:"acceptance"`
@@ -65,17 +68,18 @@ type Task struct {
 	History       []Event        `json:"history"`
 }
 type CreateInput struct {
-	Title      string         `json:"title"`
-	Goal       string         `json:"goal"`
-	Context    string         `json:"context"`
-	Acceptance string         `json:"acceptance"`
-	Type       string         `json:"type"`
-	Stage      string         `json:"stage"`
-	Priority   int            `json:"priority"`
-	Steps      []string       `json:"steps"`
-	Links      []Link         `json:"links"`
-	Metadata   map[string]any `json:"metadata"`
-	Source     string         `json:"source"`
+	Title       string         `json:"title"`
+	Description string         `json:"description"`
+	Goal        string         `json:"goal"`
+	Context     string         `json:"context"`
+	Acceptance  string         `json:"acceptance"`
+	Type        string         `json:"type"`
+	Stage       string         `json:"stage"`
+	Priority    int            `json:"priority"`
+	Steps       []string       `json:"steps"`
+	Links       []Link         `json:"links"`
+	Metadata    map[string]any `json:"metadata"`
+	Source      string         `json:"source"`
 }
 type Action struct {
 	Op            string          `json:"op"`
@@ -88,6 +92,8 @@ type Action struct {
 	Stage         *string         `json:"stage"`
 	Links         []Link          `json:"links"`
 	Title         *string         `json:"title"`
+	Description   *string         `json:"description"`
+	Type          *string         `json:"type"`
 	Goal          *string         `json:"goal"`
 	Context       *string         `json:"context"`
 	Acceptance    *string         `json:"acceptance"`
@@ -108,28 +114,11 @@ func source(s string) string {
 	}
 	return strings.TrimSpace(s)
 }
-func validStage(kind, stage string) bool {
-	for _, w := range Workflows {
-		if w.ID == kind {
-			for _, s := range w.Stages {
-				if s == stage {
-					return true
-				}
-			}
-		}
-	}
-	return false
-}
 func validate(t Task) error {
 	if strings.TrimSpace(t.Title) == "" {
 		return errors.New("請填寫任務名稱")
 	}
-	if !validStage(t.Type, t.Stage) {
-		return errors.New("無效的任務類型或流程階段")
-	}
-	if t.Priority < 0 || t.Priority > 2 {
-		return errors.New("優先順序必須介於 0 到 2")
-	}
+
 	for _, l := range t.Links {
 		u, e := url.Parse(l.URL)
 		if e != nil || u.Host == "" || (u.Scheme != "https" && u.Scheme != "http") || strings.TrimSpace(l.Type) == "" {
@@ -139,17 +128,7 @@ func validate(t Task) error {
 	return nil
 }
 func newTask(in CreateInput, now time.Time) (Task, error) {
-	if in.Type == "" {
-		in.Type = "development"
-	}
-	if in.Stage == "" {
-		for _, w := range Workflows {
-			if w.ID == in.Type {
-				in.Stage = w.Stages[0]
-			}
-		}
-	}
-	t := Task{ID: id(), Title: strings.TrimSpace(in.Title), Goal: in.Goal, Context: in.Context, Acceptance: in.Acceptance, Type: in.Type, Stage: in.Stage, Priority: in.Priority, Version: 1, CreatedAt: now, UpdatedAt: now, Steps: []Step{}, Links: in.Links, Metadata: in.Metadata, History: []Event{}}
+	t := Task{ID: id(), Title: strings.TrimSpace(in.Title), Description: in.Description, Goal: in.Goal, Context: in.Context, Acceptance: in.Acceptance, Type: in.Type, Stage: in.Stage, Priority: in.Priority, Version: 1, CreatedAt: now, UpdatedAt: now, Steps: []Step{}, Links: in.Links, Metadata: in.Metadata, History: []Event{}}
 	if t.Links == nil {
 		t.Links = []Link{}
 	}
@@ -161,11 +140,20 @@ func newTask(in CreateInput, now time.Time) (Task, error) {
 			t.Steps = append(t.Steps, Step{ID: id(), Title: strings.TrimSpace(s)})
 		}
 	}
+	if t.Description == "" {
+		parts := []string{}
+		for _, f := range []struct{ label, value string }{{"目標", t.Goal}, {"背景脈絡", t.Context}, {"驗收條件", t.Acceptance}} {
+			if strings.TrimSpace(f.value) != "" {
+				parts = append(parts, f.label+"\n"+f.value)
+			}
+		}
+		t.Description = strings.Join(parts, "\n\n")
+	}
 	t.History = append(t.History, Event{"create", source(in.Source), "建立任務", now, 1})
 	return t, validate(t)
 }
 func apply(t *Task, a Action, now time.Time) error {
-	if t.CompletedAt != nil && a.Op != "reopen_task" && a.Op != "reopen_step" && a.Op != "rename" && a.Op != "delete_item" {
+	if t.CompletedAt != nil && a.Op != "reopen_task" && a.Op != "reopen_step" && a.Op != "rename" && a.Op != "update" && a.Op != "delete_item" {
 		return errors.New("任務已完成")
 	}
 	summary := ""
@@ -264,6 +252,12 @@ func apply(t *Task, a Action, now time.Time) error {
 		}
 		summary = "新增相關連結"
 	case "update":
+		if a.Description != nil {
+			t.Description = *a.Description
+		}
+		if a.Type != nil {
+			t.Type = *a.Type
+		}
 		if a.Title != nil {
 			t.Title = strings.TrimSpace(*a.Title)
 		}
