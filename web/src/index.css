@@ -974,6 +974,7 @@ h1 {
   font-size: 14px;
 }
 .toolbar-actions {
+  margin-left: auto;
   display: flex;
   align-items: center;
   gap: 4px;
@@ -1197,9 +1198,8 @@ input.todo-title {
 .calendar-heading {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: 16px;
   margin-bottom: 18px;
 }
 .calendar-heading h1 {
@@ -1238,7 +1238,7 @@ input.todo-title {
   right: 0;
   top: calc(100% + 8px);
   z-index: 30;
-  width: 288px;
+  width: min(288px, calc(100vw - 24px));
   padding: 12px;
   border: 1px solid #dfe4d7;
   border-radius: 10px;
@@ -1304,9 +1304,6 @@ input.todo-title {
   }
   .calendar-heading {
     align-items: flex-start;
-  }
-  .calendar-heading .date-navigation {
-    margin-left: auto;
   }
 }
 

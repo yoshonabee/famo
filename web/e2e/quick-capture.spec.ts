@@ -17,12 +17,12 @@ test('Enter 連續新增，不等待上一列儲存，名稱以外皆可留白',
     await route.continue()
   })
   await page.goto('/')
-  await page.getByRole('button', { name: '新增任務', exact: true }).click()
   const capture = page.getByRole('region', {
     name: '快速新增任務',
     exact: true,
   })
   const input = capture.getByRole('textbox', { name: '快速新增任務名稱' })
+  await input.focus()
   await expect(input).toBeFocused()
   await input.fill('快速記下：整理筆記')
   await input.press('Enter')
@@ -93,7 +93,11 @@ test('Enter 連續新增，不等待上一列儲存，名稱以外皆可留白',
   await expect(row).not.toBeVisible()
   await page.getByRole('button', { name: '已完成' }).click()
   await page.getByRole('button', { name: '新增任務', exact: true }).click()
-  await expect(input).toBeFocused()
+  await expect(
+    dialog.getByRole('heading', { name: '新增任務', exact: true }),
+  ).toBeVisible()
+  await dialog.getByRole('button', { name: '關閉', exact: true }).click()
+  await page.getByRole('button', { name: '任務列表', exact: true }).click()
   await expect(input).toHaveValue('第三件先保留草稿')
   await expect(capture.locator('li')).toHaveCount(0)
   await page.reload()

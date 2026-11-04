@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { CornerDownLeft, LoaderCircle, Square } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -115,21 +115,16 @@ export function CaptureDraftRow({
 
 export function QuickCapture({
   hidden,
-  focusRequest,
   onSubmit,
   announcement,
 }: {
   hidden: boolean
-  focusRequest: number
   onSubmit: (title: string) => void
   announcement: string
 }) {
   const input = useRef<HTMLInputElement>(null)
   const composing = useRef(false)
   const [draft, setDraft] = useState('')
-  useEffect(() => {
-    if (focusRequest > 0) input.current?.focus()
-  }, [focusRequest])
   function submit() {
     if (composing.current) return
     const title = taskTitle(draft)

@@ -4,7 +4,7 @@ test('描述直接編輯、Agent 更新與歷程收合', async ({ page, request 
   const errors: string[] = []
   page.on('pageerror', (e) => errors.push(e.message))
   await page.goto('/')
-  await page.getByRole('button', { name: '完整表單', exact: true }).click()
+  await page.getByRole('button', { name: '新增任務', exact: true }).click()
   const dialog = page.getByRole('dialog')
   await dialog.getByLabel('任務名稱').fill('新版詳細頁驗收')
   await dialog

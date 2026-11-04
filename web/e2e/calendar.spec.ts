@@ -174,7 +174,7 @@ test('日期新增預設、修改與清除日期、全部任務不預設日期',
   await capture.fill('calendar-create 快速新增')
   await capture.press('Enter')
   await expect(rowTitle(page, 'calendar-create 快速新增')).toBeVisible()
-  await page.getByRole('button', { name: '完整表單', exact: true }).click()
+  await page.getByRole('button', { name: '新增任務', exact: true }).click()
   const dialog = page.getByRole('dialog')
   await expect(dialog.getByLabel('任務日期（選填）')).toHaveValue('2026-12-15')
   await dialog
@@ -447,6 +447,37 @@ test('日期標題與今日分段選單：月曆選日、鍵盤、關閉及手�
   await openDate(page)
   const heading = page.getByRole('heading', { level: 1 })
   await expect(heading).toContainText('2026年11月4日')
+  await expect(
+    page.getByRole('button', { name: '完整表單', exact: true }),
+  ).toHaveCount(0)
+  await page.getByRole('button', { name: '新增任務', exact: true }).click()
+  const form = page.getByRole('dialog', { name: '新增任務', exact: true })
+  await expect(form.getByLabel('任務日期（選填）')).toHaveValue('2026-11-04')
+  await form.getByRole('button', { name: '關閉', exact: true }).click()
+  const previous = (await page
+    .getByRole('button', { name: '前一天', exact: true })
+    .boundingBox())!
+  const todayButton = (await page
+    .getByRole('button', { name: '今日', exact: true })
+    .boundingBox())!
+  const next = (await page
+    .getByRole('button', { name: '後一天', exact: true })
+    .boundingBox())!
+  expect(previous.x).toBeLessThan(todayButton.x)
+  expect(todayButton.x).toBeLessThan(next.x)
+  const headingBox = (await heading.boundingBox())!
+  expect(previous.x).toBeGreaterThan(headingBox.x + headingBox.width)
+  const searchBox = (await page.getByLabel('搜尋任務').boundingBox())!
+  const addBox = (await page
+    .getByRole('button', { name: '新增任務', exact: true })
+    .boundingBox())!
+  expect(addBox.x).toBeGreaterThan(searchBox.x + searchBox.width)
+  const toolbarBox = (await page.locator('.list-toolbar').boundingBox())!
+  expect(addBox.x + addBox.width).toBeCloseTo(
+    toolbarBox.x + toolbarBox.width,
+    0,
+  )
+
   await expect(page.getByLabel('選擇日期', { exact: true })).toHaveCount(0)
   const trigger = page.getByRole('button', {
     name: '開啟日期選單',

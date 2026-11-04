@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useId, useRef, useState } from 'react'
 import { ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { adjacentDate, localDate } from '@/lib/calendar'
@@ -11,6 +11,7 @@ export function DateNavigation({
   onChange: (date: string) => void
 }) {
   const [open, setOpen] = useState(false)
+  const [offset, setOffset] = useState(0)
   const [month, setMonth] = useState(date.slice(0, 7))
   const [focused, setFocused] = useState(date)
   const root = useRef<HTMLDivElement>(null)
@@ -31,8 +32,14 @@ export function DateNavigation({
     onChange(value)
     close()
   }
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!open) return
+    function align() {
+      const right = root.current?.getBoundingClientRect().right ?? 300
+      setOffset(Math.max(0, Math.min(288, window.innerWidth - 24) + 12 - right))
+    }
+    align()
+    window.addEventListener('resize', align)
     function outside(event: PointerEvent) {
       if (!root.current?.contains(event.target as Node)) setOpen(false)
     }
@@ -46,6 +53,7 @@ export function DateNavigation({
     document.addEventListener('pointerdown', outside)
     document.addEventListener('keydown', escape)
     return () => {
+      window.removeEventListener('resize', align)
       document.removeEventListener('pointerdown', outside)
       document.removeEventListener('keydown', escape)
     }
@@ -54,7 +62,7 @@ export function DateNavigation({
     if (open)
       root.current
         ?.querySelector<HTMLButtonElement>(`[data-date="${focused}"]`)
-        ?.focus()
+        ?.focus({ preventScroll: true })
   }, [open, focused, month])
 
   return (
@@ -70,18 +78,6 @@ export function DateNavigation({
         }}
       >
         <ChevronLeft />
-      </Button>
-      <Button
-        variant="ghost"
-        size="icon"
-        aria-label="後一天"
-        disabled={date === '9999-12-31'}
-        onClick={() => {
-          setOpen(false)
-          onChange(adjacentDate(date, 1))
-        }}
-      >
-        <ChevronRight />
       </Button>
       <div
         className="today-picker"
@@ -125,6 +121,7 @@ export function DateNavigation({
         {open && (
           <div
             className="calendar-popover"
+            style={{ right: -offset }}
             id={popupId}
             role="dialog"
             aria-label="選擇日期"
@@ -220,6 +217,18 @@ export function DateNavigation({
           </div>
         )}
       </div>
+      <Button
+        variant="ghost"
+        size="icon"
+        aria-label="後一天"
+        disabled={date === '9999-12-31'}
+        onClick={() => {
+          setOpen(false)
+          onChange(adjacentDate(date, 1))
+        }}
+      >
+        <ChevronRight />
+      </Button>
     </div>
   )
 }

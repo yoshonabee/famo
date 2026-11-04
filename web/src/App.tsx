@@ -105,11 +105,6 @@ function App() {
   const visibleDrafts = capture.drafts.filter((draft) =>
     view === 'date' ? draft.scheduled_date === date : true,
   )
-  const [captureFocus, setCaptureFocus] = useState(0)
-  function startCapture() {
-    if (view !== 'date') setView('active')
-    setCaptureFocus((count) => count + 1)
-  }
   const [selected, setSelected] = useState<string | null>(null)
   const [message, setMessage] = useState('')
   const reorder = useMutation({
@@ -275,23 +270,14 @@ function App() {
                   />
                 </div>
                 <div className="toolbar-actions">
-                  <Button size="sm" onClick={startCapture}>
+                  <Button size="sm" onClick={() => setCreate(true)}>
                     <Plus />
                     新增任務
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setCreate(true)}
-                  >
-                    完整表單
                   </Button>
                 </div>
               </div>
               <QuickCapture
                 hidden={view !== 'active' && view !== 'date'}
-                focusRequest={captureFocus}
                 onSubmit={capture.submit}
                 announcement={capture.announcement}
               />
