@@ -188,14 +188,10 @@ test('日期新增預設、修改與清除日期、全部任務不預設日期',
       exact: true,
     })
     .click()
-  await dialog
-    .getByRole('button', { name: '編輯任務日期', exact: true })
-    .click()
   await dialog.getByLabel('任務日期', { exact: true }).fill('2026-12-16')
-  await dialog.getByRole('button', { name: '儲存', exact: true }).click()
-  await expect(
-    dialog.getByRole('button', { name: '編輯任務日期', exact: true }),
-  ).toHaveText('2026-12-16')
+  await expect(dialog.getByLabel('任務日期', { exact: true })).toHaveValue(
+    '2026-12-16',
+  )
   await dialog.getByRole('button', { name: '關閉', exact: true }).click()
   await expect(rowTitle(page, 'calendar-create 快速新增')).toHaveCount(0)
   await page.getByRole('button', { name: '後一天', exact: true }).click()
@@ -206,14 +202,8 @@ test('日期新增預設、修改與清除日期、全部任務不預設日期',
       exact: true,
     })
     .click()
-  await dialog
-    .getByRole('button', { name: '編輯任務日期', exact: true })
-    .click()
   await dialog.getByRole('button', { name: '清除日期', exact: true }).click()
-  await dialog.getByRole('button', { name: '儲存', exact: true }).click()
-  await expect(
-    dialog.getByRole('button', { name: '編輯任務日期', exact: true }),
-  ).toHaveText('未指定日期')
+  await expect(dialog.getByLabel('任務日期', { exact: true })).toHaveValue('')
   await dialog.getByRole('button', { name: '關閉', exact: true }).click()
   await expect(rowTitle(page, 'calendar-create 快速新增')).toHaveCount(0)
   await page.getByRole('button', { name: '任務列表', exact: true }).click()
@@ -336,7 +326,7 @@ test('新增草稿切換日期後重試仍儲存原日期', async ({ page, reque
   ).toBe('2026-12-20')
 })
 
-test('日期編輯遇到版本衝突保留草稿', async ({ page, request }) => {
+test('日期立即更新遇到版本衝突保留選擇', async ({ page, request }) => {
   const task = await (
     await request.post('/api/tasks', {
       data: { title: 'calendar-conflict 日期', scheduled_date: '2026-11-04' },
@@ -350,24 +340,31 @@ test('日期編輯遇到版本衝突保留草稿', async ({ page, request }) => 
     })
     .click()
   const dialog = page.getByRole('dialog')
-  await dialog
-    .getByRole('button', { name: '編輯任務日期', exact: true })
-    .click()
+  await page.route(
+    `**/api/tasks/${task.id}/actions`,
+    async (route) => {
+      await request.post(`/api/tasks/${task.id}/actions`, {
+        data: {
+          op: 'update',
+          version: task.version,
+          scheduled_date: '2026-11-06',
+        },
+      })
+      await route.continue()
+    },
+    { times: 1 },
+  )
   await dialog.getByLabel('任務日期', { exact: true }).fill('2026-11-05')
-  await request.post(`/api/tasks/${task.id}/actions`, {
-    data: { op: 'update', version: task.version, scheduled_date: '2026-11-06' },
-  })
-  await dialog.getByRole('button', { name: '儲存', exact: true }).click()
-  await expect(dialog.getByRole('alert')).toContainText('任務已被更新')
+  await expect(dialog.getByRole('alert')).toContainText('任務已')
   await expect(dialog.getByLabel('任務日期', { exact: true })).toHaveValue(
     '2026-11-05',
   )
   await dialog
-    .getByRole('button', { name: '取消並讀取最新內容', exact: true })
+    .getByRole('button', { name: '讀取最新日期', exact: true })
     .click()
-  await expect(
-    dialog.getByRole('button', { name: '編輯任務日期', exact: true }),
-  ).toHaveText('2026-11-06')
+  await expect(dialog.getByLabel('任務日期', { exact: true })).toHaveValue(
+    '2026-11-06',
+  )
 })
 
 test('日期頁排序只調整當天未完成任務，不包含已完成或其他日期', async ({
