@@ -1139,3 +1139,58 @@ input.todo-title {
     align-items: flex-end;
   }
 }
+
+.date-navigation {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 12px 0;
+}
+.date-navigation input,
+.scheduled-date-field input {
+  min-width: 0;
+  max-width: 100%;
+  padding: 8px;
+  border: 1px solid #dfe4d7;
+  border-radius: 5px;
+  background: #fffefa;
+  color: #44503a;
+  font-size: 16px;
+}
+.daily-progress {
+  margin: 12px 0;
+  color: #7c8870;
+  font-size: 14px;
+}
+.daily-completed h2,
+.earlier-tasks summary {
+  margin: 20px 0 10px;
+  font-size: 16px;
+}
+.earlier-tasks {
+  margin-top: 24px;
+  padding-top: 8px;
+  border-top: 1px solid #e8ebe3;
+}
+.earlier-actions {
+  margin-bottom: 8px;
+}
+.earlier-task-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding-top: 10px;
+  color: #7c8870;
+  font-size: 14px;
+}
+.earlier-task-actions button:last-child {
+  margin-left: auto;
+}
+.scheduled-date-field {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}

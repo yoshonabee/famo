@@ -48,6 +48,7 @@ type Event struct {
 type Task struct {
 	ID            string         `json:"id"`
 	Title         string         `json:"title"`
+	ScheduledDate string         `json:"scheduled_date"`
 	Description   string         `json:"description"`
 	Goal          string         `json:"goal"`
 	Context       string         `json:"context"`
@@ -69,21 +70,23 @@ type Task struct {
 	History       []Event        `json:"history"`
 }
 type CreateInput struct {
-	Title       string         `json:"title"`
-	Description string         `json:"description"`
-	Goal        string         `json:"goal"`
-	Context     string         `json:"context"`
-	Acceptance  string         `json:"acceptance"`
-	Type        string         `json:"type"`
-	Stage       string         `json:"stage"`
-	Priority    int            `json:"priority"`
-	Steps       []string       `json:"steps"`
-	Links       []Link         `json:"links"`
-	Metadata    map[string]any `json:"metadata"`
-	Source      string         `json:"source"`
+	Title         string         `json:"title"`
+	ScheduledDate string         `json:"scheduled_date"`
+	Description   string         `json:"description"`
+	Goal          string         `json:"goal"`
+	Context       string         `json:"context"`
+	Acceptance    string         `json:"acceptance"`
+	Type          string         `json:"type"`
+	Stage         string         `json:"stage"`
+	Priority      int            `json:"priority"`
+	Steps         []string       `json:"steps"`
+	Links         []Link         `json:"links"`
+	Metadata      map[string]any `json:"metadata"`
+	Source        string         `json:"source"`
 }
 type Action struct {
 	Op            string          `json:"op"`
+	ScheduledDate *string         `json:"scheduled_date"`
 	Version       int             `json:"version"`
 	Source        string          `json:"source"`
 	StepID        string          `json:"step_id"`
@@ -120,6 +123,13 @@ func validate(t Task) error {
 		return errors.New("請填寫任務名稱")
 	}
 
+	if t.ScheduledDate != "" {
+		d, err := time.Parse(time.DateOnly, t.ScheduledDate)
+		if err != nil || d.Year() < 1 || d.Format(time.DateOnly) != t.ScheduledDate {
+			return errors.New("任務日期須為有效的 YYYY-MM-DD，或留空")
+		}
+	}
+
 	for _, l := range t.Links {
 		u, e := url.Parse(l.URL)
 		if e != nil || u.Host == "" || (u.Scheme != "https" && u.Scheme != "http") || strings.TrimSpace(l.Type) == "" {
@@ -129,7 +139,7 @@ func validate(t Task) error {
 	return nil
 }
 func newTask(in CreateInput, now time.Time) (Task, error) {
-	t := Task{ID: id(), Title: strings.TrimSpace(in.Title), Description: in.Description, Goal: in.Goal, Context: in.Context, Acceptance: in.Acceptance, Type: in.Type, Stage: in.Stage, Priority: in.Priority, Version: 1, CreatedAt: now, UpdatedAt: now, Steps: []Step{}, Links: in.Links, Metadata: in.Metadata, History: []Event{}}
+	t := Task{ID: id(), Title: strings.TrimSpace(in.Title), ScheduledDate: in.ScheduledDate, Description: in.Description, Goal: in.Goal, Context: in.Context, Acceptance: in.Acceptance, Type: in.Type, Stage: in.Stage, Priority: in.Priority, Version: 1, CreatedAt: now, UpdatedAt: now, Steps: []Step{}, Links: in.Links, Metadata: in.Metadata, History: []Event{}}
 	if t.Links == nil {
 		t.Links = []Link{}
 	}
@@ -253,6 +263,9 @@ func apply(t *Task, a Action, now time.Time) error {
 		}
 		summary = "新增相關連結"
 	case "update":
+		if a.ScheduledDate != nil {
+			t.ScheduledDate = *a.ScheduledDate
+		}
 		if a.Description != nil {
 			t.Description = *a.Description
 		}

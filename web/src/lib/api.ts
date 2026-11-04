@@ -3,6 +3,7 @@ export type Link = { type_id?: string; type: string; url: string }
 export type Task = {
   id: string
   title: string
+  scheduled_date: string
   description: string
   goal: string
   context: string
@@ -62,6 +63,7 @@ export type Action = {
   next_step?: string
   stage?: string
   links?: { type_id?: string; type?: string; url: string }[]
+  scheduled_date?: string
   title?: string
   description?: string
   type?: string
