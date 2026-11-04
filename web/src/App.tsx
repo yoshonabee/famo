@@ -27,6 +27,7 @@ import {
   OptionSelect,
   optionStyle,
 } from '@/components/settings-page'
+import { TaskDate } from '@/components/task-date'
 import { InlineContent } from '@/components/inline-content'
 import { TodoTitle } from '@/components/todo-title'
 import {
@@ -291,10 +292,10 @@ function App() {
                   busy={mutation.isPending || reorder.isPending}
                   onReorder={(ids) => reorder.mutate(ids)}
                   onDragging={setDragging}
-                  onMove={async (task) => {
+                  onMove={async (task, targetDate) => {
                     await mutation.mutateAsync({
                       t: task,
-                      action: { op: 'update', scheduled_date: date },
+                      action: { op: 'update', scheduled_date: targetDate },
                     })
                   }}
                   renderTask={(task, index, disabled) => (
@@ -829,10 +830,7 @@ function Detail({
             }
           />
         </label>
-        <div className="scheduled-date-field">
-          <span>任務日期</span>
-          <InlineContent task={t} field="scheduled_date" busy={busy} />
-        </div>
+        <TaskDate task={t} busy={busy} />
         {completed && <span>已完成 · {dateTime(t.completed_at)}</span>}
       </div>
       <div className="detail-block">

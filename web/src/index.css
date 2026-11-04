@@ -1164,11 +1164,13 @@ input.todo-title {
   font-size: 14px;
 }
 .daily-completed h2,
-.earlier-tasks summary {
+.earlier-tasks summary,
+.undated-tasks summary {
   margin: 20px 0 10px;
   font-size: 16px;
 }
-.earlier-tasks {
+.earlier-tasks,
+.undated-tasks {
   margin-top: 24px;
   padding-top: 8px;
   border-top: 1px solid #e8ebe3;
@@ -1314,4 +1316,32 @@ input.todo-title {
   font-size: 14px;
   font-weight: 400;
   letter-spacing: 0;
+}
+
+.undated-actions,
+.undated-actions label {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.undated-actions {
+  margin: 12px 0;
+}
+.undated-actions label {
+  font-size: 14px;
+  color: #7c8870;
+}
+.undated-task {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.undated-task > ul {
+  flex: 1;
+  min-width: 0;
+}
+.date-clear {
+  color: #7c8870;
+  font-size: 13px;
 }

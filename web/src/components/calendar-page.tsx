@@ -4,6 +4,8 @@ import { DragDropProvider } from '@dnd-kit/react'
 import { isSortable } from '@dnd-kit/react/sortable'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
+import { UndatedTasks } from '@/components/undated-tasks'
+import { localDate } from '@/lib/calendar'
 import { type Task } from '@/lib/api'
 
 type Props = {
@@ -14,7 +16,7 @@ type Props = {
   busy: boolean
   onReorder: (ids: string[]) => void
   onDragging: (dragging: boolean) => void
-  onMove: (task: Task) => Promise<void>
+  onMove: (task: Task, date: string) => Promise<void>
   renderTask: (task: Task, index: number, disabled: boolean) => ReactNode
   drafts: ReactNode[]
 }
@@ -57,7 +59,7 @@ export function CalendarPage({
     try {
       for (const task of items) {
         try {
-          await onMove(task)
+          await onMove(task, date)
           setSelected((ids) => ids.filter((id) => id !== task.id))
         } catch {
           // The shared mutation displays the error; keep failed tasks selected.
@@ -171,6 +173,17 @@ export function CalendarPage({
               <p className="empty-list">沒有先前未完成的任務</p>
             )}
           </details>
+          {date === localDate() && (
+            <UndatedTasks
+              tasks={tasks.filter(
+                (task) =>
+                  !task.scheduled_date && !task.completed_at && matches(task),
+              )}
+              busy={disabled}
+              onAssign={onMove}
+              renderTask={renderTask}
+            />
+          )}
         </>
       )}
     </section>
