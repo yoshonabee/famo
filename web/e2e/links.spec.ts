@@ -160,7 +160,7 @@ test('完整表單可新增與移除多筆連結，建立失敗保留草稿，�
   try {
     await page.setViewportSize({ width: 375, height: 812 })
     await page.goto('/')
-    await page.getByRole('button', { name: '完整表單', exact: true }).click()
+    await page.getByRole('button', { name: '新增任務', exact: true }).click()
     const dialog = page.getByRole('dialog')
     await dialog.getByLabel('任務名稱').fill(title)
     await dialog.getByLabel('描述', { exact: true }).fill('連結與任務一起建立')

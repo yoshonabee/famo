@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { DragDropProvider } from '@dnd-kit/react'
 import { isSortable, useSortable } from '@dnd-kit/react/sortable'
 import {
+  CalendarDays,
   CheckCheck,
   ExternalLink,
   GripVertical,
@@ -16,6 +17,9 @@ import {
   Link2,
   Trash2,
 } from 'lucide-react'
+import { DateNavigation } from '@/components/date-navigation'
+import { CalendarPage } from '@/components/calendar-page'
+import { localDate } from '@/lib/calendar'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import {
@@ -89,16 +93,18 @@ function App() {
     refetchInterval: 30_000,
   })
   const [view, setView] = useState<
-    'active' | 'completed' | 'settings' | 'link-settings'
+    'active' | 'date' | 'completed' | 'settings' | 'link-settings'
   >('active')
+  const [date, setDate] = useState(localDate)
   const [search, setSearch] = useState('')
   const [create, setCreate] = useState(false)
-  const capture = useQuickCapture(() => setSearch(''))
-  const [captureFocus, setCaptureFocus] = useState(0)
-  function startCapture() {
-    setView('active')
-    setCaptureFocus((count) => count + 1)
-  }
+  const capture = useQuickCapture(
+    () => setSearch(''),
+    view === 'date' ? date : '',
+  )
+  const visibleDrafts = capture.drafts.filter((draft) =>
+    view === 'date' ? draft.scheduled_date === date : true,
+  )
   const [selected, setSelected] = useState<string | null>(null)
   const [message, setMessage] = useState('')
   const reorder = useMutation({
@@ -165,6 +171,17 @@ function App() {
         </a>
         <nav aria-label="主要導覽">
           <button
+            className={view === 'date' ? 'nav-item active' : 'nav-item'}
+            onClick={() => {
+              setDate(localDate())
+              setView('date')
+            }}
+            aria-label="今日任務"
+          >
+            <CalendarDays size={17} />
+            今日
+          </button>
+          <button
             className={view === 'active' ? 'nav-item active' : 'nav-item'}
             onClick={() => setView('active')}
             aria-label="任務列表"
@@ -213,11 +230,36 @@ function App() {
             )
           ) : (
             <>
+              {view === 'date' && (
+                <header className="calendar-heading">
+                  <h1>
+                    <time dateTime={date}>
+                      {new Date(`${date}T12:00:00`).toLocaleDateString(
+                        'zh-TW',
+                        {
+                          year: 'numeric',
+                          month: 'long',
+                          day: 'numeric',
+                        },
+                      )}
+                    </time>
+                    <span className="date-weekday">
+                      {new Date(`${date}T12:00:00`).toLocaleDateString(
+                        'zh-TW',
+                        { weekday: 'long' },
+                      )}
+                    </span>
+                  </h1>
+                  <DateNavigation date={date} onChange={setDate} />
+                </header>
+              )}
               <div className="list-toolbar">
-                <div className="list-title">
-                  <h1>{view === 'active' ? '任務' : '已完成'}</h1>
-                  <span className="list-count">{filtered.length}</span>
-                </div>
+                {view !== 'date' && (
+                  <div className="list-title">
+                    <h1>{view === 'active' ? '任務' : '已完成'}</h1>
+                    <span className="list-count">{filtered.length}</span>
+                  </div>
+                )}
                 <div className="search">
                   <Search size={16} />
                   <input
@@ -228,26 +270,61 @@ function App() {
                   />
                 </div>
                 <div className="toolbar-actions">
-                  <Button size="sm" onClick={startCapture}>
+                  <Button size="sm" onClick={() => setCreate(true)}>
                     <Plus />
                     新增任務
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setCreate(true)}
-                  >
-                    完整表單
                   </Button>
                 </div>
               </div>
               <QuickCapture
-                hidden={view !== 'active'}
-                focusRequest={captureFocus}
+                hidden={view !== 'active' && view !== 'date'}
                 onSubmit={capture.submit}
                 announcement={capture.announcement}
               />
+              {view === 'date' && (
+                <CalendarPage
+                  date={date}
+                  key={date}
+                  tasks={all}
+                  search={search}
+                  loading={!tasks.isSuccess}
+                  busy={mutation.isPending || reorder.isPending}
+                  onReorder={(ids) => reorder.mutate(ids)}
+                  onDragging={setDragging}
+                  onMove={async (task) => {
+                    await mutation.mutateAsync({
+                      t: task,
+                      action: { op: 'update', scheduled_date: date },
+                    })
+                  }}
+                  renderTask={(task, index, disabled) => (
+                    <TaskRow
+                      key={task.id}
+                      task={task}
+                      index={index}
+                      sortableDisabled={disabled || visibleDrafts.length > 0}
+                      busy={mutation.isPending}
+                      act={act}
+                      onOpen={() => setSelected(task.id)}
+                      onComplete={() =>
+                        act(task, {
+                          op: task.completed_at
+                            ? 'reopen_task'
+                            : 'complete_task',
+                        })
+                      }
+                      settings={settings.data}
+                    />
+                  )}
+                  drafts={visibleDrafts.map((draft) => (
+                    <CaptureDraftRow
+                      key={draft.id}
+                      draft={draft}
+                      retry={capture.retry}
+                    />
+                  ))}
+                />
+              )}
               {tasks.isPending && (
                 <div className="state">
                   <LoaderCircle className="animate-spin" />
@@ -351,6 +428,7 @@ function App() {
         open={create}
         onOpenChange={setCreate}
         settings={settings.data}
+        defaultDate={view === 'date' ? date : ''}
       />
       <Dialog
         open={!!detail}
@@ -476,7 +554,9 @@ function CreateDialog({
   open,
   onOpenChange,
   settings,
+  defaultDate,
 }: {
+  defaultDate: string
   open: boolean
   onOpenChange: (v: boolean) => void
   settings?: Settings
@@ -508,6 +588,7 @@ function CreateDialog({
     create.mutate({
       title: f.get('title'),
       description: f.get('description'),
+      scheduled_date: f.get('scheduled_date'),
       type,
       priority: Number(f.get('priority')),
       links: links.map(({ type_id, url }) => ({ type_id, url })),
@@ -554,6 +635,15 @@ function CreateDialog({
               />
             </Field>
           </div>
+          <Field label="任務日期（選填）">
+            <input
+              name="scheduled_date"
+              type="date"
+              min="0001-01-01"
+              max="9999-12-31"
+              defaultValue={defaultDate}
+            />
+          </Field>
           <Field label="描述">
             <textarea name="description" placeholder="描述（選填）" rows={3} />
           </Field>
@@ -739,6 +829,10 @@ function Detail({
             }
           />
         </label>
+        <div className="scheduled-date-field">
+          <span>任務日期</span>
+          <InlineContent task={t} field="scheduled_date" busy={busy} />
+        </div>
         {completed && <span>已完成 · {dateTime(t.completed_at)}</span>}
       </div>
       <div className="detail-block">

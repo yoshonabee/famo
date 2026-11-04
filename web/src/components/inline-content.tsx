@@ -8,7 +8,7 @@ export function InlineContent({
   busy,
 }: {
   task: Task
-  field: 'title' | 'description'
+  field: 'title' | 'description' | 'scheduled_date'
   busy: boolean
 }) {
   const client = useQueryClient()
@@ -71,7 +71,12 @@ export function InlineContent({
       submitting.current = false
     }
   }
-  const label = field === 'title' ? '任務標題' : '描述'
+  const label =
+    field === 'title'
+      ? '任務標題'
+      : field === 'scheduled_date'
+        ? '任務日期'
+        : '描述'
   if (!edit)
     return (
       <button
@@ -89,7 +94,8 @@ export function InlineContent({
           setError('')
         }}
       >
-        {task[field] || '新增描述…'}
+        {task[field] ||
+          (field === 'scheduled_date' ? '未指定日期' : '新增描述…')}
       </button>
     )
   const props = {
@@ -126,7 +132,9 @@ export function InlineContent({
   }
   return (
     <span className="inline-content-editor">
-      {field === 'title' ? (
+      {field === 'scheduled_date' ? (
+        <input {...props} type="date" min="0001-01-01" max="9999-12-31" />
+      ) : field === 'title' ? (
         <input {...props} maxLength={200} />
       ) : (
         <textarea {...props} rows={6} />
@@ -144,6 +152,16 @@ export function InlineContent({
         </span>
       )}
       <span className="inline-edit-actions">
+        {field === 'scheduled_date' && (
+          <button
+            type="button"
+            disabled={save.isPending}
+            onPointerDown={(e) => e.preventDefault()}
+            onClick={() => setEdit({ ...edit, value: '' })}
+          >
+            清除日期
+          </button>
+        )}
         <button
           type="button"
           onPointerDown={(e) => e.preventDefault()}

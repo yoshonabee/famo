@@ -1,11 +1,16 @@
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { CornerDownLeft, LoaderCircle, Square } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { request, type Task } from '@/lib/api'
 
-type Draft = { id: string; title: string; error?: string }
+type Draft = {
+  id: string
+  title: string
+  scheduled_date: string
+  error?: string
+}
 
 function taskTitle(value: string) {
   return value
@@ -14,14 +19,15 @@ function taskTitle(value: string) {
     .trim()
 }
 
-export function useQuickCapture(onCapture: () => void) {
+export function useQuickCapture(onCapture: () => void, scheduledDate = '') {
   const client = useQueryClient()
   const [drafts, setDrafts] = useState<Draft[]>([])
   const [announcement, setAnnouncement] = useState('')
   const create = useMutation({
-    mutationFn: (title: string) =>
+    mutationFn: (draft: Draft) =>
       request<Task>('/tasks', {
-        title,
+        title: draft.title,
+        scheduled_date: draft.scheduled_date,
         source: 'ui',
       }),
     retry: false,
@@ -41,7 +47,7 @@ export function useQuickCapture(onCapture: () => void) {
       ),
     )
     try {
-      const task = await create.mutateAsync(draft.title)
+      const task = await create.mutateAsync(draft)
       setDrafts((old) => old.filter((item) => item.id !== draft.id))
       setAnnouncement(`已新增：${task.title}`)
     } catch (error) {
@@ -59,7 +65,11 @@ export function useQuickCapture(onCapture: () => void) {
     }
   }
   function submit(title: string) {
-    const draft = { id: crypto.randomUUID(), title }
+    const draft = {
+      id: crypto.randomUUID(),
+      title,
+      scheduled_date: scheduledDate,
+    }
     setDrafts((old) => [...old, draft])
     onCapture()
     void save(draft)
@@ -105,21 +115,16 @@ export function CaptureDraftRow({
 
 export function QuickCapture({
   hidden,
-  focusRequest,
   onSubmit,
   announcement,
 }: {
   hidden: boolean
-  focusRequest: number
   onSubmit: (title: string) => void
   announcement: string
 }) {
   const input = useRef<HTMLInputElement>(null)
   const composing = useRef(false)
   const [draft, setDraft] = useState('')
-  useEffect(() => {
-    if (focusRequest > 0) input.current?.focus()
-  }, [focusRequest])
   function submit() {
     if (composing.current) return
     const title = taskTitle(draft)
