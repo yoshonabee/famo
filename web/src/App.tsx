@@ -17,6 +17,7 @@ import {
   Link2,
   Trash2,
 } from 'lucide-react'
+import { DateNavigation } from '@/components/date-navigation'
 import { CalendarPage } from '@/components/calendar-page'
 import { localDate } from '@/lib/calendar'
 import { Button } from '@/components/ui/button'
@@ -234,19 +235,36 @@ function App() {
             )
           ) : (
             <>
-              <div className="list-toolbar">
-                <div className="list-title">
+              {view === 'date' && (
+                <header className="calendar-heading">
                   <h1>
-                    {view === 'date'
-                      ? '日期任務'
-                      : view === 'active'
-                        ? '任務'
-                        : '已完成'}
+                    <time dateTime={date}>
+                      {new Date(`${date}T12:00:00`).toLocaleDateString(
+                        'zh-TW',
+                        {
+                          year: 'numeric',
+                          month: 'long',
+                          day: 'numeric',
+                        },
+                      )}
+                    </time>
+                    <span className="date-weekday">
+                      {new Date(`${date}T12:00:00`).toLocaleDateString(
+                        'zh-TW',
+                        { weekday: 'long' },
+                      )}
+                    </span>
                   </h1>
-                  {view !== 'date' && (
+                  <DateNavigation date={date} onChange={setDate} />
+                </header>
+              )}
+              <div className="list-toolbar">
+                {view !== 'date' && (
+                  <div className="list-title">
+                    <h1>{view === 'active' ? '任務' : '已完成'}</h1>
                     <span className="list-count">{filtered.length}</span>
-                  )}
-                </div>
+                  </div>
+                )}
                 <div className="search">
                   <Search size={16} />
                   <input
@@ -280,7 +298,7 @@ function App() {
               {view === 'date' && (
                 <CalendarPage
                   date={date}
-                  onDateChange={setDate}
+                  key={date}
                   tasks={all}
                   search={search}
                   loading={!tasks.isSuccess}

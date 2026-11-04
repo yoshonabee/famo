@@ -2,15 +2,12 @@ import { useState, type ReactNode } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { DragDropProvider } from '@dnd-kit/react'
 import { isSortable } from '@dnd-kit/react/sortable'
-import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
-import { adjacentDate, localDate } from '@/lib/calendar'
 import { type Task } from '@/lib/api'
 
 type Props = {
   date: string
-  onDateChange: (date: string) => void
   tasks: Task[]
   search: string
   loading: boolean
@@ -24,7 +21,6 @@ type Props = {
 
 export function CalendarPage({
   date,
-  onDateChange,
   tasks,
   search,
   loading,
@@ -56,10 +52,6 @@ export function CalendarPage({
     )
     .sort((a, b) => a.scheduled_date.localeCompare(b.scheduled_date))
   const selectedEarlier = earlier.filter((task) => selected.includes(task.id))
-  function changeDate(next: string) {
-    setSelected([])
-    onDateChange(next)
-  }
   async function moveTasks(items: Task[]) {
     setMoving(true)
     try {
@@ -77,52 +69,6 @@ export function CalendarPage({
   }
   return (
     <section className="calendar-page" aria-label="日期任務">
-      <div className="date-navigation" role="group" aria-label="日期導覽">
-        <Button
-          variant="ghost"
-          size="icon"
-          aria-label="前一天"
-          disabled={date === '0001-01-01'}
-          onClick={() => changeDate(adjacentDate(date, -1))}
-        >
-          <ChevronLeft />
-        </Button>
-        <input
-          type="date"
-          aria-label="選擇日期"
-          value={date}
-          min="0001-01-01"
-          max="9999-12-31"
-          onClick={(event) => {
-            // Native calendar picker supports desktop and mobile platform controls.
-            try {
-              event.currentTarget.showPicker?.()
-            } catch {
-              /* Keyboard entry remains available. */
-            }
-          }}
-          onChange={(event) => {
-            if (event.target.value && event.target.validity.valid)
-              changeDate(event.target.value)
-          }}
-        />
-        <Button
-          variant="ghost"
-          size="icon"
-          aria-label="後一天"
-          disabled={date === '9999-12-31'}
-          onClick={() => changeDate(adjacentDate(date, 1))}
-        >
-          <ChevronRight />
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => changeDate(localDate())}
-        >
-          今日
-        </Button>
-      </div>
       {!loading && (
         <>
           <p className="daily-progress">

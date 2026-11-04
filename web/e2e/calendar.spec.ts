@@ -2,10 +2,21 @@ import { expect, test, type Page } from '@playwright/test'
 
 test.use({ timezoneId: 'Asia/Taipei' })
 
+async function chooseDate(page: Page, date: string) {
+  await page.getByRole('button', { name: '開啟日期選單', exact: true }).click()
+  await page
+    .getByRole('dialog', { name: '選擇日期', exact: true })
+    .getByLabel('選擇日期', { exact: true })
+    .fill(date)
+  // Selecting the already displayed date does not emit a change event.
+  if (await page.getByRole('dialog', { name: '選擇日期', exact: true }).count())
+    await page.keyboard.press('Escape')
+}
+
 async function openDate(page: Page, date = '2026-11-04') {
   await page.goto('/')
   await page.getByRole('button', { name: '今日任務', exact: true }).click()
-  await page.getByLabel('選擇日期', { exact: true }).fill(date)
+  await chooseDate(page, date)
 }
 
 const rowTitle = (page: Page, title: string) =>
@@ -70,7 +81,10 @@ test('日期只看所屬日期，完成留在當天，補勾先前任務不移�
   await expect(earlier.locator('[data-task-id]')).toHaveCount(0)
   await expect(completed.locator('[data-task-id]')).toHaveCount(1)
   await page.getByRole('button', { name: '前一天', exact: true }).click()
-  await expect(page.getByLabel('選擇日期')).toHaveValue('2026-11-03')
+  await expect(page.locator('h1 time')).toHaveAttribute(
+    'datetime',
+    '2026-11-03',
+  )
   await expect(
     page.getByRole('checkbox', {
       name: '恢復任務：calendar-scope 昨天',
@@ -91,7 +105,7 @@ test('日期只看所屬日期，完成留在當天，補勾先前任務不移�
   ).not.toBeChecked()
   await page.reload()
   await page.getByRole('button', { name: '今日任務', exact: true }).click()
-  await page.getByLabel('選擇日期').fill('2026-11-03')
+  await chooseDate(page, '2026-11-03')
   await expect(rowTitle(page, 'calendar-scope 昨天')).toBeVisible()
 })
 
@@ -99,24 +113,27 @@ test('前後一天、日曆選日、當地今日與手機版', async ({ page }) 
   await page.clock.install({ time: new Date('2026-11-03T16:30:00Z') })
   await openDate(page)
   await page.getByRole('button', { name: '今日', exact: true }).click()
-  await expect(page.getByLabel('選擇日期')).toHaveValue('2026-11-04')
+  await expect(page.locator('h1 time')).toHaveAttribute(
+    'datetime',
+    '2026-11-04',
+  )
   for (const [start, previous, next] of [
     ['2026-01-01', '2025-12-31', '2026-01-02'],
     ['2028-03-01', '2028-02-29', '2028-03-02'],
     ['2026-03-01', '2026-02-28', '2026-03-02'],
   ]) {
-    await page.getByLabel('選擇日期').fill(start)
+    await chooseDate(page, start)
     await page.getByRole('button', { name: '前一天', exact: true }).click()
-    await expect(page.getByLabel('選擇日期')).toHaveValue(previous)
+    await expect(page.locator('h1 time')).toHaveAttribute('datetime', previous)
     await page.getByRole('button', { name: '後一天', exact: true }).click()
     await page.getByRole('button', { name: '後一天', exact: true }).click()
-    await expect(page.getByLabel('選擇日期')).toHaveValue(next)
+    await expect(page.locator('h1 time')).toHaveAttribute('datetime', next)
   }
-  await page.getByLabel('選擇日期').fill('0001-01-01')
+  await chooseDate(page, '0001-01-01')
   await expect(
     page.getByRole('button', { name: '前一天', exact: true }),
   ).toBeDisabled()
-  await page.getByLabel('選擇日期').fill('9999-12-31')
+  await chooseDate(page, '9999-12-31')
   await expect(
     page.getByRole('button', { name: '後一天', exact: true }),
   ).toBeDisabled()
@@ -126,15 +143,19 @@ test('前後一天、日曆選日、當地今日與手機版', async ({ page }) 
     fullPage: true,
   })
   await page.setViewportSize({ width: 390, height: 844 })
-  await expect(page.getByLabel('選擇日期')).toBeVisible()
-  await expect(page.getByLabel('選擇日期')).toHaveAttribute('type', 'date')
+  await expect(
+    page.getByRole('button', { name: '開啟日期選單', exact: true }),
+  ).toBeVisible()
   expect(
     await page.evaluate(
       () => document.documentElement.scrollWidth <= innerWidth,
     ),
   ).toBe(true)
   await page.getByRole('button', { name: '前一天', exact: true }).click()
-  await expect(page.getByLabel('選擇日期')).toHaveValue('2026-11-03')
+  await expect(page.locator('h1 time')).toHaveAttribute(
+    'datetime',
+    '2026-11-03',
+  )
   await page.screenshot({
     path: '/private/tmp/famo-calendar-mobile.png',
     fullPage: true,
@@ -417,4 +438,76 @@ test('日期頁排序只調整當天未完成任務，不包含已完成或其�
     'calendar-order B',
     'calendar-order done',
   ])
+})
+
+test('日期標題與今日分段選單：月曆選日、鍵盤、關閉及手機畫面', async ({
+  page,
+}) => {
+  await page.clock.install({ time: new Date('2026-11-03T16:30:00Z') })
+  await openDate(page)
+  const heading = page.getByRole('heading', { level: 1 })
+  await expect(heading).toContainText('2026年11月4日')
+  await expect(page.getByLabel('選擇日期', { exact: true })).toHaveCount(0)
+  const trigger = page.getByRole('button', {
+    name: '開啟日期選單',
+    exact: true,
+  })
+  const calendar = page.getByRole('dialog', { name: '選擇日期', exact: true })
+  await trigger.click()
+  await expect(trigger).toHaveAttribute('aria-expanded', 'true')
+  await expect(
+    calendar.getByRole('button', { name: '2026-11-04', exact: true }),
+  ).toBeFocused()
+  await page.keyboard.press('ArrowRight')
+  await page.keyboard.press('Enter')
+  await expect(page.locator('h1 time')).toHaveAttribute(
+    'datetime',
+    '2026-11-05',
+  )
+  await expect(calendar).toHaveCount(0)
+  await expect(trigger).toBeFocused()
+  await trigger.click()
+  await calendar.getByRole('button', { name: '下一個月', exact: true }).click()
+  await calendar
+    .getByRole('button', { name: '2026-12-12', exact: true })
+    .click()
+  await expect(page.locator('h1 time')).toHaveAttribute(
+    'datetime',
+    '2026-12-12',
+  )
+  await trigger.click()
+  await page.keyboard.press('Escape')
+  await expect(calendar).toHaveCount(0)
+  await expect(trigger).toBeFocused()
+  await trigger.click()
+  await heading.click()
+  await expect(calendar).toHaveCount(0)
+  await page.getByRole('button', { name: '今日', exact: true }).click()
+  await expect(page.locator('h1 time')).toHaveAttribute(
+    'datetime',
+    '2026-11-04',
+  )
+  await trigger.click()
+  await page.screenshot({
+    path: '/private/tmp/famo-date-picker-desktop.png',
+    fullPage: true,
+  })
+  await page.keyboard.press('Escape')
+  await page.setViewportSize({ width: 390, height: 844 })
+  await trigger.click()
+  await expect(calendar).toBeVisible()
+  const box = (await calendar.boundingBox())!
+  expect(box.x).toBeGreaterThanOrEqual(0)
+  expect(box.x + box.width).toBeLessThanOrEqual(390)
+  await page.screenshot({
+    path: '/private/tmp/famo-date-picker-mobile.png',
+    fullPage: true,
+  })
+  await calendar
+    .getByRole('button', { name: '2026-11-10', exact: true })
+    .click()
+  await expect(page.locator('h1 time')).toHaveAttribute(
+    'datetime',
+    '2026-11-10',
+  )
 })
