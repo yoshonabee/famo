@@ -44,7 +44,7 @@ func migrate(db *sql.DB) error {
 	if err = tx.QueryRow(`PRAGMA user_version`).Scan(&version); err != nil {
 		return err
 	}
-	if version > 4 {
+	if version > 5 {
 		return fmt.Errorf("資料庫版本 %d 高於此程式支援版本", version)
 	}
 	_, err = tx.Exec(`
@@ -129,7 +129,12 @@ func migrate(db *sql.DB) error {
 			}
 		}
 	}
-	if _, err = tx.Exec(`PRAGMA user_version=4;`); err != nil {
+	if version < 5 {
+		if err = migrateLinkTypes(tx); err != nil {
+			return err
+		}
+	}
+	if _, err = tx.Exec(`PRAGMA user_version=5;`); err != nil {
 		return err
 	}
 	return tx.Commit()
@@ -235,6 +240,10 @@ func (s *Store) Create(ctx context.Context, in CreateInput) (Task, error) {
 			}
 		}
 	}
+	in.Links, err = cfg.normalizeLinks(in.Links)
+	if err != nil {
+		return Task{}, fmt.Errorf("%w：%v", ErrInvalid, err)
+	}
 	t, err := newTask(in, time.Now().UTC())
 	if err != nil {
 		return Task{}, fmt.Errorf("%w：%v", ErrInvalid, err)
@@ -266,6 +275,10 @@ func (s *Store) Act(ctx context.Context, id string, a Action) (Task, error) {
 	cfg, err := s.Settings(ctx)
 	if err != nil {
 		return Task{}, err
+	}
+	a.Links, err = cfg.normalizeLinks(a.Links)
+	if err != nil {
+		return Task{}, fmt.Errorf("%w：%v", ErrInvalid, err)
 	}
 	if err = apply(&t, a, time.Now().UTC()); err != nil {
 		return Task{}, fmt.Errorf("%w：%v", ErrInvalid, err)

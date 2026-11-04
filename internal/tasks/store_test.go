@@ -33,7 +33,7 @@ func TestAgentRoundTripAndPersistence(t *testing.T) {
 		t.Fatal(err)
 	}
 	task := createTest(t, s)
-	updated, err := s.Act(context.Background(), task.ID, Action{Op: "complete_step", Version: task.Version, Source: "agent:codex", StepID: task.Steps[0].ID, NextStep: ptr("查看 CI 結果"), Stage: ptr("PR review"), WaitingReason: ptr("CI 執行中"), ReviewAt: ptr("2026-11-05T09:00:00+08:00"), Links: []Link{{"GitHub PR", "https://github.com/example/repo/pull/1"}}})
+	updated, err := s.Act(context.Background(), task.ID, Action{Op: "complete_step", Version: task.Version, Source: "agent:codex", StepID: task.Steps[0].ID, NextStep: ptr("查看 CI 結果"), Stage: ptr("PR review"), WaitingReason: ptr("CI 執行中"), ReviewAt: ptr("2026-11-05T09:00:00+08:00"), Links: []Link{{Type: "GitHub PR", URL: "https://github.com/example/repo/pull/1"}}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -69,7 +69,7 @@ func TestAgentRoundTripAndPersistence(t *testing.T) {
 func TestFailedActionIsAtomic(t *testing.T) {
 	s := openTest(t)
 	task := createTest(t, s)
-	_, err := s.Act(context.Background(), task.ID, Action{Op: "complete_step", Version: 1, StepID: task.Steps[0].ID, WaitingReason: ptr("CI"), Links: []Link{{"PR", "javascript:alert(1)"}}})
+	_, err := s.Act(context.Background(), task.ID, Action{Op: "complete_step", Version: 1, StepID: task.Steps[0].ID, WaitingReason: ptr("CI"), Links: []Link{{Type: "PR", URL: "javascript:alert(1)"}}})
 	if err == nil {
 		t.Fatal("invalid URL accepted")
 	}

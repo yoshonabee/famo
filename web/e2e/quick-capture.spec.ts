@@ -28,13 +28,13 @@ test('Enter 連續新增，不等待上一列儲存，名稱以外皆可留白',
   await input.press('Enter')
   await expect(input).toHaveValue('')
   await expect(input).toBeFocused()
-  const ready = page.locator('.section-ready')
-  await expect(ready.getByText('儲存中', { exact: true })).toBeVisible()
+  const mainList = page.getByRole('list', { name: '主要任務列表', exact: true })
+  await expect(mainList.getByText('儲存中', { exact: true })).toBeVisible()
   await expect(capture.locator('li')).toHaveCount(0)
   await input.fill('- [ ] 快速記下：回覆訊息')
   await input.press('Enter')
   await expect(
-    ready.getByRole('textbox', {
+    mainList.getByRole('textbox', {
       name: '編輯任務標題：快速記下：回覆訊息',
       exact: true,
     }),
@@ -42,7 +42,7 @@ test('Enter 連續新增，不等待上一列儲存，名稱以外皆可留白',
   await input.fill('第三件先保留草稿')
   releaseFirst()
   await expect(
-    ready.getByRole('textbox', {
+    mainList.getByRole('textbox', {
       name: '編輯任務標題：快速記下：整理筆記',
       exact: true,
     }),
@@ -51,7 +51,7 @@ test('Enter 連續新增，不等待上一列儲存，名稱以外皆可留白',
   await expect(input).toBeFocused()
   // 輸入區只保留一個輸入框，儲存中的列和已儲存任務都在下方。
   await expect(capture.locator('li')).toHaveCount(0)
-  const row = ready.locator('.task-row').filter({
+  const row = mainList.locator('.task-row').filter({
     has: page.getByRole('textbox', {
       name: '編輯任務標題：快速記下：整理筆記',
       exact: true,
@@ -98,10 +98,12 @@ test('Enter 連續新增，不等待上一列儲存，名稱以外皆可留白',
   await expect(capture.locator('li')).toHaveCount(0)
   await page.reload()
   await expect(
-    page.locator('.section-ready').getByRole('textbox', {
-      name: '編輯任務標題：快速記下：回覆訊息',
-      exact: true,
-    }),
+    page
+      .getByRole('list', { name: '主要任務列表', exact: true })
+      .getByRole('textbox', {
+        name: '編輯任務標題：快速記下：回覆訊息',
+        exact: true,
+      }),
   ).toBeVisible()
 })
 
@@ -127,7 +129,7 @@ test('中文選字與空白 Enter 不送出；失敗保留原列，手機可重�
     exact: true,
   })
   const input = capture.getByRole('textbox', { name: '快速新增任務名稱' })
-  const ready = page.locator('.section-ready')
+  const mainList = page.getByRole('list', { name: '主要任務列表', exact: true })
   await input.fill('   ')
   await input.press('Enter')
   await input.fill('- [ ] ')
@@ -142,14 +144,14 @@ test('中文選字與空白 Enter 不送出；失敗保留原列，手機可重�
   expect(attempts).toBe(0)
   await input.fill('快速記下：保留失敗內容')
   await input.press('Enter')
-  await expect(ready.getByRole('alert')).toContainText('暫時無法儲存')
+  await expect(mainList.getByRole('alert')).toContainText('暫時無法儲存')
   await expect(
-    ready.getByText('快速記下：保留失敗內容', { exact: true }),
+    mainList.getByText('快速記下：保留失敗內容', { exact: true }),
   ).toBeVisible()
   await input.fill('下一行還在輸入')
-  await ready.getByRole('button', { name: '重試', exact: true }).click()
+  await mainList.getByRole('button', { name: '重試', exact: true }).click()
   await expect(
-    ready.getByRole('textbox', {
+    mainList.getByRole('textbox', {
       name: '編輯任務標題：快速記下：保留失敗內容',
       exact: true,
     }),
@@ -159,7 +161,7 @@ test('中文選字與空白 Enter 不送出；失敗保留原列，手機可重�
   await input.fill('快速記下：手機按鈕新增')
   await capture.getByRole('button', { name: '新增這一列' }).click()
   await expect(
-    ready.getByRole('textbox', {
+    mainList.getByRole('textbox', {
       name: '編輯任務標題：快速記下：手機按鈕新增',
       exact: true,
     }),

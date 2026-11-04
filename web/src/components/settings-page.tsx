@@ -177,7 +177,9 @@ export function OptionSelect({
   disabled,
   name,
   className,
+  colored = true,
 }: {
+  colored?: boolean
   className?: string
   options: Option[]
   label: string
@@ -196,7 +198,9 @@ export function OptionSelect({
       name={name}
       value={current}
       disabled={disabled}
-      style={optionStyle(options.find((o) => o.id === current))}
+      style={
+        colored ? optionStyle(options.find((o) => o.id === current)) : undefined
+      }
       onChange={(e) => {
         setSelected(e.target.value)
         onChange?.(e.target.value)
@@ -209,7 +213,7 @@ export function OptionSelect({
             key={o.id}
             value={o.id}
             disabled={o.disabled}
-            style={optionStyle(o)}
+            style={colored ? optionStyle(o) : undefined}
           >
             {o.name}
             {o.disabled ? '（已停用）' : ''}
@@ -227,7 +231,9 @@ function OptionRows({
   numeric = false,
   disabled = false,
   colors,
+  colorEditing = true,
 }: {
+  colorEditing?: boolean
   colors: ColorPreset[]
   title: string
   options: Option[]
@@ -273,12 +279,16 @@ function OptionRows({
             required
             onChange={(e) => update(index, { name: e.target.value })}
           />
-          <ColorPicker
-            name={o.name}
-            color={o.color}
-            colors={colors}
-            onChange={(color) => update(index, { color })}
-          />
+          {colorEditing ? (
+            <ColorPicker
+              name={o.name}
+              color={o.color}
+              colors={colors}
+              onChange={(color) => update(index, { color })}
+            />
+          ) : (
+            <span className="link-type-preview">{o.name || '預覽'}</span>
+          )}
           <label>
             <input
               type="radio"
@@ -350,7 +360,13 @@ function OptionRows({
     </fieldset>
   )
 }
-export function SettingsPage({ settings }: { settings: Settings }) {
+export function SettingsPage({
+  settings,
+  section = 'tasks',
+}: {
+  settings: Settings
+  section?: 'tasks' | 'links'
+}) {
   const client = useQueryClient()
   const [draft, setDraft] = useState<Settings>(() => structuredClone(settings))
   const [message, setMessage] = useState('')
@@ -373,13 +389,9 @@ export function SettingsPage({ settings }: { settings: Settings }) {
     <div className="settings-page">
       <div className="page-heading">
         <div>
-          <h1>下拉選項設定</h1>
-          <p>調整任務類型、流程階段與優先順序的名稱、顏色和排列。</p>
+          <h1>{section === 'links' ? '連結種類設定' : '下拉選項設定'}</h1>
         </div>
       </div>
-      <p className="muted">
-        新增選項會自動配色，也可以點選色票或自訂顏色。刪除後，使用該選項的任務會改用對應預設值；按下儲存後才會生效。
-      </p>
       {stale && (
         <div role="alert" className="conflict-notice">
           設定已有更新，草稿仍保留。
@@ -403,86 +415,108 @@ export function SettingsPage({ settings }: { settings: Settings }) {
         }}
       >
         <fieldset disabled={save.isPending} className="settings-fields">
-          <OptionRows
-            title="任務類型"
-            colors={draft.color_presets ?? []}
-            options={draft.workflows}
-            defaultID={draft.default_type}
-            onDefault={(id) => setDraft({ ...draft, default_type: id })}
-            onChange={(options, defaultType) =>
-              setDraft({
-                ...draft,
-                default_type: defaultType ?? draft.default_type,
-                workflows: options.map((o) => ({
-                  ...o,
-                  stages: draft.workflows.find((w) => w.id === o.id)
-                    ?.stages ?? [
-                    {
-                      id: 'initial',
-                      name: '待開始',
-                      color: nextOptionColor([], draft.color_presets ?? []),
-                      disabled: false,
-                    },
-                  ],
-                  default_stage:
-                    draft.workflows.find((w) => w.id === o.id)?.default_stage ??
-                    'initial',
-                })),
-              })
-            }
-          />
-          {draft.workflows.map((w) => (
+          {section === 'links' ? (
             <OptionRows
-              key={w.id}
+              title="連結種類"
+              colorEditing={false}
               colors={draft.color_presets ?? []}
-              title={`${w.name || '新類型'}流程階段`}
-              options={w.stages}
-              defaultID={w.default_stage}
-              disabled={w.disabled}
-              onDefault={(id) =>
+              options={draft.link_types ?? []}
+              defaultID={draft.default_link_type}
+              onDefault={(id) => setDraft({ ...draft, default_link_type: id })}
+              onChange={(linkTypes, defaultLinkType) =>
                 setDraft({
                   ...draft,
-                  workflows: draft.workflows.map((item) =>
-                    item.id === w.id ? { ...item, default_stage: id } : item,
-                  ),
-                })
-              }
-              onChange={(stages, defaultStage) =>
-                setDraft({
-                  ...draft,
-                  workflows: draft.workflows.map((item) =>
-                    item.id === w.id
-                      ? {
-                          ...item,
-                          stages,
-                          default_stage: defaultStage ?? item.default_stage,
-                        }
-                      : item,
-                  ),
+                  link_types: linkTypes,
+                  default_link_type: defaultLinkType ?? draft.default_link_type,
                 })
               }
             />
-          ))}
-          <OptionRows
-            title="優先順序"
-            colors={draft.color_presets ?? []}
-            numeric
-            options={draft.priorities}
-            defaultID={String(draft.default_priority)}
-            onDefault={(id) =>
-              setDraft({ ...draft, default_priority: Number(id) })
-            }
-            onChange={(priorities, defaultPriority) =>
-              setDraft({
-                ...draft,
-                priorities,
-                default_priority:
-                  defaultPriority === undefined
-                    ? draft.default_priority
-                    : Number(defaultPriority),
-              })
-            }
-          />
+          ) : (
+            <>
+              <OptionRows
+                title="任務類型"
+                colors={draft.color_presets ?? []}
+                options={draft.workflows}
+                defaultID={draft.default_type}
+                onDefault={(id) => setDraft({ ...draft, default_type: id })}
+                onChange={(options, defaultType) =>
+                  setDraft({
+                    ...draft,
+                    default_type: defaultType ?? draft.default_type,
+                    workflows: options.map((o) => ({
+                      ...o,
+                      stages: draft.workflows.find((w) => w.id === o.id)
+                        ?.stages ?? [
+                        {
+                          id: 'initial',
+                          name: '待開始',
+                          color: nextOptionColor([], draft.color_presets ?? []),
+                          disabled: false,
+                        },
+                      ],
+                      default_stage:
+                        draft.workflows.find((w) => w.id === o.id)
+                          ?.default_stage ?? 'initial',
+                    })),
+                  })
+                }
+              />
+              {draft.workflows.map((w) => (
+                <OptionRows
+                  key={w.id}
+                  colors={draft.color_presets ?? []}
+                  title={`${w.name || '新類型'}流程階段`}
+                  options={w.stages}
+                  defaultID={w.default_stage}
+                  disabled={w.disabled}
+                  onDefault={(id) =>
+                    setDraft({
+                      ...draft,
+                      workflows: draft.workflows.map((item) =>
+                        item.id === w.id
+                          ? { ...item, default_stage: id }
+                          : item,
+                      ),
+                    })
+                  }
+                  onChange={(stages, defaultStage) =>
+                    setDraft({
+                      ...draft,
+                      workflows: draft.workflows.map((item) =>
+                        item.id === w.id
+                          ? {
+                              ...item,
+                              stages,
+                              default_stage: defaultStage ?? item.default_stage,
+                            }
+                          : item,
+                      ),
+                    })
+                  }
+                />
+              ))}
+              <OptionRows
+                title="優先順序"
+                colors={draft.color_presets ?? []}
+                numeric
+                options={draft.priorities}
+                defaultID={String(draft.default_priority)}
+                onDefault={(id) =>
+                  setDraft({ ...draft, default_priority: Number(id) })
+                }
+                onChange={(priorities, defaultPriority) =>
+                  setDraft({
+                    ...draft,
+                    priorities,
+                    default_priority:
+                      defaultPriority === undefined
+                        ? draft.default_priority
+                        : Number(defaultPriority),
+                  })
+                }
+              />
+            </>
+          )}
         </fieldset>
         <div className="form-actions">
           <Button disabled={save.isPending || stale}>

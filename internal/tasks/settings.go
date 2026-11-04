@@ -38,6 +38,8 @@ var optionColors = []ColorPreset{
 }
 
 type Settings struct {
+	LinkTypes       []Option         `json:"link_types"`
+	DefaultLinkType string           `json:"default_link_type"`
 	ColorPresets    []ColorPreset    `json:"color_presets"`
 	Version         int              `json:"version"`
 	Workflows       []ConfigWorkflow `json:"workflows"`
@@ -47,7 +49,7 @@ type Settings struct {
 }
 
 func defaultSettings() Settings {
-	cfg := Settings{Version: 1, DefaultType: "general", DefaultPriority: 1, Priorities: []Option{
+	cfg := Settings{LinkTypes: defaultLinkTypes(), DefaultLinkType: "pr", Version: 1, DefaultType: "general", DefaultPriority: 1, Priorities: []Option{
 		{ID: "2", Name: "優先處理", Color: optionColors[0].Color}, {ID: "1", Name: "一般", Color: optionColors[4].Color}, {ID: "0", Name: "之後再做", Color: optionColors[6].Color},
 	}}
 	for index, w := range Workflows {
@@ -141,6 +143,17 @@ func (s *Store) SaveSettings(ctx context.Context, c Settings) (Settings, error) 
 	if old.Version != c.Version {
 		return Settings{}, ErrConflict
 	}
+	if c.LinkTypes == nil {
+		c.LinkTypes = old.LinkTypes
+		c.DefaultLinkType = old.DefaultLinkType
+	}
+	if err = checkOptions(c.LinkTypes, false); err != nil {
+		return Settings{}, fmt.Errorf("%w：%v", ErrInvalid, err)
+	}
+	linkDefault := findOption(c.LinkTypes, c.DefaultLinkType)
+	if linkDefault == nil || linkDefault.Disabled {
+		return Settings{}, fmt.Errorf("%w：需要啟用中的預設連結種類", ErrInvalid)
+	}
 	options := []Option{}
 	for _, w := range c.Workflows {
 		options = append(options, w.Option)
@@ -218,10 +231,30 @@ func (s *Store) SaveSettings(ctx context.Context, c Settings) (Settings, error) 
 			task.Priority = c.DefaultPriority
 			changed = true
 		}
-		if changed {
+		linksChanged := false
+		for i := range task.Links {
+			link := &task.Links[i]
+			option := findOption(c.LinkTypes, link.TypeID)
+			if option == nil {
+				option = linkDefault
+			}
+			if link.TypeID != option.ID || link.Type != option.Name {
+				link.TypeID = option.ID
+				link.Type = option.Name
+				linksChanged = true
+			}
+		}
+		if changed || linksChanged {
 			task.Version++
 			task.UpdatedAt = now
-			task.History = append(task.History, Event{Action: "replace_deleted_option", Source: "settings", Summary: "刪除選項，改用預設類型、階段或優先順序", At: now, Version: task.Version})
+			action, summary := "replace_deleted_option", "刪除選項，改用預設類型、階段或優先順序"
+			if linksChanged {
+				action, summary = "update_link_types", "更新連結種類"
+				if changed {
+					summary = "更新任務選項與連結種類"
+				}
+			}
+			task.History = append(task.History, Event{Action: action, Source: "settings", Summary: summary, At: now, Version: task.Version})
 			updates = append(updates, task)
 		}
 	}
@@ -235,7 +268,11 @@ func (s *Store) SaveSettings(ctx context.Context, c Settings) (Settings, error) 
 		if err != nil {
 			return Settings{}, err
 		}
-		result, err := tx.ExecContext(ctx, `UPDATE tasks SET type=?,stage=?,priority=?,version=?,document=? WHERE id=? AND version=?`, task.Type, task.Stage, task.Priority, task.Version, string(raw), task.ID, task.Version-1)
+		links, err := json.Marshal(task.Links)
+		if err != nil {
+			return Settings{}, err
+		}
+		result, err := tx.ExecContext(ctx, `UPDATE tasks SET type=?,stage=?,priority=?,version=?,links=?,document=? WHERE id=? AND version=?`, task.Type, task.Stage, task.Priority, task.Version, string(links), string(raw), task.ID, task.Version-1)
 		if err != nil {
 			return Settings{}, err
 		}

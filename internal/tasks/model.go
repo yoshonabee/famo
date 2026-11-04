@@ -34,8 +34,9 @@ type Step struct {
 	CompletedAt *time.Time `json:"completed_at"`
 }
 type Link struct {
-	Type string `json:"type"`
-	URL  string `json:"url"`
+	TypeID string `json:"type_id,omitempty"`
+	Type   string `json:"type"`
+	URL    string `json:"url"`
 }
 type Event struct {
 	Action  string    `json:"action"`

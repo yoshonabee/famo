@@ -141,7 +141,7 @@ export function QuickCapture({
           aria-label="快速新增任務名稱"
           value={draft}
           maxLength={200}
-          placeholder="快速記下任務，Enter 新增…"
+          placeholder="新增任務…"
           onChange={(e) => setDraft(e.target.value)}
           onCompositionStart={() => {
             composing.current = true

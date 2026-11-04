@@ -1,9 +1,6 @@
 import { expect, test } from '@playwright/test'
 
-test('描述直接編輯、等待與提醒、Agent 更新與歷程收合', async ({
-  page,
-  request,
-}) => {
+test('描述直接編輯、Agent 更新與歷程收合', async ({ page, request }) => {
   const errors: string[] = []
   page.on('pageerror', (e) => errors.push(e.message))
   await page.goto('/')
@@ -49,13 +46,15 @@ test('描述直接編輯、等待與提醒、Agent 更新與歷程收合', async
   await expect(
     dialog.getByRole('button', { name: '編輯描述', exact: true }),
   ).toHaveText('修改描述\n保留換行')
-  await dialog.getByLabel('等待原因（選填）').fill('等待測試')
-  await dialog.getByRole('button', { name: '儲存等待與提醒' }).click()
-  await expect(dialog.locator('.detail-wait')).toContainText('等待 等待測試')
+  await expect(
+    dialog.getByRole('heading', { name: '等待與提醒', exact: true }),
+  ).toHaveCount(0)
+  await expect(dialog.getByLabel('等待原因（選填）')).toHaveCount(0)
+  await expect(dialog.getByLabel('下次查看（選填）')).toHaveCount(0)
   await dialog.getByRole('button', { name: '關閉', exact: true }).click()
   await expect(
     page
-      .locator('.section-waiting')
+      .getByRole('list', { name: '主要任務列表', exact: true })
       .getByRole('textbox', { name: '編輯任務標題：已直接改名', exact: true }),
   ).toBeVisible()
   const tasks = await (await request.get('/api/tasks')).json()
@@ -84,21 +83,25 @@ test('描述直接編輯、等待與提醒、Agent 更新與歷程收合', async
   expect(
     (
       await request.post(`/api/tasks/${task.id}/actions`, {
-        data: { op: 'resume', version: task.version },
+        data: {
+          op: 'update',
+          version: task.version,
+          description: '舊版本不可覆寫',
+        },
       })
     ).status(),
   ).toBe(409)
   await page.reload()
-  const review = page.locator('.section-review')
-  await expect(review.getByRole('link', { name: 'GitHub PR' })).toBeVisible()
-  await review
+  const mainList = page.getByRole('list', { name: '主要任務列表', exact: true })
+  await expect(mainList.getByRole('link', { name: 'GitHub PR' })).toBeVisible()
+  await mainList
     .getByRole('button', { name: '任務詳情：已直接改名', exact: true })
     .click()
   await expect(dialog.locator('.history')).not.toBeVisible()
   await dialog.getByText(/^進展歷程（/).click()
   await expect(dialog.getByText(/agent:e2e/)).toBeVisible()
   await dialog.getByRole('button', { name: '關閉', exact: true }).click()
-  await review
+  await mainList
     .getByRole('button', { name: '任務詳情：已直接改名', exact: true })
     .click()
   await expect(dialog.locator('.history')).not.toBeVisible()
@@ -110,9 +113,7 @@ test('描述直接編輯、等待與提醒、Agent 更新與歷程收合', async
   await expect(
     dialog.getByRole('button', { name: '編輯描述', exact: true }),
   ).toHaveText('離開欄位自動儲存')
-  await dialog
-    .getByRole('button', { name: '完成整件任務', exact: true })
-    .click()
+  await dialog.getByRole('button', { name: '完成任務', exact: true }).click()
   await expect(
     dialog.getByRole('button', { name: '恢復為未完成', exact: true }),
   ).toBeVisible()

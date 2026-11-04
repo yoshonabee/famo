@@ -98,7 +98,7 @@ test('舊步驟保留，但列表改字與完成只操作整件任務', async ({
   expect(saved.steps).toEqual(task.steps)
   await page.getByRole('button', { name: '已完成', exact: false }).click()
   await row.getByRole('checkbox', { name: '恢復任務：任務新名稱' }).click()
-  await page.getByRole('button', { name: '我的工作台', exact: false }).click()
+  await page.getByRole('button', { name: '任務列表', exact: false }).click()
   await expect(title).toHaveValue('任務新名稱')
   saved = await (await request.get(`/api/tasks/${task.id}`)).json()
   expect(saved.completed_at).toBeNull()

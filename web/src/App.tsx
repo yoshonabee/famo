@@ -1,17 +1,9 @@
-import {
-  useEffect,
-  useRef,
-  useState,
-  type FormEvent,
-  type ReactNode,
-} from 'react'
+import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { DragDropProvider } from '@dnd-kit/react'
 import { isSortable, useSortable } from '@dnd-kit/react/sortable'
 import {
-  ArrowRight,
   CheckCheck,
-  Clock3,
   ExternalLink,
   GripVertical,
   Inbox,
@@ -20,9 +12,9 @@ import {
   Plus,
   PanelRightOpen,
   Search,
-  Sprout,
-  Sun,
-  TimerReset,
+  Settings2,
+  Link2,
+  Trash2,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -47,41 +39,14 @@ import {
 import {
   ApiError,
   dateTime,
-  groupOf,
   orderSubset,
   request,
   type Action,
-  type Group,
   type Task,
   type Settings,
 } from '@/lib/api'
 
 type Act = (t: Task, action: Action, done?: (updated: Task) => void) => void
-const sections: {
-  id: Group
-  name: string
-  caption: string
-  icon: typeof Sun
-}[] = [
-  {
-    id: 'ready',
-    name: '可繼續',
-    caption: '從一個小步驟開始，讓事情往前一點。',
-    icon: Sun,
-  },
-  {
-    id: 'review',
-    name: '該回來看了',
-    caption: '約定的時間到了，看看有沒有新的進展。',
-    icon: TimerReset,
-  },
-  {
-    id: 'waiting',
-    name: '等外部結果',
-    caption: '脈絡留在這裡，現在可以先做別的事。',
-    icon: Clock3,
-  },
-]
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
     <label className="field">
@@ -123,9 +88,9 @@ function App() {
     queryFn: () => request<Settings>('/settings'),
     refetchInterval: 30_000,
   })
-  const [view, setView] = useState<'active' | 'completed' | 'settings'>(
-    'active',
-  )
+  const [view, setView] = useState<
+    'active' | 'completed' | 'settings' | 'link-settings'
+  >('active')
   const [search, setSearch] = useState('')
   const [create, setCreate] = useState(false)
   const capture = useQuickCapture(() => setSearch(''))
@@ -136,7 +101,6 @@ function App() {
   }
   const [selected, setSelected] = useState<string | null>(null)
   const [message, setMessage] = useState('')
-  const [now, setNow] = useState(Date.now())
   const reorder = useMutation({
     mutationFn: (ids: string[]) =>
       request<Task[]>('/tasks/reorder', { task_ids: ids }),
@@ -159,10 +123,6 @@ function App() {
       void client.invalidateQueries({ queryKey: ['tasks'] })
     },
   })
-  useEffect(() => {
-    const interval = setInterval(() => setNow(Date.now()), 15_000)
-    return () => clearInterval(interval)
-  }, [])
   const mutation = useMutation({
     mutationFn: ({ t, action }: { t: Task; action: Action }) =>
       request<Task>(`/tasks/${t.id}/actions`, {
@@ -189,38 +149,28 @@ function App() {
   const filtered = all.filter(
     (t) =>
       (view === 'completed') === !!t.completed_at &&
-      `${t.title} ${t.description} ${t.waiting_reason}`
+      `${t.title} ${t.description}`
         .toLowerCase()
         .includes(search.toLowerCase()),
   )
   const detail = all.find((t) => t.id === selected)
-  const today = new Date(now).toLocaleDateString('zh-TW', {
-    month: 'long',
-    day: 'numeric',
-    weekday: 'long',
-  })
-  const tasksToday = all.filter(
-    (t) =>
-      t.completed_at &&
-      new Date(t.completed_at).toDateString() === new Date(now).toDateString(),
-  ).length
   return (
     <div className="app-shell">
       <aside className="sidebar">
         <a className="brand" href="/">
           <span className="brand-mark">
-            <Layers3 size={21} />
+            <Layers3 size={18} />
           </span>
-          famo<span className="brand-dot">.</span>
+          famo
         </a>
-        <p className="workspace-label">PERSONAL WORKSPACE</p>
         <nav aria-label="主要導覽">
           <button
             className={view === 'active' ? 'nav-item active' : 'nav-item'}
             onClick={() => setView('active')}
+            aria-label="任務列表"
           >
             <Inbox size={17} />
-            我的工作台<span>{active.length}</span>
+            任務<span>{active.length}</span>
           </button>
           <button
             className={view === 'completed' ? 'nav-item active' : 'nav-item'}
@@ -232,95 +182,56 @@ function App() {
           <button
             className={view === 'settings' ? 'nav-item active' : 'nav-item'}
             onClick={() => setView('settings')}
+            aria-label="下拉選項設定"
           >
-            下拉選項設定
+            <Settings2 size={17} />
+            選項
+          </button>
+          <button
+            className={
+              view === 'link-settings' ? 'nav-item active' : 'nav-item'
+            }
+            onClick={() => setView('link-settings')}
+            aria-label="連結種類設定"
+          >
+            <Link2 size={17} />
+            連結種類
           </button>
         </nav>
-        <div className="sidebar-note">
-          <Sprout size={22} />
-          <p>
-            一次一小步，
-            <br />
-            把重要的事慢慢完成。
-          </p>
-        </div>
-        <div className="local-status">
-          <span />
-          資料保存在這台電腦
-        </div>
       </aside>
       <main>
-        <header className="topbar">
-          <span>
-            我的空間 <span className="slash">/</span>{' '}
-            {view === 'settings'
-              ? '下拉選項設定'
-              : view === 'active'
-                ? '工作台'
-                : '已完成'}
-          </span>
-          <span className="date">{today}</span>
-        </header>
         <div className="main-content">
-          {view === 'settings' ? (
+          {view === 'settings' || view === 'link-settings' ? (
             settings.data ? (
-              <SettingsPage settings={settings.data} />
+              <SettingsPage
+                key={view}
+                settings={settings.data}
+                section={view === 'link-settings' ? 'links' : 'tasks'}
+              />
             ) : (
               <p role="status">{settings.error?.message ?? '讀取設定中…'}</p>
             )
           ) : (
             <>
-              <div className="page-heading">
-                <div>
-                  <div className="eyebrow">YOUR EVERYDAY, A LITTLE CLEARER</div>
-                  <h1>
-                    {view === 'active'
-                      ? '留住脈絡，接著往前。'
-                      : '每一步，都算數。'}
-                  </h1>
-                  <p>
-                    {view === 'active'
-                      ? '不用重新回想。下一步，已經在這裡。'
-                      : '回顧已經完成的事，也看看自己走了多遠。'}
-                  </p>
-                </div>
-                <Button onClick={startCapture}>
-                  <Plus />
-                  新增任務
-                </Button>
-              </div>
-              {view === 'active' && (
-                <div className="overview">
-                  <div>
-                    <span className="overview-dot ready" />
-                    現在可推進
-                    <strong>
-                      {active.filter((t) => groupOf(t, now) === 'ready').length}
-                    </strong>
-                  </div>
-                  <div>
-                    <span className="overview-dot review" />
-                    需要回來看
-                    <strong>
-                      {
-                        active.filter((t) => groupOf(t, now) === 'review')
-                          .length
-                      }
-                    </strong>
-                  </div>
-                  <div>
-                    <CheckCheck size={16} />
-                    今天完成的任務<strong>{tasksToday}</strong>
-                  </div>
-                  <span className="overview-note">進展，從小事開始</span>
-                </div>
-              )}
               <div className="list-toolbar">
-                <span>
-                  {view === 'active' ? '我的任務' : '完成紀錄'}{' '}
-                  <small>{filtered.length}</small>
-                </span>
+                <div className="list-title">
+                  <h1>{view === 'active' ? '任務' : '已完成'}</h1>
+                  <span className="list-count">{filtered.length}</span>
+                </div>
+                <div className="search">
+                  <Search size={16} />
+                  <input
+                    aria-label="搜尋任務"
+                    placeholder="搜尋"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                  />
+                </div>
                 <div className="toolbar-actions">
+                  <Button size="sm" onClick={startCapture}>
+                    <Plus />
+                    新增任務
+                  </Button>
                   <Button
                     type="button"
                     variant="ghost"
@@ -329,15 +240,6 @@ function App() {
                   >
                     完整表單
                   </Button>
-                  <div className="search">
-                    <Search size={15} />
-                    <input
-                      aria-label="搜尋任務"
-                      placeholder="搜尋任務與脈絡…"
-                      value={search}
-                      onChange={(e) => setSearch(e.target.value)}
-                    />
-                  </div>
                 </div>
               </div>
               <QuickCapture
@@ -349,7 +251,7 @@ function App() {
               {tasks.isPending && (
                 <div className="state">
                   <LoaderCircle className="animate-spin" />
-                  正在讀取工作台…
+                  讀取中…
                 </div>
               )}
               {tasks.isError && (
@@ -363,105 +265,64 @@ function App() {
                   </Button>
                 </div>
               )}
-              {tasks.isSuccess &&
-                view === 'active' &&
-                sections.map((section) => {
-                  const list = filtered.filter(
-                    (t) => groupOf(t, now) === section.id,
-                  )
-                  const drafts = section.id === 'ready' ? capture.drafts : []
-                  return (
-                    <section
-                      className={`task-section section-${section.id}`}
-                      key={section.id}
-                    >
-                      <div className="section-heading">
-                        <section.icon size={17} />
-                        <h2>{section.name}</h2>
-                        <span className="count">
-                          {list.length + drafts.length}
-                        </span>
-                        <p>{section.caption}</p>
-                      </div>
-                      {list.length || drafts.length ? (
-                        <DragDropProvider
-                          onDragStart={() => {
-                            setDragging(true)
-                            void client.cancelQueries({ queryKey: ['tasks'] })
-                          }}
-                          onDragEnd={(event) => {
-                            setDragging(false)
-                            if (
-                              event.canceled ||
-                              !isSortable(event.operation.source)
-                            )
-                              return
-                            const { initialIndex, index } =
-                              event.operation.source
-                            if (initialIndex === index) return
-                            const next = [...list]
-                            const [moved] = next.splice(initialIndex, 1)
-                            next.splice(index, 0, moved)
-                            reorder.mutate(next.map((t) => t.id))
-                          }}
-                        >
-                          <ul className="task-list">
-                            {list.map((t, index) => (
-                              <TaskRow
-                                key={t.id}
-                                index={index}
-                                sortableDisabled={
-                                  reorder.isPending ||
-                                  mutation.isPending ||
-                                  capture.drafts.length > 0
-                                }
-                                task={t}
-                                busy={mutation.isPending}
-                                act={act}
-                                onOpen={() => setSelected(t.id)}
-                                onComplete={() =>
-                                  act(t, { op: 'complete_task' })
-                                }
-                                settings={settings.data}
-                              />
-                            ))}
-                            {drafts.map((draft) => (
-                              <CaptureDraftRow
-                                key={draft.id}
-                                draft={draft}
-                                retry={capture.retry}
-                              />
-                            ))}
-                          </ul>
-                        </DragDropProvider>
-                      ) : (
-                        <div className="empty-section">
-                          {section.id === 'ready' ? (
-                            search ? (
-                              '沒有符合的任務。'
-                            ) : (
-                              <>
-                                <span>留一件想推進的事，從下一步開始。</span>
-                                <button onClick={startCapture}>
-                                  新增第一件任務 <Plus size={13} />
-                                </button>
-                              </>
-                            )
-                          ) : section.id === 'review' ? (
-                            '目前沒有到期的查看提醒。'
-                          ) : (
-                            '目前沒有等待中的任務。'
-                          )}
-                        </div>
-                      )}
-                    </section>
-                  )
-                })}
+              {tasks.isSuccess && view === 'active' && (
+                <>
+                  <DragDropProvider
+                    onDragStart={() => {
+                      setDragging(true)
+                      void client.cancelQueries({ queryKey: ['tasks'] })
+                    }}
+                    onDragEnd={(event) => {
+                      setDragging(false)
+                      if (event.canceled || !isSortable(event.operation.source))
+                        return
+                      const { initialIndex, index } = event.operation.source
+                      if (initialIndex === index) return
+                      const next = [...filtered]
+                      const [moved] = next.splice(initialIndex, 1)
+                      next.splice(index, 0, moved)
+                      reorder.mutate(next.map((t) => t.id))
+                    }}
+                  >
+                    <ul className="task-list" aria-label="主要任務列表">
+                      {filtered.map((t, index) => (
+                        <TaskRow
+                          key={t.id}
+                          index={index}
+                          sortableDisabled={
+                            reorder.isPending ||
+                            mutation.isPending ||
+                            capture.drafts.length > 0
+                          }
+                          task={t}
+                          busy={mutation.isPending}
+                          act={act}
+                          onOpen={() => setSelected(t.id)}
+                          onComplete={() => act(t, { op: 'complete_task' })}
+                          settings={settings.data}
+                        />
+                      ))}
+                      {capture.drafts.map((draft) => (
+                        <CaptureDraftRow
+                          key={draft.id}
+                          draft={draft}
+                          retry={capture.retry}
+                        />
+                      ))}
+                    </ul>
+                  </DragDropProvider>
+                  {!filtered.length && !capture.drafts.length && (
+                    <div className="empty-list">
+                      {search ? '沒有符合的任務' : '尚無任務'}
+                    </div>
+                  )}
+                </>
+              )}
               {tasks.isSuccess &&
                 view === 'completed' &&
                 (filtered.length ? (
                   <DragDropProvider>
-                    <ul className="task-list">
+                    <ul className="task-list" aria-label="已完成任務列表">
                       {filtered.map((t, index) => (
                         <TaskRow
                           key={t.id}
@@ -479,24 +340,17 @@ function App() {
                 ) : (
                   <div className="state">
                     <CheckCheck />
-                    {search
-                      ? '沒有符合的任務。'
-                      : '完成的任務會留在這裡。先從一個小步驟開始吧。'}
+                    {search ? '沒有符合的任務。' : '尚無已完成任務'}
                   </div>
                 ))}
             </>
           )}
-          <footer>
-            讓腦袋留給思考，讓 famo 記得進度。
-            <span>LOCAL FIRST · YOUR OWN PACE</span>
-          </footer>
         </div>
       </main>
       <CreateDialog
         open={create}
         onOpenChange={setCreate}
         settings={settings.data}
-        onError={setMessage}
       />
       <Dialog
         open={!!detail}
@@ -604,18 +458,6 @@ function TaskRow({
                 : (stage?.name ?? t.stage)}
             </span>
           )}
-          {!completed && t.waiting_reason && (
-            <span className="task-chip waiting-chip">
-              <Clock3 size={11} />
-              等待 {t.waiting_reason}
-            </span>
-          )}
-          {!completed && t.review_at && (
-            <span className="task-chip review-chip">
-              <TimerReset size={11} />
-              {dateTime(t.review_at)} 回來看
-            </span>
-          )}
           <Links task={t} />
         </div>
         <button
@@ -630,120 +472,26 @@ function TaskRow({
     </li>
   )
 }
-function WaitingForm({
-  task,
-  act,
-  busy,
-  onDone,
-}: {
-  task: Task
-  act: Act
-  busy: boolean
-  onDone: () => void
-}) {
-  const [version, setVersion] = useState(task.version)
-  const [waiting, setWaiting] = useState(task.waiting_reason)
-  const [review, setReview] = useState(() => {
-    if (!task.review_at) return ''
-    const date = new Date(task.review_at)
-    return new Date(date.getTime() - date.getTimezoneOffset() * 60_000)
-      .toISOString()
-      .slice(0, 16)
-  })
-  const baseline = useRef({ waiting, review })
-  function reload(updated: Task) {
-    setVersion(updated.version)
-    setWaiting(updated.waiting_reason)
-    const date = updated.review_at ? new Date(updated.review_at) : null
-    const nextReview = date
-      ? new Date(date.getTime() - date.getTimezoneOffset() * 60_000)
-          .toISOString()
-          .slice(0, 16)
-      : ''
-    setReview(nextReview)
-    baseline.current = { waiting: updated.waiting_reason, review: nextReview }
-  }
-  useEffect(() => {
-    if (
-      waiting === baseline.current.waiting &&
-      review === baseline.current.review
-    )
-      reload(task)
-  }, [task.version])
-
-  const changed = version !== task.version
-  function submit(e: FormEvent) {
-    e.preventDefault()
-    if (changed) return
-    act(
-      { ...task, version },
-      {
-        op: 'update',
-        waiting_reason: waiting.trim(),
-        review_at: review ? new Date(review).toISOString() : '',
-      },
-      (updated) => {
-        reload(updated)
-        onDone()
-      },
-    )
-  }
-  return (
-    <form className="next-form" onSubmit={submit}>
-      <h3>等待與提醒</h3>
-      {changed && (
-        <div className="conflict-notice" role="status">
-          任務已有新進度。請先重新載入，確認後再編輯。
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => reload(task)}
-          >
-            重新載入設定
-          </Button>
-        </div>
-      )}
-      <div className="form-grid">
-        <Field label="等待原因（選填）">
-          <input
-            placeholder="例如：CI 執行中"
-            value={waiting}
-            onChange={(e) => setWaiting(e.target.value)}
-          />
-        </Field>
-        <Field label="下次查看（選填）">
-          <input
-            type="datetime-local"
-            value={review}
-            onChange={(e) => setReview(e.target.value)}
-          />
-        </Field>
-      </div>
-      <div className="form-actions">
-        <Button size="sm" disabled={busy || changed}>
-          {busy ? '儲存中…' : '儲存等待與提醒'}
-          <ArrowRight />
-        </Button>
-      </div>
-    </form>
-  )
-}
 function CreateDialog({
   open,
   onOpenChange,
   settings,
-  onError,
 }: {
   open: boolean
   onOpenChange: (v: boolean) => void
   settings?: Settings
-  onError: (v: string) => void
 }) {
   const client = useQueryClient()
   const [chosenType, setType] = useState('')
+  const [links, setLinks] = useState<
+    { id: string; type_id: string; url: string }[]
+  >([])
   useEffect(() => {
-    if (open) setType('')
+    if (open) {
+      setType('')
+      setLinks([])
+      create.reset()
+    }
   }, [open])
   const workflows = settings?.workflows ?? []
   const type = chosenType || settings?.default_type || ''
@@ -753,7 +501,6 @@ function CreateDialog({
       void client.invalidateQueries({ queryKey: ['tasks'] })
       onOpenChange(false)
     },
-    onError: (e) => onError(e.message),
   })
   function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -763,6 +510,7 @@ function CreateDialog({
       description: f.get('description'),
       type,
       priority: Number(f.get('priority')),
+      links: links.map(({ type_id, url }) => ({ type_id, url })),
       source: 'ui',
     })
   }
@@ -774,9 +522,9 @@ function CreateDialog({
       }}
     >
       <DialogContent>
-        <DialogTitle className="dialog-title">留下一件想推進的事</DialogTitle>
-        <DialogDescription className="dialog-description">
-          先記下任務，其餘的可以邊做邊補。
+        <DialogTitle className="dialog-title">新增任務</DialogTitle>
+        <DialogDescription className="sr-only">
+          任務內容與相關連結
         </DialogDescription>
         <form onSubmit={submit} className="stack-form">
           <Field label="任務名稱">
@@ -784,7 +532,7 @@ function CreateDialog({
               name="title"
               autoFocus
               required
-              placeholder="例如：修好登入逾時的問題"
+              placeholder="任務名稱"
               maxLength={200}
             />
           </Field>
@@ -807,12 +555,89 @@ function CreateDialog({
             </Field>
           </div>
           <Field label="描述">
-            <textarea
-              name="description"
-              placeholder="留下任務內容、背景或完成條件…"
-              rows={5}
-            />
+            <textarea name="description" placeholder="描述（選填）" rows={3} />
           </Field>
+          <fieldset className="create-links" disabled={create.isPending}>
+            <legend>相關連結（選填）</legend>
+            {links.map((link, index) => (
+              <div
+                className="create-link-row"
+                role="group"
+                aria-label={`連結 ${index + 1}`}
+                key={link.id}
+              >
+                <Field label={`連結種類 ${index + 1}`}>
+                  <OptionSelect
+                    label={`連結種類 ${index + 1}`}
+                    options={settings?.link_types ?? []}
+                    value={link.type_id}
+                    colored={false}
+                    onChange={(type_id) =>
+                      setLinks((current) =>
+                        current.map((item) =>
+                          item.id === link.id ? { ...item, type_id } : item,
+                        ),
+                      )
+                    }
+                  />
+                </Field>
+                <Field label={`URL ${index + 1}`}>
+                  <input
+                    type="url"
+                    required
+                    pattern="https?://.*"
+                    placeholder="https://…"
+                    value={link.url}
+                    onChange={(e) =>
+                      setLinks((current) =>
+                        current.map((item) =>
+                          item.id === link.id
+                            ? { ...item, url: e.target.value }
+                            : item,
+                        ),
+                      )
+                    }
+                  />
+                </Field>
+                <button
+                  className="remove-link"
+                  type="button"
+                  aria-label={`移除連結 ${index + 1}`}
+                  onClick={() =>
+                    setLinks((current) =>
+                      current.filter((item) => item.id !== link.id),
+                    )
+                  }
+                >
+                  <Trash2 size={16} />
+                </button>
+              </div>
+            ))}
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              disabled={!settings?.link_types.some((type) => !type.disabled)}
+              onClick={() =>
+                setLinks((current) => [
+                  ...current,
+                  {
+                    id: crypto.randomUUID(),
+                    type_id: settings?.default_link_type ?? '',
+                    url: '',
+                  },
+                ])
+              }
+            >
+              <Plus />
+              新增連結
+            </Button>
+          </fieldset>
+          {create.isError && (
+            <p role="alert" className="capture-error">
+              {create.error.message}
+            </p>
+          )}
           <div className="form-actions">
             <Button
               type="button"
@@ -854,7 +679,9 @@ function Detail({
       t,
       {
         op: 'add_link',
-        links: [{ type: String(f.get('type')), url: String(f.get('url')) }],
+        links: [
+          { type_id: String(f.get('type_id')), url: String(f.get('url')) },
+        ],
       },
       () => {
         form.reset()
@@ -871,13 +698,10 @@ function Detail({
       }}
     >
       <div className="detail-heading">
-        <span className="eyebrow">TASK CONTEXT · V{t.version}</span>
         <DialogTitle className="dialog-title" aria-label={t.title}>
           <InlineContent task={t} field="title" busy={busy} />
         </DialogTitle>
-        <DialogDescription className="dialog-description">
-          保留整件事的脈絡，隨時接著做。
-        </DialogDescription>
+        <DialogDescription className="sr-only">任務詳細資料</DialogDescription>
       </div>
       <div className="detail-meta">
         <label>
@@ -921,37 +745,6 @@ function Detail({
         <h3>描述</h3>
         <InlineContent task={t} field="description" busy={busy} />
       </div>
-      {!completed && (
-        <div className="detail-block">
-          <WaitingForm
-            key={t.id}
-            task={t}
-            act={act}
-            busy={busy}
-            onDone={() => {}}
-          />
-        </div>
-      )}
-      {!completed && t.waiting_reason && (
-        <div className="detail-wait">
-          <Clock3 size={18} />
-          <div>
-            等待 {t.waiting_reason}
-            <small>
-              自 {dateTime(t.waiting_since)}
-              {t.review_at && ` · ${dateTime(t.review_at)} 回來看`}
-            </small>
-          </div>
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={busy}
-            onClick={() => act(t, { op: 'resume' })}
-          >
-            回到可繼續
-          </Button>
-        </div>
-      )}
       <div className="detail-block">
         <div className="block-heading">
           <h3>相關連結</h3>
@@ -977,12 +770,19 @@ function Detail({
             ))}
           </div>
         ) : (
-          <p className="muted">把 PR、Asana 和 Slack 討論串留在一起。</p>
+          <p className="muted">尚無連結</p>
         )}
         {adding && (
           <form className="link-form" onSubmit={addLink}>
-            <Field label="類型">
-              <input name="type" placeholder="GitHub PR" required />
+            <Field label="連結種類">
+              <OptionSelect
+                label="連結種類"
+                colored={false}
+                name="type_id"
+                options={settings?.link_types ?? []}
+                defaultValue={settings?.default_link_type}
+                disabled={busy}
+              />
             </Field>
             <Field label="URL">
               <input
@@ -993,7 +793,12 @@ function Detail({
                 required
               />
             </Field>
-            <Button disabled={busy} size="sm">
+            <Button
+              disabled={
+                busy || !settings?.link_types.some((type) => !type.disabled)
+              }
+              size="sm"
+            >
               加入
             </Button>
           </form>
@@ -1023,22 +828,17 @@ function Detail({
       </details>
       {!completed && (
         <div className="finish-task">
-          <div>
-            <h3>整件事都完成了？</h3>
-            <p>確認任務已完成，就把它記入完成紀錄。</p>
-          </div>
           <Button
             disabled={busy}
             onClick={() => act(t, { op: 'complete_task' })}
           >
             <CheckCheck />
-            完成整件任務
+            完成任務
           </Button>
         </div>
       )}
       {completed && (
         <div className="finish-task">
-          <p>需要接著做？可以將任務恢復為未完成。</p>
           <Button
             disabled={busy}
             variant="outline"

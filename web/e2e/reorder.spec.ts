@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 
-test('左側六點把手可拖曳、鍵盤排序，順序持久化且失敗回復', async ({
+test('含舊等待資料的任務維持單一列表，支援拖曳、鍵盤排序與失敗回復', async ({
   page,
   request,
 }) => {
@@ -9,11 +9,27 @@ test('左側六點把手可拖曳、鍵盤排序，順序持久化且失敗回�
       data: { title: `拖曳測試 ${suffix}`, type: 'general', priority: 1 },
     })
     expect(response.status()).toBe(201)
+    const task = await response.json()
+    if (suffix !== 'A') {
+      expect(
+        (
+          await request.post(`/api/tasks/${task.id}/actions`, {
+            data: {
+              op: 'update',
+              version: task.version,
+              ...(suffix === 'B'
+                ? { waiting_reason: '等待回覆' }
+                : { review_at: new Date(Date.now() - 60000).toISOString() }),
+            },
+          })
+        ).status(),
+      ).toBe(200)
+    }
   }
   await page.goto('/')
   await page.getByRole('textbox', { name: '搜尋任務' }).fill('拖曳測試')
-  const ready = page.locator('.section-ready')
-  const titles = ready.locator('input.todo-title')
+  const mainList = page.getByRole('list', { name: '主要任務列表', exact: true })
+  const titles = mainList.locator('input.todo-title')
   const expectTitles = (expected: string[]) =>
     expect
       .poll(() =>
@@ -23,11 +39,21 @@ test('左側六點把手可拖曳、鍵盤排序，順序持久化且失敗回�
       )
       .toEqual(expected)
   await expectTitles(['拖曳測試 A', '拖曳測試 B', '拖曳測試 C'])
-  const source = ready.getByRole('button', {
+  await expect(
+    page.getByRole('list', { name: '主要任務列表', exact: true }),
+  ).toHaveCount(1)
+  await expect(
+    page.getByRole('heading', { name: /^(可繼續|該回來看了|等外部結果)$/ }),
+  ).toHaveCount(0)
+  await expect(
+    mainList.getByText('等待 等待回覆', { exact: true }),
+  ).toHaveCount(0)
+  await expect(mainList.locator('.review-chip')).toHaveCount(0)
+  const source = mainList.getByRole('button', {
     name: '拖曳排序：拖曳測試 C',
     exact: true,
   })
-  const first = ready.getByRole('textbox', {
+  const first = mainList.getByRole('textbox', {
     name: '編輯任務標題：拖曳測試 A',
     exact: true,
   })
@@ -80,7 +106,7 @@ test('左側六點把手可拖曳、鍵盤排序，順序持久化且失敗回�
   await capture.fill('拖曳測試 D')
   await capture.press('Enter')
   await expect(
-    ready.getByRole('textbox', {
+    mainList.getByRole('textbox', {
       name: '編輯任務標題：拖曳測試 D',
       exact: true,
     }),
