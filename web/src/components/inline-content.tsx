@@ -71,7 +71,7 @@ export function InlineContent({
       submitting.current = false
     }
   }
-  const label = field === 'title' ? '任務標題' : '描述'
+  const label = field === 'title' ? '任務標題' : '備註'
   if (!edit)
     return (
       <button
@@ -89,7 +89,7 @@ export function InlineContent({
           setError('')
         }}
       >
-        {task[field] || '新增描述…'}
+        {task[field] || '新增備註…'}
       </button>
     )
   const props = {

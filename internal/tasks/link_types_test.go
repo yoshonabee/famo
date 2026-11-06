@@ -8,6 +8,67 @@ import (
 	"testing"
 )
 
+func TestURLOnlyLinksPersistAndRespectExplicitKinds(t *testing.T) {
+	s := openTest(t)
+	ctx := context.Background()
+	task, err := s.Create(ctx, CreateInput{Title: "測試登入修正", Links: []Link{{URL: "  https://github.com/example/famo/pull/123  "}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if task.Links[0].TypeID != "pr" || task.Links[0].URL != "https://github.com/example/famo/pull/123" {
+		t.Fatalf("URL-only creation did not normalize the link: %+v", task.Links)
+	}
+	links := []Link{
+		{URL: "https://github.com/example/famo/issues/12"},
+		{URL: "https://team.slack.com/archives/C123/p456"},
+		{URL: "https://app.asana.com/0/123/456"},
+		{URL: "https://docs.google.com/document/d/123/edit"},
+		{URL: "https://example.com/design"},
+		{URL: "https://github.com.example.com/example/famo/pull/123"},
+		{TypeID: "document", URL: "https://github.com/example/famo/pull/124"},
+	}
+	task, err = s.Act(ctx, task.ID, Action{Op: "add_link", Version: task.Version, Links: links})
+	if err != nil {
+		t.Fatal(err)
+	}
+	saved, err := s.Get(ctx, task.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i, kind := range []string{"pr", "issue", "slack", "asana", "document", "other", "other", "document"} {
+		if saved.Links[i].TypeID != kind {
+			t.Fatalf("link %d: expected %s, got %+v", i, kind, saved.Links[i])
+		}
+	}
+	for _, invalid := range []string{"javascript:alert(1)", "https://", "not a URL"} {
+		_, err = s.Act(ctx, task.ID, Action{Op: "add_link", Version: saved.Version, Links: []Link{{URL: "https://example.com/good"}, {URL: invalid}}})
+		if !errors.Is(err, ErrInvalid) {
+			t.Fatalf("invalid URL accepted: %q: %v", invalid, err)
+		}
+	}
+	unchanged, _ := s.Get(ctx, task.ID)
+	if unchanged.Version != saved.Version || len(unchanged.Links) != len(saved.Links) {
+		t.Fatal("invalid batch partially appended links")
+	}
+	cfg, _ := s.Settings(ctx)
+	for i := range cfg.LinkTypes {
+		if cfg.LinkTypes[i].ID == "pr" || cfg.LinkTypes[i].ID == "other" {
+			cfg.LinkTypes[i].Disabled = true
+		}
+	}
+	cfg.DefaultLinkType = "document"
+	if _, err = s.SaveSettings(ctx, cfg); err != nil {
+		t.Fatal(err)
+	}
+	fallback, err := s.Create(ctx, CreateInput{Title: "仍可直接貼網址", Links: []Link{{URL: "https://github.com/example/famo/pull/125"}}})
+	if err != nil || fallback.Links[0].TypeID != "document" {
+		t.Fatalf("retired kinds blocked URL-only input: %+v, %v", fallback.Links, err)
+	}
+	if _, err = s.Create(ctx, CreateInput{Title: "明確種類仍驗證", Links: []Link{{TypeID: "pr", URL: "https://github.com/example/famo/pull/126"}}}); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("explicit retired kind accepted: %v", err)
+	}
+}
+
 func TestLinkTypeMigrationImportsLegacyKindsWithoutLosingLinks(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "v4.db")
 	s, err := Open(path)

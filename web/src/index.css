@@ -106,8 +106,28 @@ a:focus-visible {
 
 .link-list {
   display: flex;
-  gap: 12px;
+  align-items: center;
+  gap: 10px;
   flex-wrap: wrap;
+  min-width: 0;
+  max-width: 45%;
+}
+.link-list a {
+  min-width: 0;
+  max-width: 220px;
+}
+.link-list a span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.link-list svg {
+  flex-shrink: 0;
+}
+.more-links {
+  color: #7a876d;
+  font-size: 12px;
+  padding: 2px 4px;
 }
 .link-list a {
   display: flex;
@@ -261,6 +281,15 @@ a:focus-visible {
   font-size: 14px;
   color: #799162;
 }
+.detail-links a > span:first-child {
+  max-width: 45%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.detail-links a > svg {
+  flex-shrink: 0;
+}
 .detail-links a > span:nth-child(2) {
   overflow: hidden;
   white-space: nowrap;
@@ -270,7 +299,7 @@ a:focus-visible {
 }
 .link-form {
   display: grid;
-  grid-template-columns: 120px 1fr auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: end;
   gap: 10px;
   margin-top: 16px;
@@ -1115,7 +1144,7 @@ input.todo-title {
     grid-column: 3;
     grid-row: 1;
   }
-  .row-chips {
+  .todo-line > .link-list {
     grid-column: 3;
     grid-row: 2;
     max-width: 100%;
@@ -1178,17 +1207,26 @@ input.todo-title {
 .earlier-actions {
   margin-bottom: 8px;
 }
-.earlier-task-actions {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 10px;
-  padding-top: 10px;
+.earlier-date-group + .earlier-date-group {
+  margin-top: 16px;
+}
+.earlier-date-group h3 {
+  margin: 12px 0 4px;
   color: #7c8870;
   font-size: 14px;
+  font-weight: 500;
 }
-.earlier-task-actions button:last-child {
-  margin-left: auto;
+.earlier-task {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.earlier-task > ul {
+  flex: 1;
+  min-width: 0;
+}
+.earlier-task > button:last-child {
+  flex-shrink: 0;
 }
 .scheduled-date-field {
   display: flex;
