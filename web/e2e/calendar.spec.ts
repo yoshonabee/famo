@@ -22,7 +22,7 @@ async function openDate(page: Page, date = '2026-11-04') {
 const rowTitle = (page: Page, title: string) =>
   page.getByRole('textbox', { name: `編輯任務標題：${title}`, exact: true })
 
-test('日期只看所屬日期，完成留在當天，補勾先前任務不移入今天', async ({
+test('日期只看所屬日期，完成留在當天，先前任務只提供轉移選取', async ({
   page,
   request,
 }) => {
@@ -72,31 +72,24 @@ test('日期只看所屬日期，完成留在當天，補勾先前任務不移�
   await expect(earlier).not.toHaveAttribute('open')
   await earlier.locator('summary').click()
   await expect(earlier.locator('[data-task-id]')).toHaveCount(1)
-  await earlier
-    .getByRole('checkbox', {
+  await expect(
+    earlier.getByRole('checkbox', {
       name: '完成任務：calendar-scope 昨天',
       exact: true,
-    })
-    .click()
-  await expect(earlier.locator('[data-task-id]')).toHaveCount(0)
+    }),
+  ).toHaveCount(0)
+  await expect(
+    earlier.getByRole('checkbox', {
+      name: '選取任務：calendar-scope 昨天',
+      exact: true,
+    }),
+  ).toBeVisible()
   await expect(completed.locator('[data-task-id]')).toHaveCount(1)
   await page.getByRole('button', { name: '前一天', exact: true }).click()
   await expect(page.locator('h1 time')).toHaveAttribute(
     'datetime',
     '2026-11-03',
   )
-  await expect(
-    page.getByRole('checkbox', {
-      name: '恢復任務：calendar-scope 昨天',
-      exact: true,
-    }),
-  ).toBeChecked()
-  await page
-    .getByRole('checkbox', {
-      name: '恢復任務：calendar-scope 昨天',
-      exact: true,
-    })
-    .click()
   await expect(
     page.getByRole('checkbox', {
       name: '完成任務：calendar-scope 昨天',
@@ -162,7 +155,7 @@ test('前後一天、日曆選日、當地今日與手機版', async ({ page }) 
   })
 })
 
-test('日期新增預設、修改與清除日期、全部任務不預設日期', async ({
+test('一句話新增使用當日、修改與清除日期、全部任務不預設日期', async ({
   page,
   request,
 }) => {
@@ -174,14 +167,7 @@ test('日期新增預設、修改與清除日期、全部任務不預設日期',
   await capture.fill('calendar-create 快速新增')
   await capture.press('Enter')
   await expect(rowTitle(page, 'calendar-create 快速新增')).toBeVisible()
-  await page.getByRole('button', { name: '新增任務', exact: true }).click()
   const dialog = page.getByRole('dialog')
-  await expect(dialog.getByLabel('任務日期（選填）')).toHaveValue('2026-12-15')
-  await dialog
-    .getByLabel('任務名稱', { exact: true })
-    .fill('calendar-create 完整表單')
-  await dialog.getByRole('button', { name: '建立任務', exact: true }).click()
-  await expect(rowTitle(page, 'calendar-create 完整表單')).toBeVisible()
   await page
     .getByRole('button', {
       name: '任務詳情：calendar-create 快速新增',
@@ -240,7 +226,9 @@ test('先前未完成逐筆與多選移入，衝突保留原任務且可重試',
   const earlier = page.locator('details.earlier-tasks')
   await earlier.locator('summary').click()
   await expect(earlier.locator('[data-task-id]')).toHaveCount(3)
-  await expect(earlier.locator('time').first()).toHaveText('2026-11-02')
+  await expect(earlier.locator('time')).toHaveCount(1)
+  await expect(earlier.locator('time')).toHaveText('2026-11-02')
+  await expect(earlier.getByRole('checkbox')).toHaveCount(3)
   await earlier
     .locator('.earlier-task')
     .filter({
@@ -447,10 +435,12 @@ test('日期標題與今日分段選單：月曆選日、鍵盤、關閉及手�
   await expect(
     page.getByRole('button', { name: '完整表單', exact: true }),
   ).toHaveCount(0)
-  await page.getByRole('button', { name: '新增任務', exact: true }).click()
-  const form = page.getByRole('dialog', { name: '新增任務', exact: true })
-  await expect(form.getByLabel('任務日期（選填）')).toHaveValue('2026-11-04')
-  await form.getByRole('button', { name: '關閉', exact: true }).click()
+  await expect(
+    page.getByRole('button', { name: '新增任務', exact: true }),
+  ).toHaveCount(0)
+  await expect(
+    page.getByRole('textbox', { name: '快速新增任務名稱' }),
+  ).toBeVisible()
   const previous = (await page
     .getByRole('button', { name: '前一天', exact: true })
     .boundingBox())!
@@ -465,15 +455,6 @@ test('日期標題與今日分段選單：月曆選日、鍵盤、關閉及手�
   const headingBox = (await heading.boundingBox())!
   expect(previous.x).toBeGreaterThan(headingBox.x + headingBox.width)
   const searchBox = (await page.getByLabel('搜尋任務').boundingBox())!
-  const addBox = (await page
-    .getByRole('button', { name: '新增任務', exact: true })
-    .boundingBox())!
-  expect(addBox.x).toBeGreaterThan(searchBox.x + searchBox.width)
-  const toolbarBox = (await page.locator('.list-toolbar').boundingBox())!
-  expect(addBox.x + addBox.width).toBeCloseTo(
-    toolbarBox.x + toolbarBox.width,
-    0,
-  )
 
   await expect(page.getByLabel('選擇日期', { exact: true })).toHaveCount(0)
   const trigger = page.getByRole('button', {

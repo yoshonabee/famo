@@ -15,6 +15,7 @@ test('直接編輯標題、Enter 儲存、Escape 取消，空白後再 Backspace
     })
   ).json()
   await page.goto('/')
+  await page.getByRole('button', { name: '任務列表', exact: true }).click()
   const capture = page.getByRole('textbox', { name: '快速新增任務名稱' })
   const border = await capture
     .locator('..')
@@ -39,6 +40,7 @@ test('直接編輯標題、Enter 儲存、Escape 取消，空白後再 Backspace
     '編輯任務標題：Markdown 已改名',
   )
   await page.reload()
+  await page.getByRole('button', { name: '任務列表', exact: true }).click()
   await expect(title).toHaveValue('Markdown 已改名')
   await title.click()
   await title.fill('不應儲存的草稿')
@@ -67,6 +69,7 @@ test('直接編輯標題、Enter 儲存、Escape 取消，空白後再 Backspace
   await expect(row).not.toBeVisible()
   expect((await request.get(`/api/tasks/${task.id}`)).status()).toBe(404)
   await page.reload()
+  await page.getByRole('button', { name: '任務列表', exact: true }).click()
   await expect(row).not.toBeVisible()
 })
 
@@ -84,6 +87,7 @@ test('舊步驟保留，但列表改字與完成只操作整件任務', async ({
     })
   ).json()
   await page.goto('/')
+  await page.getByRole('button', { name: '任務列表', exact: true }).click()
   const row = page.locator(`[data-task-id="${task.id}"]`)
   const title = row.locator('input.todo-title')
   await expect(title).toHaveValue('封存步驟的任務')
@@ -117,6 +121,7 @@ test('列內草稿遇到版本衝突保留文字，不覆寫新資料', async ({
     await request.post('/api/tasks', { data: { title: 'Markdown 衝突測試' } })
   ).json()
   await page.goto('/')
+  await page.getByRole('button', { name: '任務列表', exact: true }).click()
   const row = page.locator(`[data-task-id="${task.id}"]`)
   const title = row.locator('input.todo-title')
   await title.click()

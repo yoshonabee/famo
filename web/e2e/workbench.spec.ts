@@ -1,26 +1,27 @@
 import { expect, test } from '@playwright/test'
 
-test('描述直接編輯、Agent 更新與歷程收合', async ({ page, request }) => {
+test('備註直接編輯、Agent 更新與歷程保留於資料', async ({ page, request }) => {
   const errors: string[] = []
   page.on('pageerror', (e) => errors.push(e.message))
   await page.goto('/')
-  await page.getByRole('button', { name: '新增任務', exact: true }).click()
+  await page.getByRole('button', { name: '任務列表', exact: true }).click()
+  await request.post('/api/tasks', {
+    data: {
+      title: '新版詳細頁驗收',
+      description: '任務目標\n背景與完成條件',
+      type: 'development',
+    },
+  })
+  await page.reload()
+  await page.getByRole('button', { name: '任務列表', exact: true }).click()
   const dialog = page.getByRole('dialog')
-  await dialog.getByLabel('任務名稱').fill('新版詳細頁驗收')
-  await dialog
-    .getByLabel('描述', { exact: true })
-    .fill('任務目標\n背景與完成條件')
-  await dialog.getByLabel('任務類型').selectOption('development')
-  await expect(dialog.getByLabel('下一步與子步驟（每行一個）')).toHaveCount(0)
-  await dialog.getByRole('button', { name: '建立任務', exact: true }).click()
   await page
     .getByRole('button', { name: '任務詳情：新版詳細頁驗收', exact: true })
     .click()
   await expect(
     dialog.getByRole('button', { name: '編輯內容', exact: true }),
   ).toHaveCount(0)
-  await expect(dialog.locator('details')).not.toHaveAttribute('open')
-  await expect(dialog.locator('.history')).not.toBeVisible()
+  await expect(dialog.locator('.history')).toHaveCount(0)
   await dialog
     .getByRole('button', { name: '編輯任務標題', exact: true })
     .click()
@@ -33,18 +34,18 @@ test('描述直接編輯、Agent 更新與歷程收合', async ({ page, request 
   await expect(
     dialog.getByRole('button', { name: '編輯任務標題', exact: true }),
   ).toHaveText('已直接改名')
-  await dialog.getByRole('button', { name: '編輯描述', exact: true }).click()
-  const description = dialog.getByRole('textbox', { name: '描述', exact: true })
+  await dialog.getByRole('button', { name: '編輯備註', exact: true }).click()
+  const description = dialog.getByRole('textbox', { name: '備註', exact: true })
   await description.fill('修改描述\n保留換行')
   await description.press('Escape')
   await expect(
-    dialog.getByRole('button', { name: '編輯描述', exact: true }),
+    dialog.getByRole('button', { name: '編輯備註', exact: true }),
   ).toHaveText('任務目標\n背景與完成條件')
-  await dialog.getByRole('button', { name: '編輯描述', exact: true }).click()
+  await dialog.getByRole('button', { name: '編輯備註', exact: true }).click()
   await description.fill('修改描述\n保留換行')
   await description.press('Control+Enter')
   await expect(
-    dialog.getByRole('button', { name: '編輯描述', exact: true }),
+    dialog.getByRole('button', { name: '編輯備註', exact: true }),
   ).toHaveText('修改描述\n保留換行')
   await expect(
     dialog.getByRole('heading', { name: '等待與提醒', exact: true }),
@@ -92,40 +93,43 @@ test('描述直接編輯、Agent 更新與歷程收合', async ({ page, request 
     ).status(),
   ).toBe(409)
   await page.reload()
+  await page.getByRole('button', { name: '任務列表', exact: true }).click()
   const mainList = page.getByRole('list', { name: '主要任務列表', exact: true })
-  await expect(mainList.getByRole('link', { name: 'GitHub PR' })).toBeVisible()
+  await expect(mainList.getByRole('link', { name: 'repo PR #1' })).toBeVisible()
   await mainList
     .getByRole('button', { name: '任務詳情：已直接改名', exact: true })
     .click()
-  await expect(dialog.locator('.history')).not.toBeVisible()
-  await dialog.getByText(/^進展歷程（/).click()
-  await expect(dialog.getByText(/agent:e2e/)).toBeVisible()
+  expect(
+    (await (await request.get(`/api/tasks/${task.id}`)).json()).history.some(
+      (event: { source: string }) => event.source === 'agent:e2e',
+    ),
+  ).toBe(true)
   await dialog.getByRole('button', { name: '關閉', exact: true }).click()
   await mainList
     .getByRole('button', { name: '任務詳情：已直接改名', exact: true })
     .click()
-  await expect(dialog.locator('.history')).not.toBeVisible()
-  await dialog.getByRole('button', { name: '編輯描述', exact: true }).click()
+  await expect(dialog.locator('.history')).toHaveCount(0)
+  await dialog.getByRole('button', { name: '編輯備註', exact: true }).click()
   await dialog
-    .getByRole('textbox', { name: '描述', exact: true })
+    .getByRole('textbox', { name: '備註', exact: true })
     .fill('離開欄位自動儲存')
-  await dialog.getByRole('heading', { name: '描述', exact: true }).click()
+  await dialog.getByRole('heading', { name: '備註', exact: true }).click()
   await expect(
-    dialog.getByRole('button', { name: '編輯描述', exact: true }),
+    dialog.getByRole('button', { name: '編輯備註', exact: true }),
   ).toHaveText('離開欄位自動儲存')
   await dialog.getByRole('button', { name: '完成任務', exact: true }).click()
   await expect(
     dialog.getByRole('button', { name: '恢復為未完成', exact: true }),
   ).toBeVisible()
-  await dialog.getByRole('button', { name: '編輯描述', exact: true }).click()
+  await dialog.getByRole('button', { name: '編輯備註', exact: true }).click()
   await dialog
-    .getByRole('textbox', { name: '描述', exact: true })
+    .getByRole('textbox', { name: '備註', exact: true })
     .fill('已完成後補上的描述')
   await dialog
-    .getByRole('textbox', { name: '描述', exact: true })
+    .getByRole('textbox', { name: '備註', exact: true })
     .press('Control+Enter')
   await expect(
-    dialog.getByRole('button', { name: '編輯描述', exact: true }),
+    dialog.getByRole('button', { name: '編輯備註', exact: true }),
   ).toHaveText('已完成後補上的描述')
   await dialog.getByRole('button', { name: '關閉', exact: true }).click()
   await page.getByRole('button', { name: '已完成', exact: false }).click()
@@ -146,12 +150,13 @@ test('手機描述草稿保留版本衝突，空白標題與中文選字不誤�
     })
   ).json()
   await page.goto('/')
+  await page.getByRole('button', { name: '任務列表', exact: true }).click()
   await page
     .getByRole('button', { name: '任務詳情：手機直接編輯', exact: true })
     .click()
   const dialog = page.getByRole('dialog')
-  await dialog.getByRole('button', { name: '編輯描述', exact: true }).click()
-  const description = dialog.getByRole('textbox', { name: '描述', exact: true })
+  await dialog.getByRole('button', { name: '編輯備註', exact: true }).click()
+  const description = dialog.getByRole('textbox', { name: '備註', exact: true })
   await description.fill('保留的本機草稿')
   await request.post(`/api/tasks/${task.id}/actions`, {
     data: { op: 'update', version: task.version, description: 'Agent 新描述' },
@@ -161,7 +166,7 @@ test('手機描述草稿保留版本衝突，空白標題與中文選字不誤�
   await expect(description).toHaveValue('保留的本機草稿')
   await dialog.getByRole('button', { name: '取消並讀取最新內容' }).click()
   await expect(
-    dialog.getByRole('button', { name: '編輯描述', exact: true }),
+    dialog.getByRole('button', { name: '編輯備註', exact: true }),
   ).toHaveText('Agent 新描述')
   await dialog
     .getByRole('button', { name: '編輯任務標題', exact: true })

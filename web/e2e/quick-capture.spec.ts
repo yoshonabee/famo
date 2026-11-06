@@ -28,7 +28,10 @@ test('Enter 連續新增，不等待上一列儲存，名稱以外皆可留白',
   await input.press('Enter')
   await expect(input).toHaveValue('')
   await expect(input).toBeFocused()
-  const mainList = page.getByRole('list', { name: '主要任務列表', exact: true })
+  const mainList = page.getByRole('list', {
+    name: '當日未完成任務',
+    exact: true,
+  })
   await expect(mainList.getByText('儲存中', { exact: true })).toBeVisible()
   await expect(capture.locator('li')).toHaveCount(0)
   await input.fill('- [ ] 快速記下：回覆訊息')
@@ -92,18 +95,14 @@ test('Enter 連續新增，不等待上一列儲存，名稱以外皆可留白',
   await checkbox.click()
   await expect(row).not.toBeVisible()
   await page.getByRole('button', { name: '已完成' }).click()
-  await page.getByRole('button', { name: '新增任務', exact: true }).click()
-  await expect(
-    dialog.getByRole('heading', { name: '新增任務', exact: true }),
-  ).toBeVisible()
-  await dialog.getByRole('button', { name: '關閉', exact: true }).click()
-  await page.getByRole('button', { name: '任務列表', exact: true }).click()
+  await expect(capture).toBeHidden()
+  await page.getByRole('button', { name: '今日任務', exact: true }).click()
   await expect(input).toHaveValue('第三件先保留草稿')
   await expect(capture.locator('li')).toHaveCount(0)
   await page.reload()
   await expect(
     page
-      .getByRole('list', { name: '主要任務列表', exact: true })
+      .getByRole('list', { name: '當日未完成任務', exact: true })
       .getByRole('textbox', {
         name: '編輯任務標題：快速記下：回覆訊息',
         exact: true,
@@ -133,7 +132,10 @@ test('中文選字與空白 Enter 不送出；失敗保留原列，手機可重�
     exact: true,
   })
   const input = capture.getByRole('textbox', { name: '快速新增任務名稱' })
-  const mainList = page.getByRole('list', { name: '主要任務列表', exact: true })
+  const mainList = page.getByRole('list', {
+    name: '當日未完成任務',
+    exact: true,
+  })
   await input.fill('   ')
   await input.press('Enter')
   await input.fill('- [ ] ')

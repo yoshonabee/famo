@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"strings"
 )
 
@@ -24,9 +25,19 @@ func (c Settings) normalizeLinks(links []Link) ([]Link, error) {
 	out := append([]Link(nil), links...)
 	for i := range out {
 		link := &out[i]
+		link.URL = strings.TrimSpace(link.URL)
 		var option *Option
 		if link.TypeID != "" {
 			option = findOption(c.LinkTypes, link.TypeID)
+		} else if link.Type == "" {
+			// URL-only input keeps attaching context independent of configuration.
+			// Explicit kinds still use the existing validation below.
+			for _, kind := range []string{inferLinkType(link.URL), "other", c.DefaultLinkType} {
+				if candidate := findOption(c.LinkTypes, kind); candidate != nil && !candidate.Disabled {
+					option = candidate
+					break
+				}
+			}
 		} else {
 			for j := range c.LinkTypes {
 				candidate := &c.LinkTypes[j]
@@ -47,6 +58,33 @@ func (c Settings) normalizeLinks(links []Link) ([]Link, error) {
 		link.Type = option.Name
 	}
 	return out, nil
+}
+
+func inferLinkType(value string) string {
+	u, err := url.Parse(value)
+	if err != nil {
+		return "other"
+	}
+	host := strings.ToLower(u.Hostname())
+	parts := strings.Split(strings.Trim(u.Path, "/"), "/")
+	if host == "github.com" && len(parts) >= 4 {
+		switch parts[2] {
+		case "pull":
+			return "pr"
+		case "issues":
+			return "issue"
+		}
+	}
+	switch {
+	case host == "slack.com" || strings.HasSuffix(host, ".slack.com"):
+		return "slack"
+	case host == "asana.com" || strings.HasSuffix(host, ".asana.com"):
+		return "asana"
+	case host == "docs.google.com" || host == "drive.google.com":
+		return "document"
+	default:
+		return "other"
+	}
 }
 
 func migrateLinkTypes(tx *sql.Tx) error {

@@ -17,7 +17,12 @@ type Props = {
   onReorder: (ids: string[]) => void
   onDragging: (dragging: boolean) => void
   onMove: (task: Task, date: string) => Promise<void>
-  renderTask: (task: Task, index: number, disabled: boolean) => ReactNode
+  renderTask: (
+    task: Task,
+    index: number,
+    disabled: boolean,
+    hideCompletion?: boolean,
+  ) => ReactNode
   drafts: ReactNode[]
 }
 
@@ -53,6 +58,12 @@ export function CalendarPage({
         matches(task),
     )
     .sort((a, b) => a.scheduled_date.localeCompare(b.scheduled_date))
+  const earlierByDate = new Map<string, Task[]>()
+  for (const task of earlier) {
+    const group = earlierByDate.get(task.scheduled_date) ?? []
+    group.push(task)
+    earlierByDate.set(task.scheduled_date, group)
+  }
   const selectedEarlier = earlier.filter((task) => selected.includes(task.id))
   async function moveTasks(items: Task[]) {
     setMoving(true)
@@ -133,37 +144,41 @@ export function CalendarPage({
                 </div>
                 <DragDropProvider>
                   <ul className="task-list" aria-label="先前未完成任務">
-                    {earlier.map((task, index) => (
-                      <li className="earlier-task" key={task.id}>
-                        <div className="earlier-task-actions">
-                          <Checkbox
-                            aria-label={`選取任務：${task.title}`}
-                            checked={selected.includes(task.id)}
-                            disabled={disabled}
-                            onCheckedChange={(checked) =>
-                              setSelected((ids) =>
-                                checked
-                                  ? [
-                                      ...ids.filter((id) => id !== task.id),
-                                      task.id,
-                                    ]
-                                  : ids.filter((id) => id !== task.id),
-                              )
-                            }
-                          />
-                          <time dateTime={task.scheduled_date}>
-                            {task.scheduled_date}
-                          </time>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            disabled={disabled}
-                            onClick={() => void moveTasks([task])}
-                          >
-                            移到這天
-                          </Button>
-                        </div>
-                        <ul>{renderTask(task, index, true)}</ul>
+                    {Array.from(earlierByDate, ([scheduledDate, items]) => (
+                      <li className="earlier-date-group" key={scheduledDate}>
+                        <h3>
+                          <time dateTime={scheduledDate}>{scheduledDate}</time>
+                        </h3>
+                        <ul
+                          className="task-list"
+                          aria-label={`${scheduledDate} 未完成任務`}
+                        >
+                          {items.map((task, index) => (
+                            <li className="earlier-task" key={task.id}>
+                              <Checkbox
+                                aria-label={`選取任務：${task.title}`}
+                                checked={selected.includes(task.id)}
+                                disabled={disabled}
+                                onCheckedChange={(checked) =>
+                                  setSelected((ids) =>
+                                    checked
+                                      ? [...new Set([...ids, task.id])]
+                                      : ids.filter((id) => id !== task.id),
+                                  )
+                                }
+                              />
+                              <ul>{renderTask(task, index, true, true)}</ul>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                disabled={disabled}
+                                onClick={() => void moveTasks([task])}
+                              >
+                                移到這天
+                              </Button>
+                            </li>
+                          ))}
+                        </ul>
                       </li>
                     ))}
                   </ul>

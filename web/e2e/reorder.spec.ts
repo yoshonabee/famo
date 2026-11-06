@@ -27,6 +27,7 @@ test('含舊等待資料的任務維持單一列表，支援拖曳、鍵盤排�
     }
   }
   await page.goto('/')
+  await page.getByRole('button', { name: '任務列表', exact: true }).click()
   await page.getByRole('textbox', { name: '搜尋任務' }).fill('拖曳測試')
   const mainList = page.getByRole('list', { name: '主要任務列表', exact: true })
   const titles = mainList.locator('input.todo-title')
@@ -74,6 +75,7 @@ test('含舊等待資料的任務維持單一列表，支援拖曳、鍵盤排�
   expect((await save).status()).toBe(200)
   await expectTitles(['拖曳測試 C', '拖曳測試 A', '拖曳測試 B'])
   await page.reload()
+  await page.getByRole('button', { name: '任務列表', exact: true }).click()
   await page.getByRole('textbox', { name: '搜尋任務' }).fill('拖曳測試')
   await expectTitles(['拖曳測試 C', '拖曳測試 A', '拖曳測試 B'])
   const keyboardSave = page.waitForResponse((r) =>
@@ -99,6 +101,7 @@ test('含舊等待資料的任務維持單一列表，支援拖曳、鍵盤排�
   await expect(page.getByRole('alert')).toContainText('順序未儲存')
   await expectTitles(['拖曳測試 A', '拖曳測試 C', '拖曳測試 B'])
   await page.reload()
+  await page.getByRole('button', { name: '任務列表', exact: true }).click()
   await page.getByRole('textbox', { name: '搜尋任務' }).fill('拖曳測試')
   await expectTitles(['拖曳測試 A', '拖曳測試 C', '拖曳測試 B'])
   // 新增任務應接在最後，不可把手動順序重新按建立時間排序。
