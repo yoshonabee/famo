@@ -3,7 +3,9 @@ import ReactDOM from 'react-dom/client'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import App from './App'
 import { initializeDesktop } from './lib/desktop'
+import { initializeTheme } from './lib/theme'
 import './index.css'
+initializeTheme()
 void initializeDesktop().catch((error: unknown) => {
   console.error('無法載入桌面整合', error)
 })

@@ -29,7 +29,8 @@ func Run(cfg Config) error {
 			}),
 			DisableLogging: true,
 		},
-		Mac: application.MacOptions{ApplicationShouldTerminateAfterLastWindowClosed: true},
+		Mac:      application.MacOptions{ApplicationShouldTerminateAfterLastWindowClosed: true},
+		Services: []application.Service{application.NewService(&ThemeFiles{})},
 		SingleInstance: &application.SingleInstanceOptions{
 			UniqueID: "io.github.yoshonabee.famo",
 			OnSecondInstanceLaunch: func(application.SecondInstanceData) {
@@ -54,7 +55,24 @@ func Run(cfg Config) error {
 		}
 	})
 	menu := app.NewMenu()
-	menu.AddRole(application.AppMenu)
+	appMenu := menu.AddSubmenu("Famo")
+	appMenu.AddRole(application.About)
+	appMenu.AddSeparator()
+	appMenu.Add("偏好設定…").SetAccelerator("CmdOrCtrl+,").OnClick(func(*application.Context) {
+		if window, ok := app.Window.GetByName("famo"); ok {
+			window.Show()
+			window.Focus()
+			window.EmitEvent("famo:open-settings")
+		}
+	})
+	appMenu.AddSeparator()
+	appMenu.AddRole(application.ServicesMenu)
+	appMenu.AddSeparator()
+	appMenu.AddRole(application.Hide)
+	appMenu.AddRole(application.HideOthers)
+	appMenu.AddRole(application.UnHide)
+	appMenu.AddSeparator()
+	appMenu.AddRole(application.Quit)
 	menu.AddRole(application.EditMenu)
 	menu.AddRole(application.WindowMenu)
 	app.Menu.Set(menu)
