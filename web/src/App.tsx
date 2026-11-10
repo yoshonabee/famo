@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { DragDropProvider } from '@dnd-kit/react'
 import { isSortable, useSortable } from '@dnd-kit/react/sortable'
@@ -12,7 +12,11 @@ import {
   Plus,
   PanelRightOpen,
   Search,
+  Settings,
 } from 'lucide-react'
+import { PreferencesPage } from '@/components/preferences-page'
+import { useTheme } from '@/lib/theme'
+import { openSettingsEvent } from '@/lib/desktop'
 import { DateNavigation } from '@/components/date-navigation'
 import { CalendarPage } from '@/components/calendar-page'
 import { localDate } from '@/lib/calendar'
@@ -78,6 +82,7 @@ function Links({ task, onOpen }: { task: Task; onOpen: () => void }) {
 }
 function App() {
   const client = useQueryClient()
+  const theme = useTheme()
   const [dragging, setDragging] = useState(false)
   const [ordering, setOrdering] = useState(false)
   const tasks = useQuery({
@@ -86,7 +91,9 @@ function App() {
     enabled: !dragging && !ordering,
     refetchInterval: 30_000,
   })
-  const [view, setView] = useState<'active' | 'date' | 'completed'>('date')
+  const [view, setView] = useState<
+    'active' | 'date' | 'completed' | 'preferences'
+  >('date')
   const [date, setDate] = useState(localDate)
   const [search, setSearch] = useState('')
   const capture = useQuickCapture(
@@ -97,6 +104,15 @@ function App() {
     view === 'date' ? draft.scheduled_date === date : true,
   )
   const [selected, setSelected] = useState<string | null>(null)
+  useEffect(() => {
+    const openSettings = () => {
+      setSelected(null)
+      setView('preferences')
+      window.scrollTo(0, 0)
+    }
+    window.addEventListener(openSettingsEvent, openSettings)
+    return () => window.removeEventListener(openSettingsEvent, openSettings)
+  }, [])
   const [message, setMessage] = useState('')
   const reorder = useMutation({
     mutationFn: (ids: string[]) =>
@@ -200,9 +216,19 @@ function App() {
             已完成<span>{all.length - active.length}</span>
           </button>
         </nav>
+        <div className="sidebar-footer">
+          <button
+            className={view === 'preferences' ? 'nav-item active' : 'nav-item'}
+            onClick={() => setView('preferences')}
+            aria-current={view === 'preferences' ? 'page' : undefined}
+          >
+            <Settings size={17} />
+            設定
+          </button>
+        </div>
       </aside>
       <main>
-        <div className="main-content">
+        <div className="main-content" hidden={view === 'preferences'}>
           {view === 'date' && (
             <header className="calendar-heading">
               <h1>
@@ -373,6 +399,9 @@ function App() {
                 {search ? '沒有符合的任務。' : '尚無已完成任務'}
               </div>
             ))}
+        </div>
+        <div className="main-content" hidden={view !== 'preferences'}>
+          <PreferencesPage appearance={theme} />
         </div>
       </main>
       <Dialog
