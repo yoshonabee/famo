@@ -66,6 +66,9 @@ func Run(cfg Config) error {
 	log.Printf("Famo 資料：%s", cfg.DBPath)
 	if backend.APIURL() != "" {
 		log.Printf("Famo Agent API：%s", backend.APIURL())
+		if cfg.APIInfoPath != "" {
+			log.Printf("Famo Agent API 位址檔案：%s", cfg.APIInfoPath)
+		}
 	}
 	return app.Run()
 }
