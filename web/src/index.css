@@ -920,13 +920,10 @@ button:disabled {
   color: #3c4932;
 }
 .brand-mark {
-  display: grid;
-  place-items: center;
-  width: 25px;
-  height: 25px;
-  border-radius: 7px;
-  background: #657d4d;
-  color: #fff;
+  display: block;
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
 }
 .sidebar nav {
   display: grid;

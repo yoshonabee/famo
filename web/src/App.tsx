@@ -8,7 +8,6 @@ import {
   ExternalLink,
   GripVertical,
   Inbox,
-  Layers3,
   LoaderCircle,
   Plus,
   PanelRightOpen,
@@ -164,9 +163,13 @@ function App() {
     <div className="app-shell">
       <aside className="sidebar">
         <a className="brand" href="/">
-          <span className="brand-mark">
-            <Layers3 size={18} />
-          </span>
+          <img
+            className="brand-mark"
+            src="/famo-mark.svg"
+            alt=""
+            width={28}
+            height={28}
+          />
           famo
         </a>
         <nav aria-label="主要導覽">
