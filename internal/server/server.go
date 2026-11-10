@@ -16,9 +16,19 @@ import (
 )
 
 func New(store *tasks.Store, assets fs.FS) http.Handler {
+	return newHandler(store, assets, localOnly)
+}
+
+// NewEmbedded serves the same API inside Wails' in-process asset server.
+// It must never be exposed on a network listener; network clients use New.
+func NewEmbedded(store *tasks.Store, assets fs.FS) http.Handler {
+	return newHandler(store, assets, requireJSON)
+}
+
+func newHandler(store *tasks.Store, assets fs.FS, access func(http.Handler) http.Handler) http.Handler {
 	r := chi.NewRouter()
 	r.Use(recoverer)
-	r.Use(localOnly)
+	r.Use(access)
 	api := func(r chi.Router) {
 		r.Get("/health", func(w http.ResponseWriter, r *http.Request) { write(w, 200, map[string]string{"status": "ok"}) })
 		r.Get("/settings", func(w http.ResponseWriter, r *http.Request) {
@@ -163,6 +173,7 @@ func recoverer(next http.Handler) http.Handler {
 	})
 }
 func localOnly(next http.Handler) http.Handler {
+	next = requireJSON(next)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		host := r.Host
 		if h, _, err := net.SplitHostPort(host); err == nil {
@@ -179,6 +190,11 @@ func localOnly(next http.Handler) http.Handler {
 				return
 			}
 		}
+		next.ServeHTTP(w, r)
+	})
+}
+func requireJSON(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "POST" && strings.Split(r.Header.Get("Content-Type"), ";")[0] != "application/json" {
 			write(w, 415, map[string]string{"error": "請使用 application/json"})
 			return
