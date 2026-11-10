@@ -55,6 +55,48 @@ make build
 
 正式執行檔已內嵌前端，搬動時不必搬動 Node.js 或 `web/dist`。修改程式後需重新執行 `make build` 並重新啟動程式。
 
+### macOS 桌面版
+
+桌面版使用 Wails v3 與系統 WKWebView，直接開啟獨立視窗，不需要另外啟動伺服器或開啟瀏覽器。每日清單、日期、排序、備註和連結沿用相同介面；任務連結交給系統預設瀏覽器開啟。支援 macOS 13.3 以上，提供標準 App／Edit／Window 選單與 ⌘Q、複製貼上等操作；關閉最後一個視窗會結束 App，再次啟動已開啟的 App 會聚焦原視窗。
+
+建置需要前述 Go／Node.js／npm，以及 Xcode Command Line Tools（`xcode-select --install`）。不需要另外安裝 Wails CLI：
+
+```sh
+make desktop
+open bin/Famo.app
+```
+
+也可使用 `make run-desktop` 一次完成建置與開啟。`bin/Famo.app` 已包含執行檔、前端與圖示，可從 Finder 開啟或搬到 Applications；執行時不需要 Go 或 Node.js。預設建置目前 Mac 的 CPU 架構；`make desktop ARCH=universal` 會打包同時支援 Apple Silicon 與 Intel 的版本。
+
+要加入 macOS 的 App 畫面，將 `Famo.app` 拖進 Finder 的「應用程式」（`/Applications`），之後可從 App 畫面或 Spotlight 搜尋開啟。需要固定在 Dock 時，將「應用程式」中的 Famo 拖到 Dock。更新已安裝的版本時，先以 ⌘Q 結束 Famo，再用新 `Famo.app` 替換「應用程式」中的版本；資料庫獨立存放，替換 App 不會刪除任務。
+
+桌面版的預設資料庫固定為 `~/Library/Application Support/Famo/famo.db`，不受啟動位置影響。第一次啟動會建立新資料庫，不會自動搬動或覆寫命令列版的 `data/famo.db`。若要使用既有資料，先結束原本的 Famo，再指定完整路徑：
+
+```sh
+open bin/Famo.app --args -db /absolute/path/to/existing/famo.db
+```
+
+啟動參數只在第一次啟動程序時生效。也可直接執行 `bin/Famo.app/Contents/MacOS/famo-desktop -db /absolute/path/famo.db`，在終端機查看訊息。
+
+桌面版的 Agent API 預設監聽 `127.0.0.1:0`，由作業系統直接分配空閒 port；雙擊開啟時不需要設定埠，也不會與原本的 8787 服務爭用。介面透過程序內部的 Wails asset server 存取資料，無須經過 TCP 埠。Agent API 與桌面視窗仍共用資料及版本檢查。
+
+實際位址在啟動時原子寫入固定的 `~/Library/Application Support/Famo/agent-api.json`，例如：
+
+```json
+{
+  "version": 1,
+  "url": "http://127.0.0.1:52431",
+  "pid": 12345,
+  "instance_id": "THIS_LAUNCH_HAS_A_UNIQUE_ID"
+}
+```
+
+Agent 應先讀取這個檔案，再呼叫 `url` 下的 `/health`，確認狀態為 `ok`，且回應的 `X-Famo-Instance-ID` header 與檔案的 `instance_id` 相同，然後使用相同的 `/api/tasks` 等路徑。這個識別碼用於核對執行個體，不是存取憑證。App 每次啟動都會重新分配 port 並更新檔案；連線失敗或識別碼不符時，應重新讀取檔案，避免使用異常結束前留下的位址。正常結束會清除所屬位址檔案、關閉資料庫並釋放埠。
+
+目前可用啟動參數選擇 `-addr 127.0.0.1:8789` 固定 port，或用 `-addr ''` 停用 Agent API；停用時會清除舊位址檔案，桌面介面仍可正常使用。指定固定埠而發生衝突時會顯示啟動錯誤。這些參數只對本次程序生效，App 內的偏好設定留待後續提供。`-api-info /absolute/path/agent-api.json` 可為隔離測試指定其他位址檔案；`-db` 不會改變預設位址檔案的位置。
+
+目前產物使用本機 ad-hoc 簽章，供本機建置與試用；Developer ID 簽署、公證與自動更新尚未提供。原始碼已保留其他平台可共用的核心，這一版僅支援及驗證 macOS 桌面打包。
+
 ### 資料升級
 
 資料庫升級至 v4 時會在交易中建立選項設定，將原有 `goal`、`context`、`acceptance` 的非空內容依序加上小標合併成 `description`。原欄位、步驟、連結、歷程、任務版本與排序均保留；之後清空描述不會再次從舊欄位填回。
@@ -95,6 +137,8 @@ npm run format:check
 ## Agent API
 
 所有路徑同時支援 `/api` 前綴。僅供本機單一使用者使用；預設綁定 loopback，驗證 Host 與瀏覽器 Origin。寫入只接受 `application/json`，單次請求最多 1 MiB。
+
+以下 `curl` 範例使用命令列版預設的 `127.0.0.1:8787`。桌面版請先依上方 `agent-api.json` 的方式取得位址，再替換範例中的主機與 port。
 
 | 方法與路徑 | 用途 |
 | --- | --- |
@@ -166,12 +210,16 @@ curl http://127.0.0.1:8787/tasks/TASK_ID/actions \
 
 ```text
 cmd/famo/              啟動、參數、結束處理
+cmd/famo-desktop/      macOS Wails 桌面入口
+internal/desktop/     桌面視窗、固定資料目錄、共用資料庫及 Agent API 生命週期
 internal/tasks/        資料模型、自訂選項、領域操作、SQLite 持久化與遷移
 internal/server/       chi HTTP API、本機來源驗證、靜態檔案
 web/src/               React 每日清單與輕量詳情
 web/src/components/ui/ 專案持有的 UI 基礎元件
 web/e2e/               Playwright 瀏覽器驗收
 web/embed.go           內嵌前端建置產物
+build/macos/           App bundle metadata 與圖示
+scripts/build-macos.sh macOS 建置、Universal binary 與本機簽章
 ```
 
 原始需求背景見 [personal-task-manager.md](personal-task-manager.md)；目前操作以本文件為準。

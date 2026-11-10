@@ -1,8 +1,14 @@
-.PHONY: build run dev-api dev-web test clean
+.PHONY: build run frontend desktop run-desktop dev-api dev-web test clean
 build:
-	cd web && npm ci && npm run build
+	$(MAKE) frontend
 	mkdir -p bin
 	go build -o bin/famo ./cmd/famo
+frontend:
+	cd web && npm ci && npm run build
+desktop: frontend
+	sh scripts/build-macos.sh
+run-desktop: desktop
+	open bin/Famo.app
 run: build
 	./bin/famo
 dev-api:
