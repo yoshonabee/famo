@@ -131,6 +131,80 @@ test('square checkboxes complete and reopen tasks, preserve dates and recover fr
   await expect(page.getByRole('alert')).toHaveCount(0)
 })
 
+test('panel writes refresh an already open main window without focus or polling', async ({
+  page,
+  context,
+  request,
+}) => {
+  const time = new Date('2044-05-06T04:00:00Z')
+  await page.clock.install({ time })
+  await page.setViewportSize({ width: 1100, height: 780 })
+  const created = await request.post('/api/tasks', {
+    data: { title: '兩個視窗同步', scheduled_date: '2044-05-06' },
+  })
+  const task = (await created.json()) as Task
+  let mainReads = 0
+  await page.route('**/api/tasks', async (route) => {
+    if (route.request().method() === 'GET') mainReads++
+    await route.continue()
+  })
+  await page.goto('/')
+  const mainComplete = page.getByRole('checkbox', {
+    name: `完成任務：${task.title}`,
+    exact: true,
+  })
+  const mainReopen = page.getByRole('checkbox', {
+    name: `恢復任務：${task.title}`,
+    exact: true,
+  })
+  await expect(mainComplete).not.toBeChecked()
+  const initialReads = mainReads
+  const panel = await context.newPage()
+  await panel.clock.install({ time })
+  await panel.goto('/?view=menu-bar')
+  await panel
+    .getByRole('checkbox', { name: `完成任務：${task.title}`, exact: true })
+    .click()
+  await expect(mainReopen).toBeChecked({ timeout: 3_000 })
+  expect(mainReads).toBeGreaterThan(initialReads)
+  await panel
+    .getByRole('checkbox', { name: `恢復任務：${task.title}`, exact: true })
+    .click()
+  await expect(mainComplete).not.toBeChecked({ timeout: 3_000 })
+
+  // A failed write must not tell another window that a task changed.
+  const readsBeforeFailure = mainReads
+  await panel.route(`**/api/tasks/${task.id}/actions`, (route) =>
+    route.fulfill({ status: 500, json: { error: '暫時無法寫入' } }),
+  )
+  await panel
+    .getByRole('checkbox', { name: `完成任務：${task.title}`, exact: true })
+    .click()
+  await expect(panel.getByRole('alert')).toContainText('暫時無法寫入')
+  await expect(mainComplete).not.toBeChecked()
+  expect(mainReads).toBe(readsBeforeFailure)
+  await panel.unroute(`**/api/tasks/${task.id}/actions`)
+
+  // Changes made in the main window also reach the panel before its 2s poll.
+  await panel.clock.pauseAt(new Date('2044-05-06T04:00:05Z'))
+  const panelRefresh = panel.waitForResponse(
+    (response) =>
+      response.url().endsWith('/api/tasks') &&
+      response.request().method() === 'GET',
+  )
+  await page.bringToFront()
+  await mainComplete.click()
+  await (await panelRefresh).finished()
+  await panel.clock.resume()
+  await expect(
+    panel.getByRole('checkbox', {
+      name: `恢復任務：${task.title}`,
+      exact: true,
+    }),
+  ).toBeChecked({ timeout: 3_000 })
+  await panel.close()
+})
+
 test('empty panel follows theme changes and Open Famo returns to the main app', async ({
   page,
   context,

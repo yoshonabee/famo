@@ -7,11 +7,13 @@ import { initializeDesktop } from './lib/desktop'
 import { initializeTheme } from './lib/theme'
 import './index.css'
 initializeTheme()
-void initializeDesktop().catch((error: unknown) => {
-  console.error('無法載入桌面整合', error)
-})
 const client = new QueryClient({
   defaultOptions: { queries: { staleTime: 10_000, retry: 1 } },
+})
+void initializeDesktop(() => {
+  void client.invalidateQueries({ queryKey: ['tasks'] })
+}).catch((error: unknown) => {
+  console.error('無法載入桌面整合', error)
 })
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>

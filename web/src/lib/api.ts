@@ -1,3 +1,5 @@
+import { notifyTasksChanged } from '@/lib/desktop'
+
 export type Step = { id: string; title: string; completed_at: string | null }
 export type Link = { type_id?: string; type: string; url: string }
 export type Task = {
@@ -98,6 +100,7 @@ export async function request<T>(
   )
   const data = await res.json()
   if (!res.ok) throw new ApiError(data.error || '操作失敗，請重試', res.status)
+  if (body !== undefined && path.startsWith('/tasks')) void notifyTasksChanged()
   return data as T
 }
 export function orderSubset(tasks: Task[], ids: string[]) {

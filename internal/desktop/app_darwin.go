@@ -69,6 +69,7 @@ func Run(cfg Config) error {
 	appMenu.AddRole(application.UnHide)
 	appMenu.AddSeparator()
 	appMenu.AddRole(application.Quit)
+	menu.AddSubmenu("File").AddRole(application.CloseWindow)
 	menu.AddRole(application.EditMenu)
 	menu.AddRole(application.WindowMenu)
 	app.Menu.Set(menu)
