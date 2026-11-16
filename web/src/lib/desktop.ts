@@ -1,7 +1,17 @@
+const tasksChangedEvent = 'famo:tasks-changed'
+let taskChannel: BroadcastChannel | undefined
+
 // Load Wails only inside the macOS app; the browser build keeps using HTTP.
-export async function initializeDesktop() {
-  if (window.location.protocol !== 'wails:') return
+export async function initializeDesktop(onTasksChanged: () => void) {
+  if (window.location.protocol !== 'wails:') {
+    if ('BroadcastChannel' in window) {
+      taskChannel = new BroadcastChannel(tasksChangedEvent)
+      taskChannel.onmessage = onTasksChanged
+    }
+    return
+  }
   const { Browser, Events } = await import('@wailsio/runtime')
+  Events.On(tasksChangedEvent, onTasksChanged)
   Events.On(openSettingsEvent, () => {
     window.dispatchEvent(new Event(openSettingsEvent))
   })
@@ -22,6 +32,30 @@ export async function initializeDesktop() {
   )
 }
 export const openSettingsEvent = 'famo:open-settings'
+
+// Publish only after a successful write. Each WebView owns a separate query
+// cache, so invalidating the sender alone leaves other open windows stale.
+export async function notifyTasksChanged() {
+  try {
+    if (window.location.protocol === 'wails:') {
+      const { Events } = await import('@wailsio/runtime')
+      await Events.Emit(tasksChangedEvent)
+    } else {
+      taskChannel?.postMessage(null)
+    }
+  } catch (error) {
+    console.error('無法通知其他視窗更新任務', error)
+  }
+}
+
+export async function openFamo() {
+  if (window.location.protocol === 'wails:') {
+    const { Call } = await import('@wailsio/runtime')
+    await Call.ByName('famo/internal/desktop.MenuBar.OpenFamo')
+    return
+  }
+  window.location.assign('/')
+}
 
 export async function exportThemeFile(contents: string, filename: string) {
   if (window.location.protocol === 'wails:') {

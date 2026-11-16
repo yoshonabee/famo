@@ -29,5 +29,7 @@
 
 ## 桌面偏好設定
 
+- [x] macOS 選單列顯示今日完成比例，點擊可開啟今日任務浮動面板與 Open Famo。
+
 - [ ] 可在 App 中開啟或停用 Agent API。
 - [ ] 可選擇動態 port 或指定固定 port，套用後同步更新 Agent API 位址檔案。

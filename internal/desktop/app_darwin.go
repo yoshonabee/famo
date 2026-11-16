@@ -11,6 +11,7 @@ import (
 
 	"famo/web"
 	"github.com/wailsapp/wails/v3/pkg/application"
+	"github.com/wailsapp/wails/v3/pkg/events"
 )
 
 func Run(cfg Config) error {
@@ -29,8 +30,8 @@ func Run(cfg Config) error {
 			}),
 			DisableLogging: true,
 		},
-		Mac:      application.MacOptions{ApplicationShouldTerminateAfterLastWindowClosed: true},
-		Services: []application.Service{application.NewService(&ThemeFiles{})},
+		Mac:      application.MacOptions{ApplicationShouldTerminateAfterLastWindowClosed: false},
+		Services: []application.Service{application.NewService(&ThemeFiles{}), application.NewService(&MenuBar{})},
 		SingleInstance: &application.SingleInstanceOptions{
 			UniqueID: "io.github.yoshonabee.famo",
 			OnSecondInstanceLaunch: func(application.SecondInstanceData) {
@@ -49,11 +50,6 @@ func Run(cfg Config) error {
 		return err
 	}
 	defer backend.Close()
-	app.OnShutdown(func() {
-		if err := backend.Close(); err != nil {
-			log.Printf("關閉 Famo：%v", err)
-		}
-	})
 	menu := app.NewMenu()
 	appMenu := menu.AddSubmenu("Famo")
 	appMenu.AddRole(application.About)
@@ -73,13 +69,27 @@ func Run(cfg Config) error {
 	appMenu.AddRole(application.UnHide)
 	appMenu.AddSeparator()
 	appMenu.AddRole(application.Quit)
+	menu.AddSubmenu("File").AddRole(application.CloseWindow)
 	menu.AddRole(application.EditMenu)
 	menu.AddRole(application.WindowMenu)
 	app.Menu.Set(menu)
-	app.Window.NewWithOptions(application.WebviewWindowOptions{
+	mainWindow := app.Window.NewWithOptions(application.WebviewWindowOptions{
 		Name: "famo", Title: "Famo", URL: "/",
 		Width: 1100, Height: 780, MinWidth: 620, MinHeight: 480,
 		BackgroundColour: application.NewRGB(248, 247, 244),
+	})
+	mainWindow.RegisterHook(events.Common.WindowClosing, func(event *application.WindowEvent) {
+		event.Cancel()
+		mainWindow.Hide()
+	})
+	app.Event.OnApplicationEvent(events.Mac.ApplicationShouldHandleReopen, func(*application.ApplicationEvent) {
+		(&MenuBar{}).OpenFamo()
+	})
+	setupMenuBar(app, backend)
+	app.OnShutdown(func() {
+		if err := backend.Close(); err != nil {
+			log.Printf("關閉 Famo：%v", err)
+		}
 	})
 	log.Printf("Famo 資料：%s", cfg.DBPath)
 	if backend.APIURL() != "" {
