@@ -30,6 +30,16 @@ test('panel counts scheduled local tasks, reflects API edits and rolls over at m
   await expect(page.getByRole('progressbar')).toHaveAttribute('value', '1')
   await expect(page.locator('.menu-bar-progress')).toContainText('50%')
   await expect(list.getByRole('listitem').first()).toContainText(first.title)
+  const open = await page
+    .getByRole('button', { name: 'Open Famo', exact: true })
+    .boundingBox()
+  const date = await page.locator('time').boundingBox()
+  expect(open!.y).toBeLessThan(50)
+  expect(date!.x + date!.width).toBeLessThan(open!.x)
+  await expect(page.getByRole('checkbox').first()).toHaveCSS(
+    'border-radius',
+    '3px',
+  )
   await page.screenshot({ path: '/private/tmp/famo-menu-bar-light.png' })
   await request.post(`/api/tasks/${first.id}/actions`, {
     data: { op: 'complete_task', version: first.version },
@@ -42,6 +52,83 @@ test('panel counts scheduled local tasks, reflects API edits and rolls over at m
   await expect(list.getByRole('listitem')).toHaveCount(1)
   await expect(list).toContainText('明天的任務')
   await expect(page.getByRole('status')).toHaveText('已完成 0 / 1 件')
+})
+
+test('square checkboxes complete and reopen tasks, preserve dates and recover from failures and conflicts', async ({
+  page,
+  request,
+}) => {
+  await page.clock.install({ time: new Date('2042-03-04T04:00:00Z') })
+  const response = await request.post('/api/tasks', {
+    data: {
+      title: '在選單列完成任務',
+      scheduled_date: '2042-03-04',
+      description: '保留備註',
+    },
+  })
+  const task = (await response.json()) as Task
+  await page.goto('/?view=menu-bar')
+  const complete = page.getByRole('checkbox', {
+    name: `完成任務：${task.title}`,
+    exact: true,
+  })
+  const reopen = page.getByRole('checkbox', {
+    name: `恢復任務：${task.title}`,
+    exact: true,
+  })
+  await expect(complete).not.toBeChecked()
+  await complete.click()
+  await expect(reopen).toBeChecked()
+  await expect(page.getByRole('status')).toContainText('已完成 1 / 1 件')
+  const saved = (await (
+    await request.get(`/api/tasks/${task.id}`)
+  ).json()) as Task
+  expect(saved.scheduled_date).toBe('2042-03-04')
+  expect(saved.description).toBe('保留備註')
+  expect(saved.version).toBe(task.version + 1)
+  await reopen.click()
+  await expect(complete).not.toBeChecked()
+  await expect(page.getByRole('status')).toHaveText('已完成 0 / 1 件')
+
+  let writes = 0
+  let release!: () => void
+  const pending = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  await page.route(`**/api/tasks/${task.id}/actions`, async (route) => {
+    writes++
+    await pending
+    await route.fulfill({ status: 500, json: { error: '暫時無法寫入' } })
+  })
+  await complete.click()
+  await expect(complete).toBeDisabled()
+  await complete.evaluate((element: HTMLButtonElement) => element.click())
+  expect(writes).toBe(1)
+  release()
+  await expect(page.getByRole('alert')).toContainText('暫時無法寫入')
+  await expect(complete).not.toBeChecked()
+  await expect(complete).toBeEnabled()
+  await page.unroute(`**/api/tasks/${task.id}/actions`)
+
+  // Another client changes the version after the panel sends its snapshot.
+  await page.route(
+    `**/api/tasks/${task.id}/actions`,
+    async (route) => {
+      const snapshot = route.request().postDataJSON() as { version: number }
+      const changed = await request.post(`/api/tasks/${task.id}/actions`, {
+        data: { op: 'complete_task', version: snapshot.version },
+      })
+      expect(changed.ok()).toBe(true)
+      await route.continue()
+    },
+    { times: 1 },
+  )
+  await complete.click()
+  await expect(page.getByRole('alert')).toContainText('任務已變更')
+  await expect(reopen).toBeChecked()
+  await reopen.click()
+  await expect(complete).not.toBeChecked()
+  await expect(page.getByRole('alert')).toHaveCount(0)
 })
 
 test('empty panel follows theme changes and Open Famo returns to the main app', async ({

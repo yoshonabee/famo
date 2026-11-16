@@ -27,6 +27,22 @@
 }
 .menu-bar-heading time {
   font-size: 11px;
+  white-space: nowrap;
+}
+.menu-bar-heading-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.menu-bar-heading-actions > button {
+  height: 28px;
+  padding: 0 8px;
+  gap: 4px;
+  font-size: 11px;
+}
+.menu-bar-heading-actions > button svg {
+  width: 12px;
+  height: 12px;
 }
 .menu-bar-progress {
   padding: 6px 20px 16px;
@@ -90,19 +106,21 @@
   padding: 12px 0;
   border-top: 1px solid var(--border);
 }
-.menu-bar-tasks li svg {
-  flex-shrink: 0;
-  margin-top: 2px;
-  color: var(--primary);
+.menu-bar-task-checkbox {
+  margin-top: 1px;
 }
-.menu-bar-tasks li span {
+.menu-bar-task-body {
+  flex: 1;
+  min-width: 0;
+}
+.menu-bar-task-title {
   overflow-wrap: anywhere;
   line-height: 1.5;
 }
 .menu-bar-tasks li.done {
   color: var(--muted-foreground);
 }
-.menu-bar-tasks li.done span {
+.menu-bar-tasks li.done .menu-bar-task-title {
   text-decoration: line-through;
 }
 .menu-bar-empty {
@@ -122,17 +140,14 @@
 .menu-bar-empty span {
   font-size: 11px;
 }
-.menu-bar-footer {
-  padding: 14px 20px;
-  border-top: 1px solid var(--border);
-}
-.menu-bar-footer > button {
-  width: 100%;
-  justify-content: space-between;
-}
-.menu-bar-footer p {
+.menu-bar-open-error,
+.menu-bar-task-error {
   color: var(--danger);
-  margin: 0 0 10px;
+  margin: 6px 0 0;
+  font-size: 12px;
+}
+.menu-bar-open-error {
+  padding: 0 20px;
 }
 @theme inline {
   --color-background: var(--background);

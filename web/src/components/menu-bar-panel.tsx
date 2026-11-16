@@ -1,11 +1,56 @@
 import { useEffect, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
-import { ArrowUpRight, Check, Circle, RefreshCw } from 'lucide-react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { ArrowUpRight, Circle, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { request, type Task } from '@/lib/api'
+import { Checkbox } from '@/components/ui/checkbox'
+import { ApiError, request, type Task } from '@/lib/api'
 import { localDate } from '@/lib/calendar'
 import { openFamo } from '@/lib/desktop'
 import { useTheme } from '@/lib/theme'
+
+function MenuBarTask({ task }: { task: Task }) {
+  const client = useQueryClient()
+  const toggle = useMutation({
+    mutationFn: (snapshot: Task) =>
+      request<Task>(`/tasks/${snapshot.id}/actions`, {
+        op: snapshot.completed_at ? 'reopen_task' : 'complete_task',
+        version: snapshot.version,
+        source: 'ui:menu-bar',
+      }),
+    onSuccess: async (updated) => {
+      await client.cancelQueries({ queryKey: ['tasks'] })
+      client.setQueryData<Task[]>(['tasks'], (items) =>
+        items?.map((item) => (item.id === updated.id ? updated : item)),
+      )
+      void client.invalidateQueries({ queryKey: ['tasks'] })
+    },
+    onError: (error) => {
+      if (error instanceof ApiError && error.status === 409)
+        void client.invalidateQueries({ queryKey: ['tasks'] })
+    },
+  })
+  return (
+    <li className={task.completed_at ? 'done' : ''}>
+      <Checkbox
+        className="menu-bar-task-checkbox"
+        aria-label={`${task.completed_at ? '恢復' : '完成'}任務：${task.title}`}
+        checked={!!task.completed_at}
+        disabled={toggle.isPending}
+        onCheckedChange={() => toggle.mutate(task)}
+      />
+      <div className="menu-bar-task-body">
+        <span className="menu-bar-task-title">{task.title}</span>
+        {toggle.isError && (
+          <p className="menu-bar-task-error" role="alert">
+            {toggle.error instanceof ApiError && toggle.error.status === 409
+              ? '任務已變更，已重新讀取，請再試一次。'
+              : `無法更新任務：${toggle.error.message}，請再試一次。`}
+          </p>
+        )}
+      </div>
+    </li>
+  )
+}
 
 export function MenuBarPanel() {
   useTheme()
@@ -44,8 +89,26 @@ export function MenuBarPanel() {
           <img src="/famo-mark.svg" alt="" width="24" height="24" />
           <span>famo</span>
         </div>
-        <time dateTime={date}>{date.replaceAll('-', ' / ')}</time>
+        <div className="menu-bar-heading-actions">
+          <time dateTime={date}>{date.replaceAll('-', '/')}</time>
+          <Button
+            size="sm"
+            onClick={() => {
+              setOpenError('')
+              void openFamo().catch(() =>
+                setOpenError('無法開啟 Famo，請重試。'),
+              )
+            }}
+          >
+            Open Famo <ArrowUpRight size={12} />
+          </Button>
+        </div>
       </header>
+      {openError && (
+        <p className="menu-bar-open-error" role="alert">
+          {openError}
+        </p>
+      )}
       <section className="menu-bar-progress" aria-label="今日完成進度">
         <div>
           <h1>今日任務</h1>
@@ -85,29 +148,11 @@ export function MenuBarPanel() {
         ) : (
           <ul aria-label="今日任務列表">
             {ordered.map((task) => (
-              <li key={task.id} className={task.completed_at ? 'done' : ''}>
-                {task.completed_at ? (
-                  <Check size={16} aria-label="已完成" />
-                ) : (
-                  <Circle size={16} aria-label="未完成" />
-                )}
-                <span>{task.title}</span>
-              </li>
+              <MenuBarTask key={task.id} task={task} />
             ))}
           </ul>
         )}
       </div>
-      <footer className="menu-bar-footer">
-        {openError && <p role="alert">{openError}</p>}
-        <Button
-          onClick={() => {
-            setOpenError('')
-            void openFamo().catch(() => setOpenError('無法開啟 Famo，請重試。'))
-          }}
-        >
-          Open Famo <ArrowUpRight size={16} />
-        </Button>
-      </footer>
     </div>
   )
 }
