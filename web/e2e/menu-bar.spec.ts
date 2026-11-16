@@ -3,6 +3,37 @@ import type { Task } from '../src/lib/api'
 
 test.use({ timezoneId: 'Asia/Taipei', viewport: { width: 360, height: 480 } })
 
+test('dedicated panel entry stays compact after opening settings and reloading', async ({
+  page,
+  context,
+}) => {
+  const main = await context.newPage()
+  await main.goto('/')
+  await main.getByRole('button', { name: '設定', exact: true }).click()
+  await expect(
+    main.getByRole('heading', { name: '設定', exact: true }),
+  ).toBeVisible()
+
+  await page.goto('/menu-bar.html')
+  await expect(page.getByRole('heading', { name: '今日任務' })).toBeVisible()
+  await page.evaluate(() =>
+    window.dispatchEvent(new Event('famo:open-settings')),
+  )
+  await page.reload()
+  await expect(page.getByRole('heading', { name: '今日任務' })).toBeVisible()
+  await expect(
+    page.getByRole('button', { name: '設定', exact: true }),
+  ).toHaveCount(0)
+  await expect(
+    page.getByRole('heading', { name: '設定', exact: true }),
+  ).toHaveCount(0)
+  await expect(
+    page.getByRole('button', { name: 'Open Famo', exact: true }),
+  ).toBeVisible()
+  await page.screenshot({ path: '/private/tmp/famo-menu-bar-entry.png' })
+  await main.close()
+})
+
 test('panel counts scheduled local tasks, reflects API edits and rolls over at midnight', async ({
   page,
   request,
@@ -23,7 +54,7 @@ test('panel counts scheduled local tasks, reflects API edits and rolls over at m
   await request.post(`/api/tasks/${second.id}/actions`, {
     data: { op: 'complete_task', version: second.version },
   })
-  await page.goto('/?view=menu-bar')
+  await page.goto('/menu-bar.html')
   const list = page.getByRole('list', { name: '今日任務列表' })
   await expect(list.getByRole('listitem')).toHaveCount(2)
   await expect(page.getByRole('status')).toHaveText('已完成 1 / 2 件')
@@ -67,7 +98,7 @@ test('square checkboxes complete and reopen tasks, preserve dates and recover fr
     },
   })
   const task = (await response.json()) as Task
-  await page.goto('/?view=menu-bar')
+  await page.goto('/menu-bar.html')
   const complete = page.getByRole('checkbox', {
     name: `完成任務：${task.title}`,
     exact: true,
@@ -161,7 +192,7 @@ test('panel writes refresh an already open main window without focus or polling'
   const initialReads = mainReads
   const panel = await context.newPage()
   await panel.clock.install({ time })
-  await panel.goto('/?view=menu-bar')
+  await panel.goto('/menu-bar.html')
   await panel
     .getByRole('checkbox', { name: `完成任務：${task.title}`, exact: true })
     .click()
@@ -210,7 +241,7 @@ test('empty panel follows theme changes and Open Famo returns to the main app', 
   context,
 }) => {
   await page.clock.install({ time: new Date('2041-02-03T04:00:00Z') })
-  await page.goto('/?view=menu-bar')
+  await page.goto('/menu-bar.html')
   await expect(page.getByRole('status')).toHaveText('今天還沒有安排任務')
   await expect(page.getByRole('progressbar')).toHaveAttribute('value', '0')
   const other = await context.newPage()
@@ -240,7 +271,7 @@ test('failed reads show an error and retry recovers without claiming an empty da
   await page.route('**/api/tasks', (route) =>
     route.fulfill({ status: 500, json: { error: 'read failed' } }),
   )
-  await page.goto('/?view=menu-bar')
+  await page.goto('/menu-bar.html')
   await expect(page.getByRole('alert')).toContainText('無法讀取任務')
   await expect(page.getByRole('status')).toHaveText('今日進度暫時無法更新')
   await expect(page.locator('.menu-bar-progress')).toContainText('—')

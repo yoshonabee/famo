@@ -33,10 +33,20 @@ func (*MenuBar) OpenFamo() {
 
 func setupMenuBar(app *application.App, backend *Backend) {
 	panel := app.Window.NewWithOptions(application.WebviewWindowOptions{
-		Name: "menu-bar", Title: "Famo 今日任務", URL: "/?view=menu-bar",
+		Name: "menu-bar", Title: "Famo 今日任務", URL: "/menu-bar.html",
 		Width: 360, Height: 480, Frameless: true, AlwaysOnTop: true,
 		Hidden: true, DisableResize: true, HideOnFocusLost: true, HideOnEscape: true,
 		BackgroundColour: application.NewRGB(248, 249, 246),
+		Mac: application.MacWindow{
+			// Stay in the current Space, including another app's fullscreen Space,
+			// without activating Famo and switching back to its main window.
+			WindowClass: application.MacWindowClassPanel,
+			PanelPreferences: application.MacPanelPreferences{
+				NonActivating: true,
+			},
+			CollectionBehavior: application.MacWindowCollectionBehaviorCanJoinAllSpaces |
+				application.MacWindowCollectionBehaviorFullScreenAuxiliary,
+		},
 	})
 	panel.RegisterHook(events.Common.WindowClosing, func(event *application.WindowEvent) {
 		event.Cancel()
