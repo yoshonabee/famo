@@ -1,29 +1,11 @@
-import React from 'react'
-import ReactDOM from 'react-dom/client'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import App from './App'
 import { MenuBarPanel } from './components/menu-bar-panel'
-import { initializeDesktop } from './lib/desktop'
-import { initializeTheme } from './lib/theme'
-import './index.css'
-initializeTheme()
-const client = new QueryClient({
-  defaultOptions: { queries: { staleTime: 10_000, retry: 1 } },
-})
-void initializeDesktop(() => {
-  void client.invalidateQueries({ queryKey: ['tasks'] })
-}).catch((error: unknown) => {
-  console.error('無法載入桌面整合', error)
-})
-ReactDOM.createRoot(document.getElementById('root')!).render(
-  <React.StrictMode>
-    <QueryClientProvider client={client}>
-      {new URLSearchParams(window.location.search).get('view') ===
-      'menu-bar' ? (
-        <MenuBarPanel />
-      ) : (
-        <App />
-      )}
-    </QueryClientProvider>
-  </React.StrictMode>,
+import { renderApp } from './render-app'
+
+renderApp(
+  new URLSearchParams(window.location.search).get('view') === 'menu-bar' ? (
+    <MenuBarPanel />
+  ) : (
+    <App />
+  ),
 )

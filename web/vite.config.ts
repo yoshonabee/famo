@@ -15,5 +15,13 @@ export default defineConfig({
     },
   ],
   resolve: { alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) } },
+  build: {
+    rolldownOptions: {
+      input: {
+        main: fileURLToPath(new URL('./index.html', import.meta.url)),
+        menuBar: fileURLToPath(new URL('./menu-bar.html', import.meta.url)),
+      },
+    },
+  },
   server: { strictPort: true, proxy: { '/api': 'http://127.0.0.1:8787' } },
 })
