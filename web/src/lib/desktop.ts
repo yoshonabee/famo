@@ -23,6 +23,15 @@ export async function initializeDesktop() {
 }
 export const openSettingsEvent = 'famo:open-settings'
 
+export async function openFamo() {
+  if (window.location.protocol === 'wails:') {
+    const { Call } = await import('@wailsio/runtime')
+    await Call.ByName('famo/internal/desktop.MenuBar.OpenFamo')
+    return
+  }
+  window.location.assign('/')
+}
+
 export async function exportThemeFile(contents: string, filename: string) {
   if (window.location.protocol === 'wails:') {
     const { Call } = await import('@wailsio/runtime')
