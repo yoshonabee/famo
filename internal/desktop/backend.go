@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"famo/internal/agent"
 	"famo/internal/server"
 	"famo/internal/tasks"
 )
@@ -21,37 +22,40 @@ import (
 const DefaultAPIAddr = "127.0.0.1:0"
 
 type Config struct {
-	DBPath      string
-	APIAddr     string // Port 0 is dynamic; empty disables the optional Agent HTTP API.
-	APIInfoPath string // Empty skips publishing discovery information (for embedded callers).
+	DBPath           string
+	APIAddr          string // Port 0 is dynamic; empty disables the optional Agent HTTP API.
+	APIInfoPath      string // Empty skips publishing discovery information (for embedded callers).
+	UseAPIPreference bool   // Used for the default desktop launch, without an explicit -addr.
 }
 
-// DefaultDatabasePath is independent of Finder's working directory.
 func DefaultDatabasePath() (string, error) {
-	dir, err := os.UserConfigDir()
+	path, err := agent.DefaultAPIInfoPath()
 	if err != nil {
 		return "", fmt.Errorf("找不到應用程式資料目錄：%w", err)
 	}
-	return filepath.Join(dir, "Famo", "famo.db"), nil
+	return filepath.Join(filepath.Dir(path), "famo.db"), nil
 }
 
-func DefaultAPIInfoPath() (string, error) {
-	db, err := DefaultDatabasePath()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(filepath.Dir(db), "agent-api.json"), nil
-}
+func DefaultAPIInfoPath() (string, error) { return agent.DefaultAPIInfoPath() }
 
 type Backend struct {
 	handler     http.Handler
+	external    http.Handler
 	store       *tasks.Store
-	api         *http.Server
-	apiURL      string
+	apiAddr     string
 	apiInfoPath string
-	instanceID  string
-	closed      sync.Once
-	closeErr    error
+
+	mu       sync.Mutex
+	api      *runningAPI
+	closed   bool
+	closeErr error
+}
+
+type runningAPI struct {
+	server     *http.Server
+	listener   net.Listener
+	url        string
+	instanceID string
 }
 
 // Start shares one store between the native window and the Agent API.
@@ -73,55 +77,53 @@ func Start(cfg Config, assets fs.FS) (*Backend, error) {
 		}
 	}
 	var listener net.Listener
-	if cfg.APIAddr != "" {
-		host, _, err := net.SplitHostPort(cfg.APIAddr)
-		ip := net.ParseIP(host)
-		if err != nil || ip == nil || !ip.IsLoopback() {
-			return nil, errors.New("Agent API 必須使用 loopback IP，例如 127.0.0.1:8787")
-		}
-		listener, err = net.Listen("tcp", cfg.APIAddr)
-		if err != nil {
-			return nil, fmt.Errorf("無法啟動 Agent API（%s）；請結束另一個 Famo，或使用 -addr 指定其他埠：%w", cfg.APIAddr, err)
-		}
-	}
-	if err := os.MkdirAll(filepath.Dir(cfg.DBPath), 0700); err != nil {
+	// Until startAPI succeeds, the caller owns the listener.
+	defer func() {
 		if listener != nil {
 			listener.Close()
 		}
+	}()
+	var err error
+	if !cfg.UseAPIPreference && cfg.APIAddr != "" {
+		listener, err = listenAPI(cfg.APIAddr)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if err := os.MkdirAll(filepath.Dir(cfg.DBPath), 0700); err != nil {
 		return nil, err
 	}
 	store, err := tasks.Open(cfg.DBPath)
 	if err != nil {
-		if listener != nil {
-			listener.Close()
-		}
 		return nil, err
 	}
-	b := &Backend{store: store, handler: server.NewEmbedded(store, assets), apiInfoPath: cfg.APIInfoPath}
-	if listener != nil {
-		b.apiURL = "http://" + listener.Addr().String()
-		b.instanceID = rand.Text()
-		handler := server.New(store, assets)
-		b.api = &http.Server{
-			Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				w.Header().Set(InstanceHeader, b.instanceID)
-				handler.ServeHTTP(w, r)
-			}),
-			ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 15 * time.Second,
-			WriteTimeout: 15 * time.Second, IdleTimeout: 60 * time.Second,
-		}
-		if err := writeAPIInfo(cfg.APIInfoPath, APIInfo{
-			Version: 1, URL: b.apiURL, PID: os.Getpid(), InstanceID: b.instanceID,
-		}); err != nil {
-			listener.Close()
+	b := &Backend{
+		store: store, handler: server.NewEmbedded(store, assets), external: server.NewDesktopAPI(store, assets),
+		apiAddr: cfg.APIAddr, apiInfoPath: cfg.APIInfoPath,
+	}
+	if b.apiAddr == "" {
+		b.apiAddr = DefaultAPIAddr
+	}
+	if cfg.UseAPIPreference {
+		enabled, err := store.AgentAPIEnabled(context.Background())
+		if err != nil {
 			store.Close()
-			return nil, fmt.Errorf("無法寫入 Agent API 位址檔案：%w", err)
+			return nil, err
 		}
-		go func() {
-			if err := b.api.Serve(listener); err != nil && !errors.Is(err, http.ErrServerClosed) {
-				log.Printf("Agent API：%v", err)
+		if enabled {
+			listener, err = listenAPI(b.apiAddr)
+			if err != nil {
+				store.Close()
+				return nil, err
 			}
-		}()
+		}
+	}
+	if listener != nil {
+		if err := b.startAPI(listener); err != nil {
+			store.Close()
+			return nil, err
+		}
+		listener = nil
 	} else if err := removeAPIInfo(cfg.APIInfoPath, ""); err != nil {
 		store.Close()
 		return nil, fmt.Errorf("無法清除 Agent API 位址檔案：%w", err)
@@ -129,21 +131,114 @@ func Start(cfg Config, assets fs.FS) (*Backend, error) {
 	return b, nil
 }
 
+func listenAPI(addr string) (net.Listener, error) {
+	host, _, err := net.SplitHostPort(addr)
+	ip := net.ParseIP(host)
+	if err != nil || ip == nil || !ip.IsLoopback() {
+		return nil, errors.New("Agent API 必須使用 loopback IP，例如 127.0.0.1:8787")
+	}
+	listener, err := net.Listen("tcp", addr)
+	if err != nil {
+		return nil, fmt.Errorf("無法啟動 Agent API（%s）；請結束另一個 Famo，或使用 -addr 指定其他埠：%w", addr, err)
+	}
+	return listener, nil
+}
+
+func (b *Backend) startAPI(listener net.Listener) error {
+	api := &runningAPI{
+		listener: listener, url: "http://" + listener.Addr().String(), instanceID: rand.Text(),
+	}
+	api.server = &http.Server{
+		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set(InstanceHeader, api.instanceID)
+			if expected := r.Header.Get(InstanceHeader); expected != "" && expected != api.instanceID {
+				http.Error(w, "Agent API 執行個體已變更", http.StatusPreconditionFailed)
+				return
+			}
+			b.external.ServeHTTP(w, r)
+		}),
+		ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 15 * time.Second,
+		WriteTimeout: 15 * time.Second, IdleTimeout: 60 * time.Second,
+	}
+	if err := writeAPIInfo(b.apiInfoPath, APIInfo{
+		Version: 1, URL: api.url, PID: os.Getpid(), InstanceID: api.instanceID,
+	}); err != nil {
+		return fmt.Errorf("無法寫入 Agent API 位址檔案：%w", err)
+	}
+	b.api = api
+	go func() {
+		if err := api.server.Serve(listener); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			log.Printf("Agent API：%v", err)
+		}
+	}()
+	return nil
+}
+
 func (b *Backend) Handler() http.Handler { return b.handler }
-func (b *Backend) APIURL() string        { return b.apiURL }
+
+func (b *Backend) APIURL() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.api == nil {
+		return ""
+	}
+	return b.api.url
+}
+
+func (b *Backend) SetAPIEnabled(enabled bool) error {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.closed {
+		return errors.New("Famo 已關閉")
+	}
+	if enabled && b.api == nil {
+		listener, err := listenAPI(b.apiAddr)
+		if err != nil {
+			return err
+		}
+		if err := b.startAPI(listener); err != nil {
+			listener.Close()
+			return err
+		}
+		if err := b.store.SetAgentAPIEnabled(context.Background(), true); err != nil {
+			return errors.Join(err, b.stopAPI())
+		}
+		return nil
+	}
+	if err := b.store.SetAgentAPIEnabled(context.Background(), enabled); err != nil {
+		return err
+	}
+	if !enabled {
+		return b.stopAPI()
+	}
+	return nil
+}
+
+func (b *Backend) stopAPI() error {
+	api := b.api
+	if api == nil {
+		return nil
+	}
+	b.api = nil
+	err := removeAPIInfo(b.apiInfoPath, api.instanceID)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if shutdownErr := api.server.Shutdown(ctx); shutdownErr != nil {
+		err = errors.Join(err, shutdownErr, api.server.Close())
+	}
+	// Shutdown can run before Serve registers the listener.
+	if closeErr := api.listener.Close(); closeErr != nil && !errors.Is(closeErr, net.ErrClosed) {
+		err = errors.Join(err, closeErr)
+	}
+	return err
+}
 
 func (b *Backend) Close() error {
-	b.closed.Do(func() {
-		if b.api != nil {
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			defer cancel()
-			b.closeErr = b.api.Shutdown(ctx)
-			if b.closeErr != nil {
-				b.closeErr = errors.Join(b.closeErr, b.api.Close())
-			}
-			b.closeErr = errors.Join(b.closeErr, removeAPIInfo(b.apiInfoPath, b.instanceID))
-		}
-		b.closeErr = errors.Join(b.closeErr, b.store.Close())
-	})
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if !b.closed {
+		b.closed = true
+		b.closeErr = errors.Join(b.stopAPI(), b.store.Close())
+	}
 	return b.closeErr
 }

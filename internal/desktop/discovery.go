@@ -4,17 +4,13 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+
+	"famo/internal/agent"
 )
 
-const InstanceHeader = "X-Famo-Instance-ID"
+const InstanceHeader = agent.InstanceHeader
 
-// APIInfo describes the currently running desktop Agent API, not preferences.
-type APIInfo struct {
-	Version    int    `json:"version"`
-	URL        string `json:"url"`
-	PID        int    `json:"pid"`
-	InstanceID string `json:"instance_id"`
-}
+type APIInfo = agent.APIInfo
 
 func writeAPIInfo(path string, info APIInfo) error {
 	if path == "" {

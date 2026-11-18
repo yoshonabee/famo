@@ -8,6 +8,7 @@ import {
   Upload,
 } from 'lucide-react'
 import { useRef, useState, type ChangeEvent } from 'react'
+import { AgentPreferences } from '@/components/agent-preferences'
 import { Button } from '@/components/ui/button'
 import { ThemeEditor } from '@/components/theme-editor'
 import { ThemePreview } from '@/components/theme-preview'
@@ -118,8 +119,8 @@ export function PreferencesPage({
     <div className="preferences-page">
       <header className="preferences-heading">
         <h1>設定</h1>
-        <p>讓 Famo 換上你喜歡的樣子。</p>
       </header>
+      <AgentPreferences />
       <div className="theme-tools">
         <Button
           variant="outline"

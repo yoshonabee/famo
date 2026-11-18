@@ -11,26 +11,53 @@ import (
 	"net/url"
 	"strings"
 
+	"famo/internal/agent"
 	"famo/internal/tasks"
 	"github.com/go-chi/chi/v5"
 )
 
 func New(store *tasks.Store, assets fs.FS) http.Handler {
-	return newHandler(store, assets, localOnly)
+	return newHandler(store, assets, localOnly, true)
+}
+
+func NewDesktopAPI(store *tasks.Store, assets fs.FS) http.Handler {
+	return newHandler(store, assets, localOnly, false)
 }
 
 // NewEmbedded serves the same API inside Wails' in-process asset server.
 // It must never be exposed on a network listener; network clients use New.
 func NewEmbedded(store *tasks.Store, assets fs.FS) http.Handler {
-	return newHandler(store, assets, requireJSON)
+	return newHandler(store, assets, requireJSON, true)
 }
 
-func newHandler(store *tasks.Store, assets fs.FS, access func(http.Handler) http.Handler) http.Handler {
+func newHandler(store *tasks.Store, assets fs.FS, access func(http.Handler) http.Handler, workspaceEditable bool) http.Handler {
 	r := chi.NewRouter()
 	r.Use(recoverer)
 	r.Use(access)
 	api := func(r chi.Router) {
 		r.Get("/health", func(w http.ResponseWriter, r *http.Request) { write(w, 200, map[string]string{"status": "ok"}) })
+		r.Get("/agent/workspace", func(w http.ResponseWriter, r *http.Request) {
+			workspace, err := store.Workspace(r.Context())
+			if err != nil {
+				fail(w, err)
+				return
+			}
+			write(w, 200, workspace)
+		})
+		if workspaceEditable {
+			r.Post("/agent/workspace", func(w http.ResponseWriter, r *http.Request) {
+				var workspace agent.Workspace
+				if !decode(w, r, &workspace) {
+					return
+				}
+				saved, err := store.SaveWorkspace(r.Context(), workspace)
+				if err != nil {
+					fail(w, err)
+					return
+				}
+				write(w, 200, saved)
+			})
+		}
 		r.Get("/settings", func(w http.ResponseWriter, r *http.Request) {
 			cfg, err := store.Settings(r.Context())
 			if err != nil {
@@ -179,7 +206,7 @@ func localOnly(next http.Handler) http.Handler {
 		if h, _, err := net.SplitHostPort(host); err == nil {
 			host = h
 		}
-		if host != "localhost" && host != "127.0.0.1" && host != "::1" {
+		if !agent.IsLoopbackHost(host) {
 			http.Error(w, "僅允許本機存取", 403)
 			return
 		}

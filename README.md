@@ -109,7 +109,7 @@ open bin/Famo.app --args -db /absolute/path/to/existing/famo.db
 
 Agent 應先讀取這個檔案，再呼叫 `url` 下的 `/health`，確認狀態為 `ok`，且回應的 `X-Famo-Instance-ID` header 與檔案的 `instance_id` 相同，然後使用相同的 `/api/tasks` 等路徑。這個識別碼用於核對執行個體，不是存取憑證。App 每次啟動都會重新分配 port 並更新檔案；連線失敗或識別碼不符時，應重新讀取檔案，避免使用異常結束前留下的位址。正常結束會清除所屬位址檔案、關閉資料庫並釋放埠。
 
-目前可用啟動參數選擇 `-addr 127.0.0.1:8789` 固定 port，或用 `-addr ''` 停用 Agent API；停用時會清除舊位址檔案，桌面介面仍可正常使用。指定固定埠而發生衝突時會顯示啟動錯誤。這些參數只對本次程序生效，Agent API 的 App 內設定留待後續提供。`-api-info /absolute/path/agent-api.json` 可為隔離測試指定其他位址檔案；`-db` 不會改變預設位址檔案的位置。
+「設定 → 本機 Agent」可即時開啟或停用桌面版的 Agent API，選擇會儲存在 SQLite。停用時會清除該執行個體的位址檔案，桌面介面可繼續使用。`-addr 127.0.0.1:8789` 可指定固定 port，`-addr ''` 會在本次啟動時停用 API。未指定 `-addr` 時採用儲存的偏好。`-api-info /absolute/path/agent-api.json` 可為隔離測試指定其他位址檔案，`-db` 不會改變預設位址檔案的位置。
 
 目前產物使用本機 ad-hoc 簽章，供本機建置與試用；Developer ID 簽署、公證與自動更新尚未提供。原始碼已保留其他平台可共用的核心，這一版僅支援及驗證 macOS 桌面打包。
 
@@ -159,6 +159,7 @@ npm run format:check
 | 方法與路徑 | 用途 |
 | --- | --- |
 | `GET /health` | 健康檢查 |
+| `GET /agent/workspace` | 預設工作區路徑 `dir` 和選填指引 `prompt` |
 | `GET /settings` | 選項設定及版本 |
 | `POST /settings` | 提交完整設定，需帶讀取時的 `version` |
 | `GET /workflows` | 類型及階段選項（含固定 ID、名稱、色彩、停用狀態及預設階段） |
@@ -221,6 +222,24 @@ curl http://127.0.0.1:8787/tasks/TASK_ID/actions \
 排序不修改任務版本或歷程，只交換指定 ID 占用的位置。重複、不存在或已完成 ID 回傳 `400`，不留下部分更新。
 
 錯誤回傳 `{"error":"說明"}`：`400` 輸入錯誤、`404` 找不到任務、`409` 版本衝突、`415` Content-Type 錯誤、`500` 儲存失敗。
+
+## Agent CLI 與 Skill
+
+macOS 桌面版在「設定 → 本機 Agent」可安裝、更新或移除 CLI，並複製 Skill 安裝指令。CLI 安裝到 `~/.local/bin/famo-agent`。若該資料夾未加到 `PATH`，可用完整路徑執行。在同一頁設定本機工作區的絕對路徑，並選擇性填寫指引，例如先查哪份文件或怎麼跑測試。Famo 提供路徑和指引，由本機 Agent 直接讀取工作區檔案。
+
+`make build` 也會產生 `bin/famo-agent`。可在專案根目錄用 `./bin/famo-agent cli install` 安裝 CLI，或直接執行二進位檔。連線到命令列版的網頁服務時，請在子指令前加 `--url http://127.0.0.1:8787`。桌面版預設自動探索 API，隔離環境可傳 `--api-info PATH`。
+
+```sh
+famo-agent skill install                      # 安裝至 ~/.agents/skills/famo
+famo-agent skill install --dir /path/to/skills # 使用其他 Agent 的 Skill 資料夾
+famo-agent today                              # 今日未完成任務與工作區
+famo-agent context TASK_ID                    # 任務、版本與工作區
+famo-agent add --title '調查登入逾時'
+famo-agent update TASK_ID --version 1 --description '已重現，待確認重試條件' --link https://example.com/report
+famo-agent complete TASK_ID --version 2
+```
+
+CLI 成功時將 JSON 寫入 stdout，失敗時將 JSON 寫入 stderr。版本衝突的 exit code 是 `3`。`--description` 會取代整段備註，省略時保留原備註，`--link` 可重複使用。Skill 負責從工作區查找脈絡與回寫結果，可由使用者在本機 Agent 裡觸發。
 
 ## 專案結構
 

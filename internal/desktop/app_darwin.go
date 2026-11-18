@@ -16,6 +16,7 @@ import (
 
 func Run(cfg Config) error {
 	var backend *Backend
+	agentTools := &AgentTools{}
 	assets := application.BundledAssetFileServer(web.Assets())
 	app := application.New(application.Options{
 		Name: "Famo", Description: "每天一小步。",
@@ -31,7 +32,7 @@ func Run(cfg Config) error {
 			DisableLogging: true,
 		},
 		Mac:      application.MacOptions{ApplicationShouldTerminateAfterLastWindowClosed: false},
-		Services: []application.Service{application.NewService(&ThemeFiles{}), application.NewService(&MenuBar{})},
+		Services: []application.Service{application.NewService(&ThemeFiles{}), application.NewService(&MenuBar{}), application.NewService(agentTools)},
 		SingleInstance: &application.SingleInstanceOptions{
 			UniqueID: "io.github.yoshonabee.famo",
 			OnSecondInstanceLaunch: func(application.SecondInstanceData) {
@@ -49,6 +50,7 @@ func Run(cfg Config) error {
 		app.Dialog.Error().SetTitle("無法開啟 Famo").SetMessage(err.Error()).Show()
 		return err
 	}
+	agentTools.backend = backend
 	defer backend.Close()
 	menu := app.NewMenu()
 	appMenu := menu.AddSubmenu("Famo")

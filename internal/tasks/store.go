@@ -64,6 +64,11 @@ func migrate(db *sql.DB) error {
  CREATE TRIGGER IF NOT EXISTS tasks_order_insert AFTER INSERT ON tasks BEGIN
  INSERT INTO task_order(task_id,position) VALUES(NEW.id,(SELECT COALESCE(MAX(position),0)+1 FROM task_order));
  END;
+ CREATE TABLE IF NOT EXISTS agent_preferences (
+ id INTEGER PRIMARY KEY CHECK(id=1), api_enabled INTEGER NOT NULL DEFAULT 1,
+ workspace_dir TEXT NOT NULL DEFAULT '', workspace_prompt TEXT NOT NULL DEFAULT ''
+ );
+ INSERT OR IGNORE INTO agent_preferences(id) VALUES(1);
  `)
 	if err != nil {
 		return err

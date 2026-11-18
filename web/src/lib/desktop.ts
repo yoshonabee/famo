@@ -78,3 +78,35 @@ export async function exportThemeFile(contents: string, filename: string) {
   setTimeout(() => URL.revokeObjectURL(url), 1000)
   return true
 }
+
+export type AgentToolsState = {
+  api_url: string
+  cli_installed: boolean
+  cli_available: boolean
+  cli_path: string
+  cli_error?: string
+  skill_command?: string
+}
+
+export const isDesktop = () => window.location.protocol === 'wails:'
+
+export async function agentTool<T>(
+  method:
+    'Status' | 'SetAPIEnabled' | 'InstallCLI' | 'RemoveCLI' | 'ChooseWorkspace',
+  ...args: unknown[]
+): Promise<T> {
+  const { Call } = await import('@wailsio/runtime')
+  return (await Call.ByName(
+    `famo/internal/desktop.AgentTools.${method}`,
+    ...args,
+  )) as T
+}
+
+export async function copyText(text: string) {
+  if (isDesktop()) {
+    const { Clipboard } = await import('@wailsio/runtime')
+    await Clipboard.SetText(text)
+  } else {
+    await navigator.clipboard.writeText(text)
+  }
+}
