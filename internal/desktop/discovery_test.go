@@ -1,6 +1,7 @@
 package desktop
 
 import (
+	"bytes"
 	"encoding/json"
 	"net"
 	"net/http"
@@ -10,6 +11,9 @@ import (
 	"strings"
 	"testing"
 	"testing/fstest"
+
+	"famo/internal/agent"
+	"famo/internal/agentcli"
 )
 
 func readAPIInfo(t *testing.T, path string) APIInfo {
@@ -160,5 +164,104 @@ func TestDiscoveryCannotOverwriteDatabase(t *testing.T) {
 	}
 	if _, err := os.Stat(path); !os.IsNotExist(err) {
 		t.Fatalf("invalid discovery path touched the database: %v", err)
+	}
+}
+
+func TestAgentAPITogglePersistsAndKeepsEmbeddedUIAvailable(t *testing.T) {
+	dir := t.TempDir()
+	cfg := Config{
+		DBPath: filepath.Join(dir, "famo.db"), APIAddr: DefaultAPIAddr,
+		APIInfoPath: filepath.Join(dir, "agent-api.json"), UseAPIPreference: true,
+	}
+	b, err := Start(cfg, fstest.MapFS{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer b.Close()
+	first := readAPIInfo(t, cfg.APIInfoPath)
+	if err := b.SetAPIEnabled(false); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(cfg.APIInfoPath); !os.IsNotExist(err) {
+		t.Fatalf("discovery record still present: %v", err)
+	}
+	if response, err := http.Get(first.URL + "/api/health"); err == nil {
+		response.Body.Close()
+		t.Fatal("disabled listener still accepting connections")
+	}
+	w := httptest.NewRecorder()
+	b.Handler().ServeHTTP(w, httptest.NewRequest("GET", "wails://localhost/api/tasks", nil))
+	if w.Code != 200 {
+		t.Fatalf("embedded tasks became unavailable: %d", w.Code)
+	}
+	workspace := agent.Workspace{Dir: dir, Prompt: "Read docs first"}
+	body, err := json.Marshal(workspace)
+	if err != nil {
+		t.Fatal(err)
+	}
+	w = httptest.NewRecorder()
+	workspaceRequest := httptest.NewRequest("POST", "wails://localhost/api/agent/workspace", bytes.NewReader(body))
+	workspaceRequest.Header.Set("Content-Type", "application/json")
+	b.Handler().ServeHTTP(w, workspaceRequest)
+	if w.Code != 200 {
+		t.Fatalf("embedded workspace update failed: %d %s", w.Code, w.Body)
+	}
+	if err := b.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	b, err = Start(cfg, fstest.MapFS{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer b.Close()
+	if b.APIURL() != "" {
+		t.Fatal("API reenabled after restart")
+	}
+	if err := b.SetAPIEnabled(true); err != nil {
+		t.Fatal(err)
+	}
+	second := readAPIInfo(t, cfg.APIInfoPath)
+	if first.InstanceID == second.InstanceID {
+		t.Fatal("reenabled API reused instance ID")
+	}
+	var stdout, stderr bytes.Buffer
+	if code := agentcli.Run(t.Context(), []string{"--api-info", cfg.APIInfoPath, "today"}, &stdout, &stderr); code != 0 {
+		t.Fatalf("CLI couldn't discover reenabled API: %s", &stderr)
+	}
+	var daily struct{ Workspace agent.Workspace }
+	if err := json.Unmarshal(stdout.Bytes(), &daily); err != nil || daily.Workspace != workspace {
+		t.Fatalf("CLI couldn't read the saved workspace: %s, %v", &stdout, err)
+	}
+	req, err := http.NewRequest("POST", second.URL+"/api/tasks", strings.NewReader(`{"title":"stale instance"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(InstanceHeader, first.InstanceID)
+	response, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	response.Body.Close()
+	if response.StatusCode != http.StatusPreconditionFailed {
+		t.Fatalf("outdated instance could send writes: %d", response.StatusCode)
+	}
+	w = httptest.NewRecorder()
+	b.Handler().ServeHTTP(w, httptest.NewRequest("GET", "wails://localhost/api/tasks", nil))
+	if strings.TrimSpace(w.Body.String()) != "[]" {
+		t.Fatalf("stale API call affected tasks: %s", w.Body)
+	}
+	if err := b.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	reopened, err := Start(cfg, fstest.MapFS{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { reopened.Close() })
+	if reopened.APIURL() == "" {
+		t.Fatal("enabled preference did not survive restart")
 	}
 }

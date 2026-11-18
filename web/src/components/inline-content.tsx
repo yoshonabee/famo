@@ -27,7 +27,6 @@ export function InlineContent({
         op: field === 'title' ? 'rename' : 'update',
         [field]: snapshot.value,
         version: snapshot.version,
-        source: 'ui',
       }),
     onSuccess: (updated) => {
       client.setQueryData<Task[]>(['tasks'], (old) =>

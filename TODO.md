@@ -31,5 +31,18 @@
 
 - [x] macOS 選單列顯示今日完成比例，點擊可開啟今日任務浮動面板與 Open Famo。
 
-- [ ] 可在 App 中開啟或停用 Agent API。
+- [x] 可在 App 中開啟或停用 Agent API。
 - [ ] 可選擇動態 port 或指定固定 port，套用後同步更新 Agent API 位址檔案。
+
+## 本機 AI Agent 整合
+
+- [x] 保留現有的本機 HTTP API，新增薄 CLI，封裝桌面版位址探索與執行個體核對，提供可解析的 JSON 輸出，沿用 API 的版本衝突檢查。
+- [x] 提供 Agent Skill，說明如何透過 CLI 查任務、讀取脈絡、新增待辦、回報進度和標記完成，以及遇到版本衝突時如何處理。
+- [x] 設定頁可安裝或移除桌面 CLI，並提供可複製的 Skill 安裝指令。
+- [x] 可設定預設 workspace dir 和選填的自訂 prompt。CLI 一併回傳路徑及 prompt，留空時 Agent 依 Skill 的預設方式查找脈絡。
+- [ ] Project 功能加入後可設定各 Project 的 workspace dir 和選填 prompt。未歸類的任務使用預設 workspace，已歸類的任務使用所屬 Project 的 workspace。
+
+## 舊任務功能與資料清理
+
+- [x] 移除已從主要介面撤下的舊功能及對應 API，包含任務類型、流程階段、優先順序、等待與下次查看、子步驟與下一步、獨立目標／背景脈絡／驗收條件、類型 metadata、進展歷程及手動連結種類設定。
+- [x] 提供 SQLite 清理工具，支援預覽受影響的資料、備份，以及明確確認後移除舊欄位與設定。確認現行任務的備註、日期、連結網址、完成狀態、排序及版本資料皆完整保留。

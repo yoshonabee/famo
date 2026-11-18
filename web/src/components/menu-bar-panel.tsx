@@ -15,7 +15,6 @@ function MenuBarTask({ task }: { task: Task }) {
       request<Task>(`/tasks/${snapshot.id}/actions`, {
         op: snapshot.completed_at ? 'reopen_task' : 'complete_task',
         version: snapshot.version,
-        source: 'ui:menu-bar',
       }),
     onSuccess: async (updated) => {
       await client.cancelQueries({ queryKey: ['tasks'] })

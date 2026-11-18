@@ -34,7 +34,6 @@ export function TodoTitle({
       request<Task>(`/tasks/${snapshot.task.id}/actions`, {
         op,
         version: snapshot.task.version,
-        source: 'ui',
         ...(op === 'rename' ? { title: updatedTitle } : {}),
       }),
     onSuccess: (updated) => {

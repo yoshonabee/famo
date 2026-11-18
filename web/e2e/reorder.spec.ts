@@ -1,30 +1,11 @@
 import { expect, test } from '@playwright/test'
 
-test('含舊等待資料的任務維持單一列表，支援拖曳、鍵盤排序與失敗回復', async ({
-  page,
-  request,
-}) => {
+test('任務列表支援拖曳、鍵盤排序與失敗回復', async ({ page, request }) => {
   for (const suffix of ['A', 'B', 'C']) {
     const response = await request.post('/api/tasks', {
-      data: { title: `拖曳測試 ${suffix}`, type: 'general', priority: 1 },
+      data: { title: `拖曳測試 ${suffix}` },
     })
     expect(response.status()).toBe(201)
-    const task = await response.json()
-    if (suffix !== 'A') {
-      expect(
-        (
-          await request.post(`/api/tasks/${task.id}/actions`, {
-            data: {
-              op: 'update',
-              version: task.version,
-              ...(suffix === 'B'
-                ? { waiting_reason: '等待回覆' }
-                : { review_at: new Date(Date.now() - 60000).toISOString() }),
-            },
-          })
-        ).status(),
-      ).toBe(200)
-    }
   }
   await page.goto('/')
   await page.getByRole('button', { name: '任務列表', exact: true }).click()

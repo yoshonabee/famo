@@ -27,14 +27,23 @@ tags="production${EXTRA_TAGS:+,$EXTRA_TAGS}"
 build_binary() {
   GOARCH="$1" go build -tags "$tags" -trimpath -ldflags='-s -w' -o "$2" ./cmd/famo-desktop
 }
+build_agent() {
+  CGO_ENABLED=0 GOARCH="$1" go build -trimpath -ldflags='-s -w' -o "$2" ./cmd/famo-agent
+}
 if [ "$arch" = universal ]; then
   build_binary arm64 bin/famo-desktop-arm64
   build_binary amd64 bin/famo-desktop-amd64
   lipo -create bin/famo-desktop-arm64 bin/famo-desktop-amd64 -output "$bundle/Contents/MacOS/famo-desktop"
   rm bin/famo-desktop-arm64 bin/famo-desktop-amd64
+  build_agent arm64 bin/famo-agent-arm64
+  build_agent amd64 bin/famo-agent-amd64
+  lipo -create bin/famo-agent-arm64 bin/famo-agent-amd64 -output "$bundle/Contents/MacOS/famo-agent"
+  rm bin/famo-agent-arm64 bin/famo-agent-amd64
 else
   build_binary "$arch" "$bundle/Contents/MacOS/famo-desktop"
+  build_agent "$arch" "$bundle/Contents/MacOS/famo-agent"
 fi
+codesign --force --sign - "$bundle/Contents/MacOS/famo-agent"
 codesign --force --sign - "$bundle"
-codesign --verify --strict "$bundle"
+codesign --verify --deep --strict "$bundle"
 echo "Built $bundle ($arch)"

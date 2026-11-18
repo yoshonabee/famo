@@ -3,6 +3,7 @@ build:
 	$(MAKE) frontend
 	mkdir -p bin
 	go build -o bin/famo ./cmd/famo
+	go build -o bin/famo-agent ./cmd/famo-agent
 frontend:
 	cd web && npm ci && npm run build
 desktop: frontend

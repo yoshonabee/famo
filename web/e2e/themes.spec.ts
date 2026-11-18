@@ -4,7 +4,6 @@ test('設定提供 12 款主題，切換立即生效並在重開後保留', asyn
   page,
   request,
 }) => {
-  const settings = await (await request.get('/api/settings')).json()
   const tasks = await (await request.get('/api/tasks')).json()
   await page.goto('/')
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'moss')
@@ -73,7 +72,7 @@ test('設定提供 12 款主題，切換立即生效並在重開後保留', asyn
     path: '/private/tmp/famo-themes-dark.png',
     fullPage: true,
   })
-  expect(await (await request.get('/api/settings')).json()).toEqual(settings)
+  expect((await request.get('/api/settings')).status()).toBe(404)
   expect(await (await request.get('/api/tasks')).json()).toEqual(tasks)
 })
 

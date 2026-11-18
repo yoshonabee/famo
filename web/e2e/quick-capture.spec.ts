@@ -76,12 +76,9 @@ test('Enter 連續新增，不等待上一列儲存，名稱以外皆可留白',
   )
   expect(saved).toHaveLength(2)
   for (const task of saved) {
-    expect(task.goal).toBe('')
-    expect(task.context).toBe('')
-    expect(task.acceptance).toBe('')
-    expect(task.steps).toEqual([])
-    expect(task.type).toBe('general')
-    expect(task.priority).toBe(1)
+    expect(task.description).toBe('')
+    expect(task.links).toEqual([])
+    expect(task.version).toBe(1)
   }
   await row
     .getByRole('button', { name: '任務詳情：快速記下：整理筆記', exact: true })

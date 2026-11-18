@@ -13,7 +13,7 @@
 - 方形 checkbox 完成／恢復該列任務。每個小步驟各自建立與完成，不要求預先規劃後續流程。
 - 六點把手支援滑鼠、觸控及鍵盤排序。以手動順序安排先後，搜尋後排序只交換可見任務的位置。
 
-任務類型、流程階段、優先順序及其設定頁已從介面撤下，新增也不再開啟完整表單。既有欄位、選項、步驟、metadata 與歷程仍保存在資料庫，API 維持相容，介面的改字、移動日期和完成操作不會清除這些資料。任務每 30 秒及視窗重新聚焦時同步。
+任務每 30 秒及視窗重新聚焦時同步。
 
 ## macOS 選單列
 
@@ -50,7 +50,6 @@
 - 點標題或備註直接編輯，離開欄位儲存、Escape 取消。標題以 Enter 儲存；備註的 Enter 換行，Ctrl／⌘＋Enter 儲存，也可使用儲存／取消按鈕。已完成任務也可修改。
 - 新增連結只需貼上 HTTP／HTTPS 網址，不必選種類。同一任務可以保留多個 PR 或討論串，儲存失敗或版本衝突會保留輸入網址。
 - 列表直接顯示前兩筆連結，其餘以 `+N` 開啟詳情。GitHub PR／Issue 顯示 repo 與編號，Slack、Asana、Google 文件顯示簡短名稱，其餘使用主機與路徑，完整網址可在詳情查看。
-- 進展歷程與類型 metadata 保留於資料和 API，日常詳情只呈現工作所需的備註與連結。
 
 所有內容寫入都帶版本；衝突與儲存失敗會保留編輯草稿，避免覆蓋其他視窗或 Agent 的更新。
 
@@ -109,15 +108,24 @@ open bin/Famo.app --args -db /absolute/path/to/existing/famo.db
 
 Agent 應先讀取這個檔案，再呼叫 `url` 下的 `/health`，確認狀態為 `ok`，且回應的 `X-Famo-Instance-ID` header 與檔案的 `instance_id` 相同，然後使用相同的 `/api/tasks` 等路徑。這個識別碼用於核對執行個體，不是存取憑證。App 每次啟動都會重新分配 port 並更新檔案；連線失敗或識別碼不符時，應重新讀取檔案，避免使用異常結束前留下的位址。正常結束會清除所屬位址檔案、關閉資料庫並釋放埠。
 
-目前可用啟動參數選擇 `-addr 127.0.0.1:8789` 固定 port，或用 `-addr ''` 停用 Agent API；停用時會清除舊位址檔案，桌面介面仍可正常使用。指定固定埠而發生衝突時會顯示啟動錯誤。這些參數只對本次程序生效，Agent API 的 App 內設定留待後續提供。`-api-info /absolute/path/agent-api.json` 可為隔離測試指定其他位址檔案；`-db` 不會改變預設位址檔案的位置。
+「設定 → 本機 Agent」可即時開啟或停用桌面版的 Agent API，選擇會儲存在 SQLite。停用時會清除該執行個體的位址檔案，桌面介面可繼續使用。`-addr 127.0.0.1:8789` 可指定固定 port，`-addr ''` 會在本次啟動時停用 API。未指定 `-addr` 時採用儲存的偏好。`-api-info /absolute/path/agent-api.json` 可為隔離測試指定其他位址檔案，`-db` 不會改變預設位址檔案的位置。
 
 目前產物使用本機 ad-hoc 簽章，供本機建置與試用；Developer ID 簽署、公證與自動更新尚未提供。原始碼已保留其他平台可共用的核心，這一版僅支援及驗證 macOS 桌面打包。
 
 ### 資料升級
 
-資料庫升級至 v4 時會在交易中建立選項設定，將原有 `goal`、`context`、`acceptance` 的非空內容依序加上小標合併成 `description`。原欄位、步驟、連結、歷程、任務版本與排序均保留；之後清空描述不會再次從舊欄位填回。
+首次用新版開啟舊 SQLite 資料庫時，Famo 會在交易中升級到 v6，保留任務標題、備註、日期、連結網址、完成與刪除狀態、時間、排序和版本。很早期的任務若尚無備註欄位，會將原有目標、背景和驗收條件合併成備註。原始任務、排序和選項會封存，待你主動清理。升級後請用支援 v6 的執行檔。
 
-備份時先停止程式再複製 SQLite 檔案；執行中的 WAL 可能尚未合併到主檔。升級至 v5 會加入連結種類設定，將舊連結種類匯入並綁定固定 ID；保留原種類名稱、URL、重複種類連結、任務版本、歷程與順序。升級後請使用支援 v5 的執行檔。
+### 清理舊任務資料
+
+先用 `make build` 取得 `bin/famo`。桌面版的預設資料庫如下，命令列版請將路徑替換為 `data/famo.db` 或你實際使用的資料庫。
+
+```sh
+./bin/famo cleanup -db "$HOME/Library/Application Support/Famo/famo.db"
+./bin/famo cleanup -db "$HOME/Library/Application Support/Famo/famo.db" -apply -backup "$HOME/Library/Application Support/Famo/famo-before-cleanup.db"
+```
+
+第一個指令以唯讀模式列出受影響的資料表與筆數。確認後，請先結束 Famo，再執行第二個指令。工具會先在指定路徑寫入完整 SQLite 備份，包含尚在 WAL 中的資料。備份路徑必須是新檔。備份成功後才會在交易中刪除舊資料並壓縮資料庫。工作區與 Agent API 偏好維持原值。備份仍包含舊資料，可保留以便需要時復原。
 
 ## 開發與檢查
 
@@ -148,7 +156,7 @@ npm run test:e2e
 npm run format:check
 ```
 
-瀏覽器驗收會啟動獨立的 `127.0.0.1:8788` 伺服器，使用暫存目錄中的 SQLite，不接觸個人資料庫。測試涵蓋資料升級、URL-only 連結與既有設定相容、任務原子寫入、今日新增與完成紀錄、跨日保留脈絡、拖曳排序、直接編輯、版本衝突草稿，以及手機操作。
+瀏覽器驗收會啟動獨立的 `127.0.0.1:8788` 伺服器，使用暫存目錄中的 SQLite，不接觸個人資料庫。測試涵蓋資料升級、URL 連結、任務原子寫入、今日新增與完成紀錄、跨日保留脈絡、拖曳排序、直接編輯、版本衝突草稿，以及手機操作。
 
 ## Agent API
 
@@ -159,9 +167,7 @@ npm run format:check
 | 方法與路徑 | 用途 |
 | --- | --- |
 | `GET /health` | 健康檢查 |
-| `GET /settings` | 選項設定及版本 |
-| `POST /settings` | 提交完整設定，需帶讀取時的 `version` |
-| `GET /workflows` | 類型及階段選項（含固定 ID、名稱、色彩、停用狀態及預設階段） |
+| `GET /agent/workspace` | 預設工作區路徑 `dir` 和選填指引 `prompt` |
 | `GET /tasks` | 全部未刪除任務，含已完成任務 |
 | `POST /tasks` | 建立任務 |
 | `POST /tasks/reorder` | `{"task_ids":["id2","id1"]}` 調整未完成任務的相對順序 |
@@ -169,7 +175,7 @@ npm run format:check
 | `GET /tasks/{id}/context` | Agent 脈絡，與完整任務相同 |
 | `POST /tasks/{id}/actions` | 具版本檢查的任務操作 |
 
-建立任務只需標題。類型、階段與優先順序為舊版相容欄位，省略時使用既有預設值；連結可只提供網址：
+建立任務只需標題，可同時指定備註、日期或連結。
 
 ```sh
 curl http://127.0.0.1:8787/tasks \
@@ -178,8 +184,7 @@ curl http://127.0.0.1:8787/tasks \
     "title": "修復登入逾時",
     "description": "閒置後登入失敗，修復後需通過回歸測試。",
     "scheduled_date": "2026-11-04",
-    "links": [{"url": "https://team.slack.com/archives/C123/p456"}],
-    "source": "agent:codex"
+    "links": [{"url": "https://team.slack.com/archives/C123/p456"}]
   }'
 ```
 
@@ -192,35 +197,46 @@ curl http://127.0.0.1:8787/tasks/TASK_ID/actions \
     "op": "update",
     "version": 1,
     "description": "修復已提交，等待 CI 結果。",
-    "links": [{"url": "https://github.com/example/app/pull/1"}],
-    "source": "agent:codex"
+    "links": [{"url": "https://github.com/example/app/pull/1"}]
   }'
 ```
 
-請替換範例 ID、版本與時間。`type`、`stage` 使用設定中的字串 ID；`priority` 維持非負整數 ID，選項可擴充，沒有 0–2 上限。切換類型時應一併指定該類型的合法階段。新增連結建議使用 `{"url":"https://…"}`，伺服器依網址辨識 GitHub PR／Issue、Slack、Asana、Google 文件，其他網址使用 `other` 種類。推定種類已停用或不存在時依序退回啟用中的 `other`、既有預設種類。回傳仍含 `type_id` 與 `type`。明確指定 `type_id` 或舊版 `type` 名稱的寫法維持相容；未知或已停用的明確種類回傳 `400`。
+請替換範例 ID、版本與日期。新增連結使用 `{"url":"https://…"}`，Famo 介面會依網址呈現 GitHub PR／Issue、Slack、Asana 和 Google 文件等簡短名稱。
 
 | `op` | 行為 |
 | --- | --- |
-| `update` | 更新 `title`、`description`、`scheduled_date`、`type`、`stage`、`priority`、`waiting_reason`、`review_at`、`metadata`；可附加 `links` |
-| `rename` | 非空白 `title`，重新命名任務 |
-| `set_waiting` | 舊版相容操作：非空白 `waiting_reason`，設定等待；介面已移除 |
-| `resume` | 舊版相容操作：清除等待與查看時間；介面已移除 |
-| `add_link` | 非空白 `links` 陣列，附加相關連結；同一 `type_id` 允許多筆 |
-| `complete_task` | 完成任務，清除等待／提醒，保留描述與歷程 |
+| `update` | 更新 `title`、`description` 或 `scheduled_date`，也可附加 `links` |
+| `rename` | 重新命名任務，標題必須有內容 |
+| `add_link` | 附加一筆或多筆相關連結 |
+| `complete_task` | 完成任務 |
 | `reopen_task` | 恢復任務為未完成 |
 | `delete_item` | 軟刪除任務 |
 
-`scheduled_date` 為可選的日期字串，格式為有效的 `YYYY-MM-DD`（年份 0001–9999），不含時間或時區；建立時省略或設為空字串代表無日期。`update` 省略此欄位維持原值，空字串清除日期，無效日期回傳 `400`。日期保存在既有 SQLite 任務 JSON 文件，無須 schema 升級；舊任務視為無日期。請使用支援日期欄位的執行檔，舊版寫入任務可能遺失此欄位。
+`scheduled_date` 接受有效的 `YYYY-MM-DD`（年份 0001–9999），不含時間或時區。建立時省略或送空字串代表無日期，更新時送空字串清除日期。更新省略的欄位會保留原值，空字串 `description` 可清除備註。寫入成功會回傳完整任務，版本遞增一次。版本衝突回傳 `409`，先重新讀取，再確認如何套用修改。
 
-省略欄位維持原值，空字串 `description`／`waiting_reason`／`review_at` 清除內容。回傳完整任務，版本遞增一次，並記錄來源與時間。`source` 省略為 `ui`。版本衝突回傳 `409`，應重新讀取並確認適用的修改；請勿直接以新版本覆蓋舊草稿。
+舊版類型、階段、優先順序、等待狀態、子步驟、獨立脈絡、類型 metadata、寫入來源與歷程、手動連結種類，以及 `/settings`、`/workflows` 端點已移除。串接舊版 API 的工具請改用備註、日期及 URL 連結等現行欄位。
 
-舊 `goal`、`context`、`acceptance` 與步驟欄位及操作仍保留 API 相容性；新整合應只使用 `description` 與任務操作。建立時只提供舊內容欄位會合併到描述；之後舊內容欄位與描述各自獨立，不雙向同步。
-
-設定提交使用 `GET /settings` 的完整結構，包含 `version`、`workflows`、`priorities`、`default_type`、`default_priority`、`link_types`、`default_link_type`。類型另有 `stages`、`default_stage`；每個選項包含 `id`、`name`、`color`（`#RRGGBB`）及 `disabled`。移除陣列中的選項即代表刪除，引用該選項的任務會原子改派至預設值；若保留引用請設 `disabled: true`。刪除預設選項時必須同時提交合法的新預設值。陣列順序就是選單順序。`color_presets` 為伺服器提供的唯讀預選色表，提交時不會覆寫內建色表。
-
-排序不修改任務版本或歷程，只交換指定 ID 占用的位置。重複、不存在或已完成 ID 回傳 `400`，不留下部分更新。
+排序只交換指定 ID 占用的位置，保留任務內容版本。重複、不存在或已完成 ID 回傳 `400`，並回復整次排序。
 
 錯誤回傳 `{"error":"說明"}`：`400` 輸入錯誤、`404` 找不到任務、`409` 版本衝突、`415` Content-Type 錯誤、`500` 儲存失敗。
+
+## Agent CLI 與 Skill
+
+macOS 桌面版在「設定 → 本機 Agent」可安裝、更新或移除 CLI，並複製 Skill 安裝指令。CLI 安裝到 `~/.local/bin/famo-agent`。若該資料夾未加到 `PATH`，可用完整路徑執行。在同一頁設定本機工作區的絕對路徑，並選擇性填寫指引，例如先查哪份文件或怎麼跑測試。Famo 提供路徑和指引，由本機 Agent 直接讀取工作區檔案。
+
+`make build` 也會產生 `bin/famo-agent`。可在專案根目錄用 `./bin/famo-agent cli install` 安裝 CLI，或直接執行二進位檔。連線到命令列版的網頁服務時，請在子指令前加 `--url http://127.0.0.1:8787`。桌面版預設自動探索 API，隔離環境可傳 `--api-info PATH`。
+
+```sh
+famo-agent skill install                      # 安裝至 ~/.agents/skills/famo
+famo-agent skill install --dir /path/to/skills # 使用其他 Agent 的 Skill 資料夾
+famo-agent today                              # 今日未完成任務與工作區
+famo-agent context TASK_ID                    # 任務、版本與工作區
+famo-agent add --title '調查登入逾時'
+famo-agent update TASK_ID --version 1 --description '已重現，待確認重試條件' --link https://example.com/report
+famo-agent complete TASK_ID --version 2
+```
+
+CLI 成功時將 JSON 寫入 stdout，失敗時將 JSON 寫入 stderr。版本衝突的 exit code 是 `3`。`--description` 會取代整段備註，省略時保留原備註，`--link` 可重複使用。Skill 負責從工作區查找脈絡與回寫結果，可由使用者在本機 Agent 裡觸發。
 
 ## 專案結構
 

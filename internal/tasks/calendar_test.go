@@ -44,7 +44,7 @@ func TestScheduledDateLifecycle(t *testing.T) {
 		t.Fatal(err)
 	}
 	list, err := s.List(ctx)
-	if err != nil || len(list) != 1 || list[0].ScheduledDate != "2026-11-04" || len(list[0].History) != 4 {
+	if err != nil || len(list) != 1 || list[0].ScheduledDate != "2026-11-04" || list[0].Version != 4 {
 		t.Fatalf("date not persisted: %+v, %v", list, err)
 	}
 	updated, err = s.Act(ctx, task.ID, Action{Op: "update", Version: updated.Version, ScheduledDate: ptr("")})
@@ -73,7 +73,7 @@ func TestScheduledDateValidationAndAtomicity(t *testing.T) {
 				t.Fatalf("invalid update accepted: %v", err)
 			}
 			got, err := s.Get(ctx, task.ID)
-			if err != nil || got.Title != task.Title || got.Version != task.Version || got.ScheduledDate != "" || len(got.History) != 1 {
+			if err != nil || got.Title != task.Title || got.Version != task.Version || got.ScheduledDate != "" {
 				t.Fatalf("partial write: %+v, %v", got, err)
 			}
 		})
@@ -89,7 +89,7 @@ func TestLegacyDocumentHasNoScheduledDate(t *testing.T) {
 	s := openTest(t)
 	ctx := context.Background()
 	task := createTest(t, s)
-	// Existing v5 JSON documents have no scheduled_date field and need no schema migration.
+	// Documents without scheduled_date remain undated.
 	raw, _ := json.Marshal(task)
 	var document map[string]any
 	if err := json.Unmarshal(raw, &document); err != nil {
@@ -105,7 +105,7 @@ func TestLegacyDocumentHasNoScheduledDate(t *testing.T) {
 		t.Fatalf("legacy document: %+v, %v", got, err)
 	}
 	updated, err := s.Act(ctx, task.ID, Action{Op: "update", Version: got.Version, ScheduledDate: ptr("2026-11-04")})
-	if err != nil || updated.ScheduledDate != "2026-11-04" || updated.Goal != task.Goal {
+	if err != nil || updated.ScheduledDate != "2026-11-04" || updated.Description != task.Description {
 		t.Fatalf("legacy update: %+v, %v", updated, err)
 	}
 }

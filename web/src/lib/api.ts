@@ -1,78 +1,30 @@
 import { notifyTasksChanged } from '@/lib/desktop'
 
-export type Step = { id: string; title: string; completed_at: string | null }
-export type Link = { type_id?: string; type: string; url: string }
+export type Link = { url: string }
 export type Task = {
   id: string
   title: string
   scheduled_date: string
   description: string
-  goal: string
-  context: string
-  acceptance: string
-  type: string
-  stage: string
-  priority: number
-  waiting_reason: string
-  waiting_since: string | null
-  review_at: string | null
   completed_at: string | null
-  deleted_at?: string | null
+  deleted_at: string | null
   created_at: string
   updated_at: string
   version: number
-  steps: Step[]
   links: Link[]
-  metadata: Record<string, unknown>
-  history: {
-    action: string
-    source: string
-    summary: string
-    at: string
-    version: number
-  }[]
-}
-export type Option = {
-  id: string
-  name: string
-  color: string
-  disabled: boolean
-}
-export type Workflow = Option & { stages: Option[]; default_stage: string }
-export type ColorPreset = { name: string; color: string }
-export type Settings = {
-  link_types: Option[]
-  default_link_type: string
-  color_presets: ColorPreset[]
-  version: number
-  workflows: Workflow[]
-  priorities: Option[]
-  default_type: string
-  default_priority: number
 }
 export type Action = {
   op:
-    | 'complete_step'
-    | 'update_next_step'
     | 'add_link'
     | 'update'
     | 'complete_task'
     | 'reopen_task'
-    | 'reopen_step'
     | 'rename'
     | 'delete_item'
-  step_id?: string
-  next_step?: string
-  stage?: string
-  links?: { type_id?: string; type?: string; url: string }[]
+  links?: Link[]
   scheduled_date?: string
   title?: string
   description?: string
-  type?: string
-  goal?: string
-  context?: string
-  acceptance?: string
-  priority?: number
 }
 export class ApiError extends Error {
   constructor(

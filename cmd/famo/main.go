@@ -2,9 +2,7 @@ package main
 
 import (
 	"context"
-	"famo/internal/server"
-	"famo/internal/tasks"
-	"famo/web"
+	"errors"
 	"flag"
 	"log"
 	"net/http"
@@ -13,9 +11,21 @@ import (
 	"path/filepath"
 	"syscall"
 	"time"
+
+	"famo/internal/server"
+	"famo/internal/tasks"
+	"famo/web"
 )
 
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "cleanup" {
+		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+		defer stop()
+		if err := runCleanup(ctx, os.Args[2:], os.Stdout); err != nil && !errors.Is(err, flag.ErrHelp) {
+			log.Fatal(err)
+		}
+		return
+	}
 	addr := flag.String("addr", "127.0.0.1:8787", "本機監聽位址")
 	data := flag.String("db", "data/famo.db", "SQLite 檔案位置")
 	flag.Parse()
