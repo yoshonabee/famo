@@ -58,34 +58,6 @@ func newHandler(store *tasks.Store, assets fs.FS, access func(http.Handler) http
 				write(w, 200, saved)
 			})
 		}
-		r.Get("/settings", func(w http.ResponseWriter, r *http.Request) {
-			cfg, err := store.Settings(r.Context())
-			if err != nil {
-				fail(w, err)
-				return
-			}
-			write(w, 200, cfg)
-		})
-		r.Post("/settings", func(w http.ResponseWriter, r *http.Request) {
-			var cfg tasks.Settings
-			if !decode(w, r, &cfg) {
-				return
-			}
-			saved, err := store.SaveSettings(r.Context(), cfg)
-			if err != nil {
-				fail(w, err)
-				return
-			}
-			write(w, 200, saved)
-		})
-		r.Get("/workflows", func(w http.ResponseWriter, r *http.Request) {
-			cfg, err := store.Settings(r.Context())
-			if err != nil {
-				fail(w, err)
-				return
-			}
-			write(w, 200, cfg.Workflows)
-		})
 		r.Get("/tasks", func(w http.ResponseWriter, r *http.Request) {
 			list, err := store.List(r.Context())
 			if err != nil {
@@ -95,24 +67,11 @@ func newHandler(store *tasks.Store, assets fs.FS, access func(http.Handler) http
 			write(w, 200, list)
 		})
 		r.Post("/tasks", func(w http.ResponseWriter, r *http.Request) {
-			var in struct {
-				tasks.CreateInput
-				Priority *int `json:"priority"`
-			}
+			var in tasks.CreateInput
 			if !decode(w, r, &in) {
 				return
 			}
-			cfg, err := store.Settings(r.Context())
-			if err != nil {
-				fail(w, err)
-				return
-			}
-			if in.Priority == nil {
-				in.CreateInput.Priority = cfg.DefaultPriority
-			} else {
-				in.CreateInput.Priority = *in.Priority
-			}
-			t, err := store.Create(r.Context(), in.CreateInput)
+			t, err := store.Create(r.Context(), in)
 			if err != nil {
 				fail(w, err)
 				return

@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 
-test('備註直接編輯、Agent 更新與歷程保留於資料', async ({ page, request }) => {
+test('備註直接編輯、Agent 更新與版本衝突', async ({ page, request }) => {
   const errors: string[] = []
   page.on('pageerror', (e) => errors.push(e.message))
   await page.goto('/')
@@ -9,7 +9,6 @@ test('備註直接編輯、Agent 更新與歷程保留於資料', async ({ page,
     data: {
       title: '新版詳細頁驗收',
       description: '任務目標\n背景與完成條件',
-      type: 'development',
     },
   })
   await page.reload()
@@ -61,19 +60,14 @@ test('備註直接編輯、Agent 更新與歷程保留於資料', async ({ page,
   const tasks = await (await request.get('/api/tasks')).json()
   const task = tasks.find((t: { title: string }) => t.title === '已直接改名')
   expect(task.description).toBe('修改描述\n保留換行')
-  expect(task.steps).toEqual([])
   expect(
     (
       await request.post(`/api/tasks/${task.id}/actions`, {
         data: {
           op: 'update',
           version: task.version,
-          stage: 'PR review',
-          source: 'agent:e2e',
-          review_at: new Date(Date.now() - 60000).toISOString(),
           links: [
             {
-              type: 'GitHub PR',
               url: 'https://github.com/example/repo/pull/1',
             },
           ],
@@ -99,11 +93,8 @@ test('備註直接編輯、Agent 更新與歷程保留於資料', async ({ page,
   await mainList
     .getByRole('button', { name: '任務詳情：已直接改名', exact: true })
     .click()
-  expect(
-    (await (await request.get(`/api/tasks/${task.id}`)).json()).history.some(
-      (event: { source: string }) => event.source === 'agent:e2e',
-    ),
-  ).toBe(true)
+  const updated = await (await request.get(`/api/tasks/${task.id}`)).json()
+  expect(updated.version).toBe(task.version + 1)
   await dialog.getByRole('button', { name: '關閉', exact: true }).click()
   await mainList
     .getByRole('button', { name: '任務詳情：已直接改名', exact: true })

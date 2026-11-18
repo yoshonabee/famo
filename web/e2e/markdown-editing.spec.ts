@@ -8,8 +8,6 @@ test('直接編輯標題、Enter 儲存、Escape 取消，空白後再 Backspace
     await request.post('/api/tasks', {
       data: {
         title: 'Markdown 直接改字',
-        type: 'general',
-        priority: 1,
         description: '保留的背景',
       },
     })
@@ -73,15 +71,11 @@ test('直接編輯標題、Enter 儲存、Escape 取消，空白後再 Backspace
   await expect(row).not.toBeVisible()
 })
 
-test('舊步驟保留，但列表改字與完成只操作整件任務', async ({
-  page,
-  request,
-}) => {
+test('列表改名、完成和恢復會保留備註', async ({ page, request }) => {
   const task = await (
     await request.post('/api/tasks', {
       data: {
-        title: '封存步驟的任務',
-        steps: ['第一個小步驟', '第二個小步驟'],
+        title: '保留備註的任務',
         description: '保留任務描述',
       },
     })
@@ -90,7 +84,7 @@ test('舊步驟保留，但列表改字與完成只操作整件任務', async ({
   await page.getByRole('button', { name: '任務列表', exact: true }).click()
   const row = page.locator(`[data-task-id="${task.id}"]`)
   const title = row.locator('input.todo-title')
-  await expect(title).toHaveValue('封存步驟的任務')
+  await expect(title).toHaveValue('保留備註的任務')
   await expect(row.locator('.progress-chip,.parent-chip')).toHaveCount(0)
   await title.fill('任務新名稱')
   await title.press('Enter')
@@ -99,14 +93,14 @@ test('舊步驟保留，但列表改字與完成只操作整件任務', async ({
   await expect(row).not.toBeVisible()
   let saved = await (await request.get(`/api/tasks/${task.id}`)).json()
   expect(saved.completed_at).toBeTruthy()
-  expect(saved.steps).toEqual(task.steps)
+  expect(saved.description).toBe(task.description)
   await page.getByRole('button', { name: '已完成', exact: false }).click()
   await row.getByRole('checkbox', { name: '恢復任務：任務新名稱' }).click()
   await page.getByRole('button', { name: '任務列表', exact: false }).click()
   await expect(title).toHaveValue('任務新名稱')
   saved = await (await request.get(`/api/tasks/${task.id}`)).json()
   expect(saved.completed_at).toBeNull()
-  expect(saved.steps).toEqual(task.steps)
+  expect(saved.description).toBe(task.description)
   await row.getByRole('button', { name: '任務詳情：任務新名稱' }).click()
   await expect(
     page.getByRole('dialog').getByText('全部步驟', { exact: false }),
@@ -133,8 +127,7 @@ test('列內草稿遇到版本衝突保留文字，不覆寫新資料', async ({
           op: 'update',
           version: task.version,
           title: '外部已更新標題',
-          context: '外部已更新背景',
-          source: 'agent:test',
+          description: '外部已更新背景',
         },
       })
     ).status(),
@@ -145,6 +138,6 @@ test('列內草稿遇到版本衝突保留文字，不覆寫新資料', async ({
   await row.getByRole('button', { name: '取消並讀取最新標題' }).click()
   await expect(title).toHaveValue('外部已更新標題')
   const saved = await (await request.get(`/api/tasks/${task.id}`)).json()
-  expect(saved.context).toBe('外部已更新背景')
+  expect(saved.description).toBe('外部已更新背景')
   expect(saved.version).toBe(2)
 })

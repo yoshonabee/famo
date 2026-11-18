@@ -53,7 +53,7 @@ func TestNativeWindowAndAgentSharePersistentStore(t *testing.T) {
 	if err != nil || response.StatusCode != 200 || agentTask.Title != task.Title {
 		t.Fatalf("Agent cannot see native task: %+v, %v", agentTask, err)
 	}
-	response, err = http.Post(b.APIURL()+"/tasks/"+task.ID+"/actions", "application/json", strings.NewReader(`{"op":"complete_task","version":1,"source":"agent:test"}`))
+	response, err = http.Post(b.APIURL()+"/tasks/"+task.ID+"/actions", "application/json", strings.NewReader(`{"op":"complete_task","version":1}`))
 	if err != nil {
 		t.Fatal(err)
 	}

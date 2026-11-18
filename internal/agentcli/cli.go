@@ -35,7 +35,6 @@ type task struct {
 type action struct {
 	Op          string              `json:"op"`
 	Version     int                 `json:"version"`
-	Source      string              `json:"source"`
 	Description *string             `json:"description,omitempty"`
 	Links       []map[string]string `json:"links,omitempty"`
 }
@@ -50,8 +49,6 @@ const usage = `Usage: famo-agent [--api-info PATH | --url URL] COMMAND
   cli install | uninstall                 Manage the command in ~/.local/bin
   skill install [--dir DIR]               Install the Famo skill
 `
-
-const source = "agent:famo-cli"
 
 func Run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	result, err := run(ctx, args)
@@ -169,13 +166,13 @@ func runTaskCommand(ctx context.Context, c *client, command string, args []strin
 			return nil, errors.New("add requires --title")
 		}
 		return call[task](ctx, c, "/tasks", map[string]string{
-			"title": *title, "scheduled_date": *date, "source": source,
+			"title": *title, "scheduled_date": *date,
 		})
 	case "update", "complete":
 		if len(args) == 0 || args[0] == "" || strings.HasPrefix(args[0], "-") {
 			return nil, fmt.Errorf("%s requires a task ID before its flags", command)
 		}
-		a := action{Op: "complete_task", Source: source}
+		a := action{Op: "complete_task"}
 		flags.IntVar(&a.Version, "version", 0, "current task version")
 		if command == "update" {
 			a.Op = "update"

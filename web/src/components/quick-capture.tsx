@@ -28,7 +28,6 @@ export function useQuickCapture(onCapture: () => void, scheduledDate = '') {
       request<Task>('/tasks', {
         title: draft.title,
         scheduled_date: draft.scheduled_date,
-        source: 'ui',
       }),
     retry: false,
     onSuccess: async (task) => {

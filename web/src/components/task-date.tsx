@@ -13,7 +13,6 @@ export function TaskDate({ task, busy }: { task: Task; busy: boolean }) {
         op: 'update',
         scheduled_date: snapshot.value,
         version: snapshot.version,
-        source: 'ui',
       }),
     onSuccess: (updated) => {
       client.setQueryData<Task[]>(['tasks'], (old) =>

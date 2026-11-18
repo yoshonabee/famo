@@ -54,24 +54,14 @@ test('首頁是當地今日，小步驟直接新增與完成，不需維護分�
   }
 })
 
-test('先前未完成移到今日會保留連結與備註，舊分類資料仍保存', async ({
-  page,
-  request,
-}) => {
-  const originalSettings = await (await request.get('/api/settings')).json()
+test('先前未完成移到今日會保留連結與備註', async ({ page, request }) => {
   const task = await (
     await request.post('/api/tasks', {
       data: {
         title: '測試登入功能',
         scheduled_date: '2026-11-01',
         description: '在 staging 確認重新登入',
-        type: 'development',
-        stage: 'PR review',
-        priority: 0,
-        metadata: { repo: 'example/famo' },
-        links: [
-          { type_id: 'pr', url: 'https://github.com/example/famo/pull/123' },
-        ],
+        links: [{ url: 'https://github.com/example/famo/pull/123' }],
       },
     })
   ).json()
@@ -114,14 +104,8 @@ test('先前未完成移到今日會保留連結與備註，舊分類資料仍�
   const saved = await (await request.get(`/api/tasks/${task.id}`)).json()
   expect(saved.scheduled_date).toBe('2026-11-04')
   expect(saved.links).toEqual(task.links)
-  expect(saved.metadata).toEqual(task.metadata)
-  expect(saved.type).toBe(task.type)
-  expect(saved.stage).toBe(task.stage)
-  expect(saved.priority).toBe(task.priority)
   expect(saved.completed_at).toBeTruthy()
-  expect(await (await request.get('/api/settings')).json()).toEqual(
-    originalSettings,
-  )
+  expect(saved.description).toBe('測試通過，接著準備上線')
   await page.screenshot({
     path: '/private/tmp/famo-daily-todos-desktop.png',
     fullPage: true,

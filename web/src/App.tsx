@@ -148,7 +148,6 @@ function App() {
       request<Task>(`/tasks/${t.id}/actions`, {
         ...action,
         version: t.version,
-        source: 'ui',
       }),
     onSuccess: (t) => {
       client.setQueryData<Task[]>(['tasks'], (old) =>
