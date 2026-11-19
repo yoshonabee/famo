@@ -569,7 +569,7 @@ function Detail({
     >
       <div className="detail-heading">
         <Checkbox
-          className="detail-completion size-6 rounded-full"
+          className="detail-completion size-4.5 rounded-full border-2 border-primary bg-transparent [&_svg]:size-3"
           checked={completed}
           disabled={busy}
           aria-label={completed ? '恢復為未完成' : '完成任務'}

@@ -116,6 +116,15 @@ test('備註直接編輯、Agent 更新與版本衝突', async ({ page, request 
     name: '編輯任務標題',
     exact: true,
   })
+  await expect(completion).toHaveCSS('width', '18px')
+  await expect(completion).toHaveCSS('height', '18px')
+  await expect(completion).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)')
+  await expect(completion).toHaveCSS('border-top-width', '2px')
+  await expect(completion).toHaveCSS('border-top-style', 'solid')
+  const radius = await completion.evaluate((element) =>
+    Number.parseFloat(getComputedStyle(element).borderTopLeftRadius),
+  )
+  expect(radius).toBeGreaterThanOrEqual(9)
   const checkboxBox = (await completion.boundingBox())!
   const titleBox = (await titleButton.boundingBox())!
   expect(checkboxBox.x + checkboxBox.width).toBeLessThan(titleBox.x)
