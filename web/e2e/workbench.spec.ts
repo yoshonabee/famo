@@ -118,13 +118,15 @@ test('備註直接編輯、Agent 更新與版本衝突', async ({ page, request 
   })
   await expect(completion).toHaveCSS('width', '18px')
   await expect(completion).toHaveCSS('height', '18px')
-  await expect(completion).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)')
-  await expect(completion).toHaveCSS('border-top-width', '2px')
-  await expect(completion).toHaveCSS('border-top-style', 'solid')
-  const radius = await completion.evaluate((element) =>
-    Number.parseFloat(getComputedStyle(element).borderTopLeftRadius),
+  await expect(completion).not.toBeChecked()
+  const uncheckedIcon = completion.locator('svg')
+  await expect(uncheckedIcon).toHaveAttribute('fill', 'none')
+  await expect(uncheckedIcon).toHaveAttribute('stroke-width', '1.5')
+  await expect(uncheckedIcon.locator('circle')).toBeVisible()
+  await expect(uncheckedIcon.locator('path')).toBeVisible()
+  const uncheckedColor = await completion.evaluate(
+    (element) => getComputedStyle(element).color,
   )
-  expect(radius).toBeGreaterThanOrEqual(9)
   const checkboxBox = (await completion.boundingBox())!
   const titleBox = (await titleButton.boundingBox())!
   expect(checkboxBox.x + checkboxBox.width).toBeLessThan(titleBox.x)
@@ -134,9 +136,21 @@ test('備註直接編輯、Agent 更新與版本衝突', async ({ page, request 
     ),
   ).toBeLessThanOrEqual(1)
   await completion.click()
-  await expect(
-    dialog.getByRole('checkbox', { name: '恢復為未完成', exact: true }),
-  ).toBeChecked()
+  const checkedCompletion = dialog.getByRole('checkbox', {
+    name: '恢復為未完成',
+    exact: true,
+  })
+  await expect(checkedCompletion).toBeChecked()
+  await expect(checkedCompletion).toHaveCSS(
+    'background-color',
+    'rgba(0, 0, 0, 0)',
+  )
+  await expect(checkedCompletion).not.toHaveCSS('color', uncheckedColor)
+  const checkedIcon = checkedCompletion.locator('svg')
+  await expect(checkedIcon).toHaveAttribute('fill', 'none')
+  await expect(checkedIcon).toHaveAttribute('stroke-width', '1.5')
+  await expect(checkedIcon.locator('circle')).toBeVisible()
+  await expect(checkedIcon.locator('path')).toBeVisible()
   await dialog.getByRole('button', { name: '編輯備註', exact: true }).click()
   await dialog
     .getByRole('textbox', { name: '備註', exact: true })

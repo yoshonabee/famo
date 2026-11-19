@@ -5,6 +5,7 @@ import { isSortable, useSortable } from '@dnd-kit/react/sortable'
 import {
   CalendarDays,
   CheckCheck,
+  CircleCheck,
   ExternalLink,
   GripVertical,
   Inbox,
@@ -569,7 +570,7 @@ function Detail({
     >
       <div className="detail-heading">
         <Checkbox
-          className="detail-completion size-4.5 rounded-full border-2 border-primary bg-transparent [&_svg]:size-3"
+          className="detail-completion size-4.5 rounded-full border-0 bg-transparent text-muted-foreground/75 data-[state=checked]:bg-transparent data-[state=checked]:text-primary"
           checked={completed}
           disabled={busy}
           aria-label={completed ? '恢復為未完成' : '完成任務'}
@@ -577,7 +578,9 @@ function Detail({
           onCheckedChange={() =>
             act(t, { op: completed ? 'reopen_task' : 'complete_task' })
           }
-        />
+        >
+          <CircleCheck size={18} strokeWidth={1.5} aria-hidden="true" />
+        </Checkbox>
         <DialogTitle className="dialog-title" aria-label={t.title}>
           <InlineContent task={t} field="title" busy={busy} />
         </DialogTitle>

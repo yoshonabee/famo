@@ -4,6 +4,7 @@ import type { ComponentProps } from 'react'
 import { cn } from '@/lib/utils'
 export function Checkbox({
   className,
+  children,
   ...props
 }: ComponentProps<typeof CheckboxPrimitive.Root>) {
   return (
@@ -14,10 +15,12 @@ export function Checkbox({
       )}
       {...props}
     >
-      <CheckboxPrimitive.Indicator className="group flex items-center justify-center">
-        <Check className="size-3.5 group-data-[state=indeterminate]:hidden" />
-        <Minus className="hidden size-3.5 group-data-[state=indeterminate]:block" />
-      </CheckboxPrimitive.Indicator>
+      {children ?? (
+        <CheckboxPrimitive.Indicator className="group flex items-center justify-center">
+          <Check className="size-3.5 group-data-[state=indeterminate]:hidden" />
+          <Minus className="hidden size-3.5 group-data-[state=indeterminate]:block" />
+        </CheckboxPrimitive.Indicator>
+      )}
     </CheckboxPrimitive.Root>
   )
 }
