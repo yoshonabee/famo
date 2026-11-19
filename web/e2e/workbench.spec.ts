@@ -17,6 +17,15 @@ test('備註直接編輯、Agent 更新與版本衝突', async ({ page, request 
   await page
     .getByRole('button', { name: '任務詳情：新版詳細頁驗收', exact: true })
     .click()
+  const completion = dialog.getByRole('checkbox', {
+    name: '完成任務',
+    exact: true,
+  })
+  await expect(dialog).toBeFocused()
+  await expect(completion).toHaveCSS('box-shadow', 'none')
+  await page.keyboard.press('Tab')
+  await expect(completion).toBeFocused()
+  await expect(completion).not.toHaveCSS('box-shadow', 'none')
   await expect(
     dialog.getByRole('button', { name: '編輯內容', exact: true }),
   ).toHaveCount(0)
@@ -108,18 +117,15 @@ test('備註直接編輯、Agent 更新與版本衝突', async ({ page, request 
   await expect(
     dialog.getByRole('button', { name: '編輯備註', exact: true }),
   ).toHaveText('離開欄位自動儲存')
-  const completion = dialog.getByRole('checkbox', {
-    name: '完成任務',
-    exact: true,
-  })
   const titleButton = dialog.getByRole('button', {
     name: '編輯任務標題',
     exact: true,
   })
-  await expect(completion).toHaveCSS('width', '18px')
-  await expect(completion).toHaveCSS('height', '18px')
+  await expect(completion).toHaveCSS('width', '20px')
+  await expect(completion).toHaveCSS('height', '20px')
   await expect(completion).not.toBeChecked()
   const uncheckedIcon = completion.locator('svg')
+  await expect(uncheckedIcon).toHaveAttribute('width', '20')
   await expect(uncheckedIcon).toHaveAttribute('fill', 'none')
   await expect(uncheckedIcon).toHaveAttribute('stroke-width', '1.5')
   await expect(uncheckedIcon.locator('circle')).toBeVisible()

@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { DragDropProvider } from '@dnd-kit/react'
 import { isSortable, useSortable } from '@dnd-kit/react/sortable'
@@ -529,6 +529,7 @@ function Detail({
   act: Act
   busy: boolean
 }) {
+  const dialogRef = useRef<HTMLDivElement>(null)
   const [adding, setAdding] = useState(false)
   const [linkError, setLinkError] = useState('')
   const [removeError, setRemoveError] = useState('')
@@ -558,7 +559,12 @@ function Detail({
 
   return (
     <DialogContent
+      ref={dialogRef}
       className="task-detail-dialog max-w-3xl"
+      onOpenAutoFocus={(event) => {
+        event.preventDefault()
+        dialogRef.current?.focus({ preventScroll: true })
+      }}
       onEscapeKeyDown={(event) => {
         if (
           (event.target as Element)?.closest(
@@ -570,7 +576,7 @@ function Detail({
     >
       <div className="detail-heading">
         <Checkbox
-          className="detail-completion size-4.5 rounded-full border-0 bg-transparent text-muted-foreground/75 data-[state=checked]:bg-transparent data-[state=checked]:text-primary"
+          className="detail-completion size-5 rounded-full border-0 bg-transparent text-muted-foreground/75 data-[state=checked]:bg-transparent data-[state=checked]:text-primary"
           checked={completed}
           disabled={busy}
           aria-label={completed ? '恢復為未完成' : '完成任務'}
@@ -579,7 +585,7 @@ function Detail({
             act(t, { op: completed ? 'reopen_task' : 'complete_task' })
           }
         >
-          <CircleCheck size={18} strokeWidth={1.5} aria-hidden="true" />
+          <CircleCheck size={20} strokeWidth={1.5} aria-hidden="true" />
         </Checkbox>
         <DialogTitle className="dialog-title" aria-label={t.title}>
           <InlineContent task={t} field="title" busy={busy} />
