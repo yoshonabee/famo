@@ -183,3 +183,50 @@ func TestMarkdownRenameDeleteAndReopen(t *testing.T) {
 		t.Fatal("deletion changed the task description")
 	}
 }
+
+func TestRemoveLinkChecksVersionAndRemovesOnlySelectedEntry(t *testing.T) {
+	ctx := context.Background()
+	s := openTest(t)
+	duplicate := Link{URL: "https://example.com/repeated"}
+	other := Link{URL: "https://example.com/other"}
+	task, err := s.Create(ctx, CreateInput{
+		Title: "Remove link", Links: []Link{duplicate, other, duplicate},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, index := range []*int{nil, ptr(-1), ptr(3)} {
+		if _, err := s.Act(ctx, task.ID, Action{
+			Op: "remove_link", Version: task.Version, LinkIndex: index,
+		}); !errors.Is(err, ErrInvalid) {
+			t.Fatalf("expected invalid index, got %v", err)
+		}
+	}
+
+	action := Action{Op: "remove_link", Version: task.Version, LinkIndex: ptr(0)}
+	updated, err := s.Act(ctx, task.ID, action)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updated.Version != task.Version+1 || len(updated.Links) != 2 || updated.Links[0] != other || updated.Links[1] != duplicate {
+		t.Fatalf("unexpected update: %+v", updated)
+	}
+	if _, err := s.Act(ctx, task.ID, action); !errors.Is(err, ErrConflict) {
+		t.Fatalf("expected conflict on stale index, got %v", err)
+	}
+	for range 2 {
+		action.Version = updated.Version
+		updated, err = s.Act(ctx, task.ID, action)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	persisted, err := s.Get(ctx, task.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if persisted.Links == nil || len(persisted.Links) != 0 {
+		t.Fatalf("expected an empty link array, got %#v", persisted.Links)
+	}
+}

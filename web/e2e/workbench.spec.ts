@@ -17,6 +17,16 @@ test('備註直接編輯、Agent 更新與版本衝突', async ({ page, request 
   await page
     .getByRole('button', { name: '任務詳情：新版詳細頁驗收', exact: true })
     .click()
+  const completion = dialog.getByRole('checkbox', {
+    name: '完成任務',
+    exact: true,
+  })
+  await expect(dialog).toBeFocused()
+  await expect(completion).toHaveCSS('box-shadow', 'none')
+  await page.keyboard.press('Tab')
+  await expect(completion).toBeFocused()
+  await expect(completion).toHaveCSS('outline-style', 'none')
+  await expect(completion).toHaveCSS('box-shadow', 'none')
   await expect(
     dialog.getByRole('button', { name: '編輯內容', exact: true }),
   ).toHaveCount(0)
@@ -35,6 +45,8 @@ test('備註直接編輯、Agent 更新與版本衝突', async ({ page, request 
   ).toHaveText('已直接改名')
   await dialog.getByRole('button', { name: '編輯備註', exact: true }).click()
   const description = dialog.getByRole('textbox', { name: '備註', exact: true })
+  await expect(description).toBeFocused()
+  await expect(description).toHaveCSS('outline-style', 'none')
   await description.fill('修改描述\n保留換行')
   await description.press('Escape')
   await expect(
@@ -108,10 +120,47 @@ test('備註直接編輯、Agent 更新與版本衝突', async ({ page, request 
   await expect(
     dialog.getByRole('button', { name: '編輯備註', exact: true }),
   ).toHaveText('離開欄位自動儲存')
-  await dialog.getByRole('button', { name: '完成任務', exact: true }).click()
-  await expect(
-    dialog.getByRole('button', { name: '恢復為未完成', exact: true }),
-  ).toBeVisible()
+  const titleButton = dialog.getByRole('button', {
+    name: '編輯任務標題',
+    exact: true,
+  })
+  await expect(completion).toHaveCSS('width', '20px')
+  await expect(completion).toHaveCSS('height', '20px')
+  await expect(completion).not.toBeChecked()
+  const uncheckedIcon = completion.locator('svg')
+  await expect(uncheckedIcon).toHaveAttribute('width', '20')
+  await expect(uncheckedIcon).toHaveAttribute('fill', 'none')
+  await expect(uncheckedIcon).toHaveAttribute('stroke-width', '1.5')
+  await expect(uncheckedIcon.locator('path')).toBeVisible()
+  const uncheckedColor = await completion.evaluate(
+    (element) => getComputedStyle(element).color,
+  )
+  const checkboxBox = (await completion.boundingBox())!
+  const titleBox = (await titleButton.boundingBox())!
+  expect(checkboxBox.x + checkboxBox.width).toBeLessThan(titleBox.x)
+  expect(
+    Math.abs(
+      checkboxBox.y + checkboxBox.height / 2 - titleBox.y - titleBox.height / 2,
+    ),
+  ).toBeLessThanOrEqual(1)
+  await completion.click()
+  const checkedCompletion = dialog.getByRole('checkbox', {
+    name: '恢復為未完成',
+    exact: true,
+  })
+  await expect(checkedCompletion).toBeChecked()
+  await expect(checkedCompletion).toHaveCSS(
+    'background-color',
+    'rgba(0, 0, 0, 0)',
+  )
+  await expect(checkedCompletion).not.toHaveCSS('color', uncheckedColor)
+  const checkedIcon = checkedCompletion.locator('svg')
+  await expect(checkedIcon).toHaveAttribute('width', '20')
+  await expect(checkedIcon).toHaveAttribute('fill', 'currentColor')
+  await expect(checkedIcon.locator('path')).toHaveAttribute(
+    'fill-rule',
+    'evenodd',
+  )
   await dialog.getByRole('button', { name: '編輯備註', exact: true }).click()
   await dialog
     .getByRole('textbox', { name: '備註', exact: true })

@@ -1,16 +1,11 @@
-import { expect, test, type Page } from '@playwright/test'
+import { expect, test, type Locator, type Page } from '@playwright/test'
+import { selectCalendarDate, setTaskDate } from './date-picker'
 
 test.use({ timezoneId: 'Asia/Taipei' })
 
 async function chooseDate(page: Page, date: string) {
   await page.getByRole('button', { name: '開啟日期選單', exact: true }).click()
-  await page
-    .getByRole('dialog', { name: '選擇日期', exact: true })
-    .getByLabel('選擇日期', { exact: true })
-    .fill(date)
-  // Selecting the already displayed date does not emit a change event.
-  if (await page.getByRole('dialog', { name: '選擇日期', exact: true }).count())
-    await page.keyboard.press('Escape')
+  await selectCalendarDate(page, date)
 }
 
 async function openDate(page: Page, date = '2026-11-04') {
@@ -122,14 +117,17 @@ test('前後一天、日曆選日、當地今日與手機版', async ({ page }) 
     await page.getByRole('button', { name: '後一天', exact: true }).click()
     await expect(page.locator('h1 time')).toHaveAttribute('datetime', next)
   }
-  await chooseDate(page, '0001-01-01')
+  await page.clock.setSystemTime(new Date('0001-01-01T12:00:00+08:00'))
+  await page.getByRole('button', { name: '今日', exact: true }).click()
   await expect(
     page.getByRole('button', { name: '前一天', exact: true }),
   ).toBeDisabled()
-  await chooseDate(page, '9999-12-31')
+  await page.clock.setSystemTime(new Date('9999-12-31T12:00:00+08:00'))
+  await page.getByRole('button', { name: '今日', exact: true }).click()
   await expect(
     page.getByRole('button', { name: '後一天', exact: true }),
   ).toBeDisabled()
+  await page.clock.setSystemTime(new Date('2026-11-03T16:30:00Z'))
   await page.getByRole('button', { name: '今日', exact: true }).click()
   await page.screenshot({
     path: '/private/tmp/famo-calendar-desktop.png',
@@ -174,8 +172,14 @@ test('一句話新增使用當日、修改與清除日期、全部任務不預�
       exact: true,
     })
     .click()
-  await dialog.getByLabel('任務日期', { exact: true }).fill('2026-12-16')
-  await expect(dialog.getByLabel('任務日期', { exact: true })).toHaveValue(
+  const dateButton = dialog.getByRole('button', { name: /^任務日期：/ })
+  await dateButton.click()
+  await page.keyboard.press('Escape')
+  await expect(dialog).toBeVisible()
+  await expect(dialog.getByRole('dialog', { name: '選擇日期' })).toHaveCount(0)
+  await expect(dateButton).toBeFocused()
+  await setTaskDate(dialog, '2026-12-16')
+  await expect(dialog.getByRole('button', { name: /^任務日期：/ })).toHaveText(
     '2026-12-16',
   )
   await dialog.getByRole('button', { name: '關閉', exact: true }).click()
@@ -189,7 +193,9 @@ test('一句話新增使用當日、修改與清除日期、全部任務不預�
     })
     .click()
   await dialog.getByRole('button', { name: '清除日期', exact: true }).click()
-  await expect(dialog.getByLabel('任務日期', { exact: true })).toHaveValue('')
+  await expect(dialog.getByRole('button', { name: /^任務日期：/ })).toHaveText(
+    '未指定日期',
+  )
   await dialog.getByRole('button', { name: '關閉', exact: true }).click()
   await expect(rowTitle(page, 'calendar-create 快速新增')).toHaveCount(0)
   await page.getByRole('button', { name: '任務列表', exact: true }).click()
@@ -228,9 +234,9 @@ test('先前未完成逐筆與多選移入，衝突保留原任務且可重試',
   await expect(earlier.locator('[data-task-id]')).toHaveCount(3)
   await expect(earlier.locator('time')).toHaveCount(1)
   await expect(earlier.locator('time')).toHaveText('2026-11-02')
-  await expect(earlier.getByRole('checkbox')).toHaveCount(3)
+  await expect(earlier.getByRole('checkbox')).toHaveCount(4)
   await earlier
-    .locator('.earlier-task')
+    .locator('.task-move-row')
     .filter({
       has: page.getByRole('textbox', {
         name: '編輯任務標題：calendar-move A',
@@ -247,9 +253,19 @@ test('先前未完成逐筆與多選移入，衝突保留原任務且可重試',
   await earlier
     .getByRole('checkbox', { name: '選取任務：calendar-move B', exact: true })
     .click()
-  await earlier
-    .getByRole('checkbox', { name: '選取任務：calendar-move C', exact: true })
-    .click()
+  const selectAll = earlier.getByRole('checkbox', {
+    name: '全選先前未完成任務',
+  })
+  await expect(selectAll).toHaveAttribute('aria-checked', 'mixed')
+  await selectAll.click()
+  await expect(selectAll).toBeChecked()
+  await selectAll.click()
+  await expect(selectAll).not.toBeChecked()
+  await page.getByLabel('搜尋任務').fill('calendar-move B')
+  await selectAll.click()
+  await page.getByLabel('搜尋任務').fill('calendar-move')
+  await expect(selectAll).toHaveAttribute('aria-checked', 'mixed')
+  await selectAll.click()
   await request.post(`/api/tasks/${tasks[1].id}/actions`, {
     data: {
       op: 'update',
@@ -342,15 +358,15 @@ test('日期立即更新遇到版本衝突保留選擇', async ({ page, request 
     },
     { times: 1 },
   )
-  await dialog.getByLabel('任務日期', { exact: true }).fill('2026-11-05')
+  await setTaskDate(dialog, '2026-11-05')
   await expect(dialog.getByRole('alert')).toContainText('任務已')
-  await expect(dialog.getByLabel('任務日期', { exact: true })).toHaveValue(
+  await expect(dialog.getByRole('button', { name: /^任務日期：/ })).toHaveText(
     '2026-11-05',
   )
   await dialog
     .getByRole('button', { name: '讀取最新日期', exact: true })
     .click()
-  await expect(dialog.getByLabel('任務日期', { exact: true })).toHaveValue(
+  await expect(dialog.getByRole('button', { name: /^任務日期：/ })).toHaveText(
     '2026-11-06',
   )
 })
@@ -468,6 +484,12 @@ test('日期標題與今日分段選單：月曆選日、鍵盤、關閉及手�
     calendar.getByRole('button', { name: '2026-11-04', exact: true }),
   ).toBeFocused()
   await page.keyboard.press('ArrowRight')
+  const nextDate = calendar.getByRole('button', {
+    name: '2026-11-05',
+    exact: true,
+  })
+  await expect(nextDate).toBeFocused()
+  await expect(nextDate).toHaveCSS('outline-style', 'none')
   await page.keyboard.press('Enter')
   await expect(page.locator('h1 time')).toHaveAttribute(
     'datetime',
@@ -519,4 +541,122 @@ test('日期標題與今日分段選單：月曆選日、鍵盤、關閉及手�
     'datetime',
     '2026-11-10',
   )
+})
+
+test('任務列可直接安排與清除日期，手機月曆支援月份及年份切換', async ({
+  page,
+  request,
+}) => {
+  await page.setViewportSize({ width: 390, height: 600 })
+  await page.clock.install({ time: new Date('2026-11-04T04:00:00Z') })
+  const task = await (
+    await request.post('/api/tasks', {
+      data: {
+        title: '從列表重新安排',
+        scheduled_date: '2026-11-04',
+        links: [{ url: 'https://docs.google.com/document/d/spec/edit' }],
+      },
+    })
+  ).json()
+  await page.goto('/')
+  const row = page.locator(`[data-task-id="${task.id}"]`)
+  const trigger = row.getByRole('button', { name: '設定日期：從列表重新安排' })
+  const detailButton = row.getByRole('button', {
+    name: '任務詳情：從列表重新安排',
+  })
+  expect((await trigger.boundingBox())!.x).toBeLessThan(
+    (await detailButton.boundingBox())!.x,
+  )
+  await trigger.click()
+  const calendar = page.getByRole('dialog', { name: '選擇日期', exact: true })
+  const box = (await calendar.boundingBox())!
+  expect(box.x).toBeGreaterThanOrEqual(0)
+  expect(box.x + box.width).toBeLessThanOrEqual(390)
+  expect(box.y + box.height).toBeLessThanOrEqual(600)
+  await calendar
+    .getByRole('button', { name: '2026 年 11 月', exact: true })
+    .click()
+  await calendar.getByRole('button', { name: '2026 年', exact: true }).click()
+  await calendar
+    .getByRole('button', { name: '下一組年份', exact: true })
+    .click()
+  await calendar.getByRole('button', { name: '2030 年', exact: true }).click()
+  await calendar.getByRole('button', { name: '3 月', exact: true }).click()
+  await calendar
+    .getByRole('button', { name: '2030-03-08', exact: true })
+    .click()
+  await expect(row).toHaveCount(0)
+  await expect(page.getByRole('dialog')).toHaveCount(0)
+  await page.getByRole('button', { name: '任務列表', exact: true }).click()
+  await expect(trigger).toHaveAttribute('title', '任務日期：2030-03-08')
+  await trigger.click()
+  await expect(
+    calendar.getByRole('button', { name: '2030-03-08' }),
+  ).toHaveAttribute('aria-pressed', 'true')
+  await calendar.getByRole('button', { name: '清除日期', exact: true }).click()
+  await expect(trigger).toHaveAttribute('title', '設定日期')
+  const saved = await (await request.get(`/api/tasks/${task.id}`)).json()
+  expect(saved.scheduled_date).toBe('')
+})
+
+test('已完成任務依完成時間由新到舊排序', async ({ page, request }) => {
+  const created = []
+  for (const title of ['較早建立', '較晚建立', '尚未完成']) {
+    created.push(
+      await (
+        await request.post('/api/tasks', {
+          data: {
+            title: `completion-sort ${title}`,
+            scheduled_date: '2026-11-04',
+          },
+        })
+      ).json(),
+    )
+  }
+  await openDate(page)
+  await page.getByLabel('搜尋任務').fill('completion-sort')
+  const daily = page.getByRole('list', { name: '當日未完成任務', exact: true })
+  for (const task of created.slice(0, 2)) {
+    await daily
+      .getByRole('checkbox', { name: `完成任務：${task.title}` })
+      .click()
+    await expect(daily.locator(`[data-task-id="${task.id}"]`)).toHaveCount(0)
+  }
+  const sortedIds = [created[1].id, created[0].id]
+  const rowIds = (list: Locator) =>
+    list
+      .locator('[data-task-id]')
+      .evaluateAll((rows) =>
+        rows.map((row) => row.getAttribute('data-task-id')),
+      )
+  const dailyCompleted = page.getByRole('list', {
+    name: '當日已完成任務',
+    exact: true,
+  })
+  await expect.poll(() => rowIds(dailyCompleted)).toEqual(sortedIds)
+  await page.getByRole('button', { name: /^已完成/ }).click()
+  const completed = page.getByRole('list', {
+    name: '已完成任務列表',
+    exact: true,
+  })
+  await expect.poll(() => rowIds(completed)).toEqual(sortedIds)
+  await page.reload()
+  await page.getByLabel('搜尋任務').fill('completion-sort')
+  await page.getByRole('button', { name: /^已完成/ }).click()
+  await expect.poll(() => rowIds(completed)).toEqual(sortedIds)
+})
+
+test('搜尋框聚焦時，外框包含搜尋圖示', async ({ page }) => {
+  await page.goto('/')
+  for (const name of [/^今日任務$/, /^任務列表$/, /^已完成/]) {
+    await page.getByRole('button', { name }).click()
+    const search = page.locator('.search')
+    const icon = search.locator('svg')
+    const input = page.getByRole('textbox', { name: '搜尋任務' })
+    await icon.click()
+    await expect(input).toBeFocused()
+    await expect(search).toHaveCSS('outline-width', '2px')
+    await expect(search).toHaveCSS('outline-style', 'solid')
+    await expect(input).toHaveCSS('outline-style', 'none')
+  }
 })

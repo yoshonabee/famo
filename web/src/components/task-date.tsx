@@ -1,4 +1,6 @@
 import { useState } from 'react'
+import { CalendarDays } from 'lucide-react'
+import { DatePicker } from '@/components/date-picker'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { ApiError, request, type Task } from '@/lib/api'
 
@@ -37,21 +39,19 @@ export function TaskDate({ task, busy }: { task: Task; busy: boolean }) {
   const conflict = !!draft && draft.version !== task.version
   return (
     <div className="scheduled-date-field">
-      <label>
-        任務日期
-        <input
-          type="date"
-          aria-label="任務日期"
-          value={value}
-          min="0001-01-01"
-          max="9999-12-31"
-          disabled={disabled}
-          aria-invalid={save.isError || conflict}
-          onChange={(event) => {
-            if (event.currentTarget.validity.valid) change(event.target.value)
-          }}
-        />
-      </label>
+      <span className="task-date-label">任務日期</span>
+      <DatePicker
+        date={value}
+        onChange={change}
+        label={`任務日期：${value || '未指定日期'}`}
+        align="start"
+        buttonClassName="task-date-button"
+        disabled={disabled}
+        invalid={save.isError || conflict}
+      >
+        <CalendarDays size={16} />
+        {value || '未指定日期'}
+      </DatePicker>
       {value && (
         <button
           type="button"

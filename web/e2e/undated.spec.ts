@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test'
+import { setTaskDate } from './date-picker'
 
 test.use({ timezoneId: 'Asia/Taipei' })
 
@@ -12,6 +13,7 @@ test('未指定日期支援多選、搜尋後全選與批次安排到當地今�
     ['A', ''],
     ['B', ''],
     ['C', ''],
+    ['D', ''],
     ['已排程', '2026-11-06'],
     ['已完成', ''],
   ]) {
@@ -32,50 +34,59 @@ test('未指定日期支援多選、搜尋後全選與批次安排到當地今�
   const section = page.locator('details.undated-tasks')
   await expect(section).not.toHaveAttribute('open')
   await section.locator('summary').click()
+  await expect(section.locator('[data-task-id]')).toHaveCount(4)
+  const singleRow = section.locator('.task-move-row').filter({
+    has: page.getByRole('textbox', { name: '編輯任務標題：undated-batch D' }),
+  })
+  await expect(singleRow.getByRole('checkbox')).toHaveCount(1)
+  await singleRow.getByRole('button', { name: '移到這天', exact: true }).click()
   await expect(section.locator('[data-task-id]')).toHaveCount(3)
   await expect(
-    section.getByRole('button', { name: '安排到今日（0）', exact: true }),
+    section.getByRole('button', {
+      name: '將選取任務移到這天（0）',
+      exact: true,
+    }),
   ).toBeDisabled()
   await section
     .getByRole('checkbox', {
-      name: '選取未指定日期任務：undated-batch A',
+      name: '選取任務：undated-batch A',
       exact: true,
     })
     .click()
   await section
     .getByRole('checkbox', {
-      name: '選取未指定日期任務：undated-batch B',
+      name: '選取任務：undated-batch B',
       exact: true,
     })
     .click()
   await section
-    .getByRole('button', { name: '安排到今日（2）', exact: true })
+    .getByRole('button', { name: '將選取任務移到這天（2）', exact: true })
     .click()
   await expect(section.locator('[data-task-id]')).toHaveCount(1)
   await expect(
     page
       .getByRole('list', { name: '當日未完成任務', exact: true })
       .locator('[data-task-id]'),
-  ).toHaveCount(2)
+  ).toHaveCount(3)
   await page.getByLabel('搜尋任務').fill('undated-batch C')
   await section
     .getByRole('checkbox', { name: '全選未指定日期任務', exact: true })
     .click()
   await section
-    .getByRole('button', { name: '安排到今日（1）', exact: true })
+    .getByRole('button', { name: '將選取任務移到這天（1）', exact: true })
     .click()
   await expect(section.locator('[data-task-id]')).toHaveCount(0)
   const saved = await (await request.get('/api/tasks')).json()
-  for (const task of created.slice(0, 3))
+  for (const task of created.slice(0, 4))
     expect(
       saved.find((item: { id: string }) => item.id === task.id).scheduled_date,
     ).toBe('2026-11-04')
   expect(
-    saved.find((item: { id: string }) => item.id === created[3].id)
+    saved.find((item: { id: string }) => item.id === created[4].id)
       .scheduled_date,
   ).toBe('2026-11-06')
   expect(
-    saved.find((item: { id: string }) => item.id === created[4].id)
+    saved.find((item: { id: string }) => item.id === created[5].id)
       .scheduled_date,
   ).toBe('')
   await page.reload()
@@ -85,7 +96,7 @@ test('未指定日期支援多選、搜尋後全選與批次安排到當地今�
     page
       .getByRole('list', { name: '當日未完成任務', exact: true })
       .locator('[data-task-id]'),
-  ).toHaveCount(3)
+  ).toHaveCount(4)
   await page.getByRole('button', { name: '後一天', exact: true }).click()
   await expect(page.locator('details.undated-tasks')).toHaveCount(0)
 })
@@ -121,13 +132,13 @@ test('批次安排遇到版本衝突，失敗項目保留且可重試，手機�
     },
   })
   await section
-    .getByRole('button', { name: '安排到今日（2）', exact: true })
+    .getByRole('button', { name: '將選取任務移到這天（2）', exact: true })
     .click()
   await expect(page.getByRole('alert')).toContainText('任務已被更新')
   await expect(section.locator('[data-task-id]')).toHaveCount(1)
   await expect(
     section.getByRole('checkbox', {
-      name: '選取未指定日期任務：undated-conflict A',
+      name: '選取任務：undated-conflict A',
       exact: true,
     }),
   ).toBeChecked()
@@ -142,7 +153,7 @@ test('批次安排遇到版本衝突，失敗項目保留且可重試，手機�
     ),
   ).toBe(true)
   await section
-    .getByRole('button', { name: '安排到今日（1）', exact: true })
+    .getByRole('button', { name: '將選取任務移到這天（1）', exact: true })
     .click()
   await expect(section.locator('[data-task-id]')).toHaveCount(0)
 })
@@ -178,9 +189,9 @@ test('詳細頁日期自動儲存與清除，失敗保留選擇並可重試，�
       }),
     { times: 1 },
   )
-  await dialog.getByLabel('任務日期', { exact: true }).fill('2026-11-07')
+  await setTaskDate(dialog, '2026-11-07')
   await expect(dialog.getByRole('alert')).toContainText('date save failed')
-  await expect(dialog.getByLabel('任務日期', { exact: true })).toHaveValue(
+  await expect(dialog.getByRole('button', { name: /^任務日期：/ })).toHaveText(
     '2026-11-07',
   )
   expect(
@@ -198,8 +209,12 @@ test('詳細頁日期自動儲存與清除，失敗保留選擇並可重試，�
     (await (await request.get(`/api/tasks/${task.id}`)).json()).scheduled_date,
   ).toBe('2026-11-07')
   await dialog.getByRole('button', { name: '清除日期', exact: true }).click()
-  await expect(dialog.getByLabel('任務日期', { exact: true })).toBeEnabled()
-  await expect(dialog.getByLabel('任務日期', { exact: true })).toHaveValue('')
+  await expect(
+    dialog.getByRole('button', { name: /^任務日期：/ }),
+  ).toBeEnabled()
+  await expect(dialog.getByRole('button', { name: /^任務日期：/ })).toHaveText(
+    '未指定日期',
+  )
   const latest = await (await request.get(`/api/tasks/${task.id}`)).json()
   expect(latest.scheduled_date).toBe('')
   expect(latest.completed_at).not.toBeNull()

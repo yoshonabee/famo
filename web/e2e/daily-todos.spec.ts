@@ -70,7 +70,7 @@ test('先前未完成移到今日會保留連結與備註', async ({ page, reque
   const earlier = page.locator('details.earlier-tasks')
   await earlier.locator('summary').click()
   const oldRow = earlier
-    .locator('.earlier-task')
+    .locator('.task-move-row')
     .filter({ has: page.locator(`[data-task-id="${task.id}"]`) })
   await oldRow.getByRole('button', { name: '移到這天', exact: true }).click()
   const row = page

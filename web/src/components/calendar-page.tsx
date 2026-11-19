@@ -2,11 +2,9 @@ import { useState, type ReactNode } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { DragDropProvider } from '@dnd-kit/react'
 import { isSortable } from '@dnd-kit/react/sortable'
-import { Button } from '@/components/ui/button'
-import { Checkbox } from '@/components/ui/checkbox'
-import { UndatedTasks } from '@/components/undated-tasks'
+import { TaskMoveSection } from '@/components/task-move-section'
 import { localDate } from '@/lib/calendar'
-import { type Task } from '@/lib/api'
+import { compareCompletionTime, type Task } from '@/lib/api'
 
 type Props = {
   date: string
@@ -41,14 +39,15 @@ export function CalendarPage({
   const client = useQueryClient()
   const [moving, setMoving] = useState(false)
   const disabled = busy || moving
-  const [selected, setSelected] = useState<string[]>([])
   const matches = (task: Task) =>
     `${task.title} ${task.description}`
       .toLowerCase()
       .includes(search.toLowerCase())
   const daily = tasks.filter((task) => task.scheduled_date === date)
   const active = daily.filter((task) => !task.completed_at && matches(task))
-  const completed = daily.filter((task) => task.completed_at && matches(task))
+  const completed = daily
+    .filter((task) => task.completed_at && matches(task))
+    .sort(compareCompletionTime)
   const earlier = tasks
     .filter(
       (task) =>
@@ -58,27 +57,12 @@ export function CalendarPage({
         matches(task),
     )
     .sort((a, b) => a.scheduled_date.localeCompare(b.scheduled_date))
-  const earlierByDate = new Map<string, Task[]>()
-  for (const task of earlier) {
-    const group = earlierByDate.get(task.scheduled_date) ?? []
-    group.push(task)
-    earlierByDate.set(task.scheduled_date, group)
-  }
-  const selectedEarlier = earlier.filter((task) => selected.includes(task.id))
-  async function moveTasks(items: Task[]) {
-    setMoving(true)
-    try {
-      for (const task of items) {
-        try {
-          await onMove(task, date)
-          setSelected((ids) => ids.filter((id) => id !== task.id))
-        } catch {
-          // The shared mutation displays the error; keep failed tasks selected.
-        }
-      }
-    } finally {
-      setMoving(false)
-    }
+  const moveSection = {
+    busy: disabled,
+    onMoving: setMoving,
+    onMove: (task: Task) => onMove(task, date),
+    renderTask: (task: Task, index: number) =>
+      renderTask(task, index, true, true),
   }
   return (
     <section className="calendar-page" aria-label="日期任務">
@@ -126,77 +110,15 @@ export function CalendarPage({
               </DragDropProvider>
             </section>
           )}
-          <details className="earlier-tasks" key={date}>
-            <summary>先前未完成（{earlier.length}）</summary>
-            {earlier.length ? (
-              <>
-                <div className="earlier-actions">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={disabled || !selectedEarlier.length}
-                    onClick={() => {
-                      void moveTasks(selectedEarlier)
-                    }}
-                  >
-                    將選取任務移到這天（{selectedEarlier.length}）
-                  </Button>
-                </div>
-                <DragDropProvider>
-                  <ul className="task-list" aria-label="先前未完成任務">
-                    {Array.from(earlierByDate, ([scheduledDate, items]) => (
-                      <li className="earlier-date-group" key={scheduledDate}>
-                        <h3>
-                          <time dateTime={scheduledDate}>{scheduledDate}</time>
-                        </h3>
-                        <ul
-                          className="task-list"
-                          aria-label={`${scheduledDate} 未完成任務`}
-                        >
-                          {items.map((task, index) => (
-                            <li className="earlier-task" key={task.id}>
-                              <Checkbox
-                                aria-label={`選取任務：${task.title}`}
-                                checked={selected.includes(task.id)}
-                                disabled={disabled}
-                                onCheckedChange={(checked) =>
-                                  setSelected((ids) =>
-                                    checked
-                                      ? [...new Set([...ids, task.id])]
-                                      : ids.filter((id) => id !== task.id),
-                                  )
-                                }
-                              />
-                              <ul>{renderTask(task, index, true, true)}</ul>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                disabled={disabled}
-                                onClick={() => void moveTasks([task])}
-                              >
-                                移到這天
-                              </Button>
-                            </li>
-                          ))}
-                        </ul>
-                      </li>
-                    ))}
-                  </ul>
-                </DragDropProvider>
-              </>
-            ) : (
-              <p className="empty-list">沒有先前未完成的任務</p>
-            )}
-          </details>
+          <TaskMoveSection kind="earlier" tasks={earlier} {...moveSection} />
           {date === localDate() && (
-            <UndatedTasks
+            <TaskMoveSection
+              kind="undated"
               tasks={tasks.filter(
                 (task) =>
                   !task.scheduled_date && !task.completed_at && matches(task),
               )}
-              busy={disabled}
-              onAssign={onMove}
-              renderTask={renderTask}
+              {...moveSection}
             />
           )}
         </>

@@ -97,10 +97,9 @@ test('深色主題套用到任務、表單、月曆及詳情，切換頁面保�
   await page.getByRole('button', { name: '開啟日期選單' }).click()
   const calendar = page.getByRole('dialog', { name: '選擇日期' })
   await expect(calendar).toHaveCSS('background-color', 'rgb(30, 40, 56)')
-  await expect(calendar.getByLabel('選擇日期', { exact: true })).toHaveCSS(
-    'color-scheme',
-    'dark',
-  )
+  await expect(
+    calendar.getByRole('group', { name: '日期', exact: true }),
+  ).toHaveCSS('color-scheme', 'dark')
   await page.keyboard.press('Escape')
   await page.getByRole('button', { name: '任務列表', exact: true }).click()
   const row = page.locator('.task-row').filter({
@@ -177,9 +176,13 @@ test('手機可選主題並支援鍵盤操作，頁面無水平溢出', async ({
   const moss = page.getByRole('radio', { name: '苔綠', exact: true })
   await moss.focus()
   await page.keyboard.press('ArrowRight')
-  await expect(
-    page.getByRole('radio', { name: '亞麻', exact: true }),
-  ).toBeChecked()
+  const linen = page.getByRole('radio', { name: '亞麻', exact: true })
+  await expect(linen).toBeChecked()
+  await expect(linen).toBeFocused()
+  await expect(page.locator('.theme-option').filter({ has: linen })).toHaveCSS(
+    'outline-style',
+    'none',
+  )
   await page.getByRole('radio', { name: '暮紫', exact: true }).check()
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'plum')
   await page.screenshot({
