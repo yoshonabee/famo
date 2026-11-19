@@ -484,6 +484,12 @@ test('日期標題與今日分段選單：月曆選日、鍵盤、關閉及手�
     calendar.getByRole('button', { name: '2026-11-04', exact: true }),
   ).toBeFocused()
   await page.keyboard.press('ArrowRight')
+  const nextDate = calendar.getByRole('button', {
+    name: '2026-11-05',
+    exact: true,
+  })
+  await expect(nextDate).toBeFocused()
+  await expect(nextDate).toHaveCSS('outline-style', 'none')
   await page.keyboard.press('Enter')
   await expect(page.locator('h1 time')).toHaveAttribute(
     'datetime',
@@ -640,9 +646,9 @@ test('已完成任務依完成時間由新到舊排序', async ({ page, request 
   await expect.poll(() => rowIds(completed)).toEqual(sortedIds)
 })
 
-test('任務和已完成的搜尋框聚焦時，外框包含搜尋圖示', async ({ page }) => {
+test('搜尋框聚焦時，外框包含搜尋圖示', async ({ page }) => {
   await page.goto('/')
-  for (const name of [/^任務列表$/, /^已完成/]) {
+  for (const name of [/^今日任務$/, /^任務列表$/, /^已完成/]) {
     await page.getByRole('button', { name }).click()
     const search = page.locator('.search')
     const icon = search.locator('svg')

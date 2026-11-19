@@ -25,7 +25,8 @@ test('備註直接編輯、Agent 更新與版本衝突', async ({ page, request 
   await expect(completion).toHaveCSS('box-shadow', 'none')
   await page.keyboard.press('Tab')
   await expect(completion).toBeFocused()
-  await expect(completion).not.toHaveCSS('box-shadow', 'none')
+  await expect(completion).toHaveCSS('outline-style', 'none')
+  await expect(completion).toHaveCSS('box-shadow', 'none')
   await expect(
     dialog.getByRole('button', { name: '編輯內容', exact: true }),
   ).toHaveCount(0)
@@ -44,6 +45,8 @@ test('備註直接編輯、Agent 更新與版本衝突', async ({ page, request 
   ).toHaveText('已直接改名')
   await dialog.getByRole('button', { name: '編輯備註', exact: true }).click()
   const description = dialog.getByRole('textbox', { name: '備註', exact: true })
+  await expect(description).toBeFocused()
+  await expect(description).toHaveCSS('outline-style', 'none')
   await description.fill('修改描述\n保留換行')
   await description.press('Escape')
   await expect(

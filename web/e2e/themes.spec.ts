@@ -176,9 +176,13 @@ test('手機可選主題並支援鍵盤操作，頁面無水平溢出', async ({
   const moss = page.getByRole('radio', { name: '苔綠', exact: true })
   await moss.focus()
   await page.keyboard.press('ArrowRight')
-  await expect(
-    page.getByRole('radio', { name: '亞麻', exact: true }),
-  ).toBeChecked()
+  const linen = page.getByRole('radio', { name: '亞麻', exact: true })
+  await expect(linen).toBeChecked()
+  await expect(linen).toBeFocused()
+  await expect(page.locator('.theme-option').filter({ has: linen })).toHaveCSS(
+    'outline-style',
+    'none',
+  )
   await page.getByRole('radio', { name: '暮紫', exact: true }).check()
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'plum')
   await page.screenshot({

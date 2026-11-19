@@ -159,7 +159,6 @@
   --color-muted-foreground: var(--muted-foreground);
   --color-accent: var(--accent);
   --color-input: var(--border);
-  --color-ring: var(--primary);
 }
 :root {
   color-scheme: light;
@@ -221,16 +220,8 @@ textarea,
 select {
   font: inherit;
 }
-input:focus,
-textarea:focus,
-select:focus {
-  outline: 2px solid var(--primary);
-  outline-offset: 2px;
-}
-button:focus-visible,
-a:focus-visible {
-  outline: 2px solid var(--primary);
-  outline-offset: 3px;
+:focus {
+  outline: none;
 }
 .app-shell {
   display: flex;
@@ -692,8 +683,7 @@ button.todo-title:hover {
   touch-action: none;
   opacity: 0.45;
 }
-.task-row:hover .drag-handle,
-.drag-handle:focus-visible {
+.task-row:hover .drag-handle {
   opacity: 1;
 }
 .drag-handle:active {
@@ -733,13 +723,6 @@ button.todo-title:hover {
   }
 }
 
-.capture-entry input:focus,
-.capture-entry input:focus-visible,
-input.todo-title:focus,
-input.todo-title:focus-visible {
-  outline: none;
-  box-shadow: none;
-}
 .todo-title-editor {
   flex: 1;
   min-width: 0;
@@ -748,10 +731,6 @@ input.todo-title:focus-visible {
 .has-feedback input.todo-title,
 .is-completed input.todo-title {
   color: var(--muted-foreground);
-}
-input.todo-title:focus {
-  text-decoration: none;
-  text-overflow: clip;
 }
 .row-action-button {
   display: grid;
@@ -1164,9 +1143,6 @@ h1 {
 }
 .search > svg {
   flex-shrink: 0;
-}
-.search input:focus {
-  outline: none;
 }
 .search input {
   min-width: 0;
@@ -1676,11 +1652,6 @@ input.todo-title {
 .theme-option:has(input:checked) {
   border-color: var(--primary);
   box-shadow: 0 0 0 1px var(--primary);
-}
-.system-theme-option:has(input:focus-visible),
-.theme-option:has(input:focus-visible) {
-  outline: 2px solid var(--primary);
-  outline-offset: 4px;
 }
 .system-theme-option > input,
 .theme-option > input {
