@@ -67,6 +67,20 @@ export function orderSubset(tasks: Task[], ids: string[]) {
   let index = 0
   return tasks.map((t) => (selected.has(t.id) ? ordered[index++] : t))
 }
+function fractionalSecond(timestamp: string) {
+  return Number(timestamp.match(/\.\d+/)?.[0] ?? 0)
+}
+
+export function compareCompletionTime(a: Task, b: Task) {
+  const first = a.completed_at ?? ''
+  const second = b.completed_at ?? ''
+  // The API includes fractional seconds beyond Date.parse's millisecond precision.
+  return (
+    Date.parse(second) - Date.parse(first) ||
+    fractionalSecond(second) - fractionalSecond(first)
+  )
+}
+
 export const dateTime = (v: string | null) =>
   v
     ? new Date(v).toLocaleString('zh-TW', {

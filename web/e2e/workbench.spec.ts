@@ -108,7 +108,23 @@ test('備註直接編輯、Agent 更新與版本衝突', async ({ page, request 
   await expect(
     dialog.getByRole('button', { name: '編輯備註', exact: true }),
   ).toHaveText('離開欄位自動儲存')
-  await dialog.getByRole('checkbox', { name: '完成任務', exact: true }).click()
+  const completion = dialog.getByRole('checkbox', {
+    name: '完成任務',
+    exact: true,
+  })
+  const titleButton = dialog.getByRole('button', {
+    name: '編輯任務標題',
+    exact: true,
+  })
+  const checkboxBox = (await completion.boundingBox())!
+  const titleBox = (await titleButton.boundingBox())!
+  expect(checkboxBox.x + checkboxBox.width).toBeLessThan(titleBox.x)
+  expect(
+    Math.abs(
+      checkboxBox.y + checkboxBox.height / 2 - titleBox.y - titleBox.height / 2,
+    ),
+  ).toBeLessThanOrEqual(1)
+  await completion.click()
   await expect(
     dialog.getByRole('checkbox', { name: '恢復為未完成', exact: true }),
   ).toBeChecked()

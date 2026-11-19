@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test'
+import { expect, test, type Locator, type Page } from '@playwright/test'
 import { selectCalendarDate, setTaskDate } from './date-picker'
 
 test.use({ timezoneId: 'Asia/Taipei' })
@@ -236,7 +236,7 @@ test('先前未完成逐筆與多選移入，衝突保留原任務且可重試',
   await expect(earlier.locator('time')).toHaveText('2026-11-02')
   await expect(earlier.getByRole('checkbox')).toHaveCount(4)
   await earlier
-    .locator('.earlier-task')
+    .locator('.task-move-row')
     .filter({
       has: page.getByRole('textbox', {
         name: '編輯任務標題：calendar-move A',
@@ -591,4 +591,66 @@ test('任務列可直接安排與清除日期，手機月曆支援月份及年�
   await expect(trigger).toHaveAttribute('title', '設定日期')
   const saved = await (await request.get(`/api/tasks/${task.id}`)).json()
   expect(saved.scheduled_date).toBe('')
+})
+
+test('已完成任務依完成時間由新到舊排序', async ({ page, request }) => {
+  const created = []
+  for (const title of ['較早建立', '較晚建立', '尚未完成']) {
+    created.push(
+      await (
+        await request.post('/api/tasks', {
+          data: {
+            title: `completion-sort ${title}`,
+            scheduled_date: '2026-11-04',
+          },
+        })
+      ).json(),
+    )
+  }
+  await openDate(page)
+  await page.getByLabel('搜尋任務').fill('completion-sort')
+  const daily = page.getByRole('list', { name: '當日未完成任務', exact: true })
+  for (const task of created.slice(0, 2)) {
+    await daily
+      .getByRole('checkbox', { name: `完成任務：${task.title}` })
+      .click()
+    await expect(daily.locator(`[data-task-id="${task.id}"]`)).toHaveCount(0)
+  }
+  const sortedIds = [created[1].id, created[0].id]
+  const rowIds = (list: Locator) =>
+    list
+      .locator('[data-task-id]')
+      .evaluateAll((rows) =>
+        rows.map((row) => row.getAttribute('data-task-id')),
+      )
+  const dailyCompleted = page.getByRole('list', {
+    name: '當日已完成任務',
+    exact: true,
+  })
+  await expect.poll(() => rowIds(dailyCompleted)).toEqual(sortedIds)
+  await page.getByRole('button', { name: /^已完成/ }).click()
+  const completed = page.getByRole('list', {
+    name: '已完成任務列表',
+    exact: true,
+  })
+  await expect.poll(() => rowIds(completed)).toEqual(sortedIds)
+  await page.reload()
+  await page.getByLabel('搜尋任務').fill('completion-sort')
+  await page.getByRole('button', { name: /^已完成/ }).click()
+  await expect.poll(() => rowIds(completed)).toEqual(sortedIds)
+})
+
+test('任務和已完成的搜尋框聚焦時，外框包含搜尋圖示', async ({ page }) => {
+  await page.goto('/')
+  for (const name of [/^任務列表$/, /^已完成/]) {
+    await page.getByRole('button', { name }).click()
+    const search = page.locator('.search')
+    const icon = search.locator('svg')
+    const input = page.getByRole('textbox', { name: '搜尋任務' })
+    await icon.click()
+    await expect(input).toBeFocused()
+    await expect(search).toHaveCSS('outline-width', '2px')
+    await expect(search).toHaveCSS('outline-style', 'solid')
+    await expect(input).toHaveCSS('outline-style', 'none')
+  }
 })

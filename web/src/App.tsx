@@ -41,6 +41,7 @@ import {
 } from '@/components/ui/dialog'
 import {
   ApiError,
+  compareCompletionTime,
   dateTime,
   orderSubset,
   request,
@@ -175,6 +176,7 @@ function App() {
         .toLowerCase()
         .includes(search.toLowerCase()),
   )
+  if (view === 'completed') filtered.sort(compareCompletionTime)
   const detail = all.find((t) => t.id === selected)
   return (
     <div className="app-shell">
@@ -256,15 +258,15 @@ function App() {
                 <span className="list-count">{filtered.length}</span>
               </div>
             )}
-            <div className="search">
-              <Search size={16} />
+            <label className="search">
+              <Search size={16} aria-hidden="true" />
               <input
                 aria-label="搜尋任務"
                 placeholder="搜尋"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
-            </div>
+            </label>
           </div>
           <QuickCapture
             hidden={view !== 'active' && view !== 'date'}
@@ -594,18 +596,16 @@ function Detail({
       <div className="detail-block">
         <div className="block-heading">
           <h3>相關連結</h3>
-          {!completed && (
-            <Button
-              variant="ghost"
-              size="sm"
-              disabled={busy}
-              aria-expanded={adding}
-              onClick={() => setAdding(!adding)}
-            >
-              <Plus />
-              新增連結
-            </Button>
-          )}
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={busy}
+            aria-expanded={adding}
+            onClick={() => setAdding(!adding)}
+          >
+            <Plus />
+            新增連結
+          </Button>
         </div>
         {t.links.length ? (
           <div className="detail-links">

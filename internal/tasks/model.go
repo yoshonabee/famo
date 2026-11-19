@@ -106,9 +106,6 @@ func apply(t *Task, a Action, now time.Time) error {
 		}
 		t.CompletedAt = nil
 	case "add_link":
-		if t.CompletedAt != nil {
-			return errors.New("任務已完成")
-		}
 		if len(a.Links) == 0 {
 			return errors.New("請提供相關連結")
 		}

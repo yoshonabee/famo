@@ -108,7 +108,7 @@ test('附加連結失敗或衝突保留網址，確認最新資料後可重試',
   ).toBe(true)
 })
 
-test('網址依服務顯示名稱，已完成任務也可移除單筆連結', async ({
+test('網址依服務顯示名稱，已完成任務也可新增或移除單筆連結', async ({
   page,
   request,
 }) => {
@@ -148,17 +148,25 @@ test('網址依服務顯示名稱，已完成任務也可移除單筆連結', as
     await expect(link.locator('span').first()).toHaveText(label)
     await expect(link).toHaveAttribute('href', url)
   }
+  const newUrl = 'https://github.com/example/repo/pull/1'
+  await dialog.getByRole('button', { name: '新增連結', exact: true }).click()
+  await dialog.getByRole('textbox', { name: '連結網址' }).fill(newUrl)
+  await dialog.getByRole('button', { name: '加入', exact: true }).click()
+  await expect(dialog.locator('.detail-links a')).toHaveCount(
+    entries.length + 1,
+  )
   const [, removedUrl] = entries[0]
   await dialog.getByRole('button', { name: `刪除連結：${removedUrl}` }).click()
-  await expect(dialog.locator('.detail-links a')).toHaveCount(
-    entries.length - 1,
-  )
+  await expect(dialog.locator('.detail-links a')).toHaveCount(entries.length)
   await expect(dialog.locator(`a[href="${removedUrl}"]`)).toHaveCount(0)
   await dialog.getByRole('button', { name: '關閉', exact: true }).click()
   await expect(
     row.getByRole('link', { name: 'Google Slides', exact: true }),
   ).toBeVisible()
   const saved = await (await request.get(`/api/tasks/${task.id}`)).json()
-  expect(saved.links).toEqual(entries.slice(1).map(([, url]) => ({ url })))
+  expect(saved.links).toEqual([
+    ...entries.slice(1).map(([, url]) => ({ url })),
+    { url: newUrl },
+  ])
   expect(saved.completed_at).not.toBeNull()
 })
