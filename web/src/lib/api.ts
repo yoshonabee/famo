@@ -16,12 +16,14 @@ export type Task = {
 export type Action = {
   op:
     | 'add_link'
+    | 'remove_link'
     | 'update'
     | 'complete_task'
     | 'reopen_task'
     | 'rename'
     | 'delete_item'
   links?: Link[]
+  link_index?: number
   scheduled_date?: string
   title?: string
   description?: string

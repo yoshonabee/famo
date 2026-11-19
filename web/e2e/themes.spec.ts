@@ -97,10 +97,9 @@ test('深色主題套用到任務、表單、月曆及詳情，切換頁面保�
   await page.getByRole('button', { name: '開啟日期選單' }).click()
   const calendar = page.getByRole('dialog', { name: '選擇日期' })
   await expect(calendar).toHaveCSS('background-color', 'rgb(30, 40, 56)')
-  await expect(calendar.getByLabel('選擇日期', { exact: true })).toHaveCSS(
-    'color-scheme',
-    'dark',
-  )
+  await expect(
+    calendar.getByRole('group', { name: '日期', exact: true }),
+  ).toHaveCSS('color-scheme', 'dark')
   await page.keyboard.press('Escape')
   await page.getByRole('button', { name: '任務列表', exact: true }).click()
   const row = page.locator('.task-row').filter({

@@ -131,6 +131,34 @@ export function CalendarPage({
             {earlier.length ? (
               <>
                 <div className="earlier-actions">
+                  <label>
+                    <Checkbox
+                      aria-label="全選先前未完成任務"
+                      disabled={disabled}
+                      checked={
+                        selectedEarlier.length === earlier.length
+                          ? true
+                          : selectedEarlier.length
+                            ? 'indeterminate'
+                            : false
+                      }
+                      onCheckedChange={(checked) =>
+                        setSelected((ids) =>
+                          checked
+                            ? [
+                                ...new Set([
+                                  ...ids,
+                                  ...earlier.map((task) => task.id),
+                                ]),
+                              ]
+                            : ids.filter(
+                                (id) => !earlier.some((task) => task.id === id),
+                              ),
+                        )
+                      }
+                    />
+                    全選
+                  </label>
                   <Button
                     variant="outline"
                     size="sm"

@@ -41,9 +41,10 @@ test('貼上網址即可附加脈絡，多個 PR 顯示編號，多餘連結展�
   await row
     .getByRole('button', { name: '查看其餘 1 個連結：測試登入修正' })
     .click()
-  await expect(
-    dialog.getByRole('link', { name: /Slack 討論/ }),
-  ).toHaveAttribute('href', urls[2])
+  await expect(dialog.getByRole('link', { name: /Slack/ })).toHaveAttribute(
+    'href',
+    urls[2],
+  )
   await dialog.getByRole('button', { name: '關閉', exact: true }).click()
   await page.reload()
   await expect(row.getByRole('link', { name: 'famo PR #123' })).toBeVisible()
@@ -105,4 +106,59 @@ test('附加連結失敗或衝突保留網址，確認最新資料後可重試',
       () => document.documentElement.scrollWidth <= innerWidth,
     ),
   ).toBe(true)
+})
+
+test('網址依服務顯示名稱，已完成任務也可移除單筆連結', async ({
+  page,
+  request,
+}) => {
+  const entries = [
+    ['Claude Artifact', 'https://claude.ai/public/artifacts/example'],
+    ['Google Doc', 'https://docs.google.com/document/d/spec/edit'],
+    ['Google Slides', 'https://docs.google.com/presentation/d/deck/edit'],
+    ['Google Sheets', 'https://docs.google.com/spreadsheets/u/1/d/plan/edit'],
+    ['Google Forms', 'https://docs.google.com/forms/d/e/survey/viewform'],
+    ['Google Drive', 'https://drive.google.com/file/d/example/view'],
+    ['Slack', 'https://team.slack.com/archives/C123/p456'],
+  ]
+  const task = await (
+    await request.post('/api/tasks', {
+      data: {
+        title: '整理分享連結',
+        links: entries.map(([, url]) => ({ url })),
+      },
+    })
+  ).json()
+  await request.post(`/api/tasks/${task.id}/actions`, {
+    data: { op: 'complete_task', version: task.version },
+  })
+  await page.goto('/')
+  await page.getByRole('button', { name: /^已完成/ }).click()
+  const row = page.locator(`[data-task-id="${task.id}"]`)
+  await expect(
+    row.getByRole('link', { name: 'Claude Artifact', exact: true }),
+  ).toBeVisible()
+  await expect(
+    row.getByRole('link', { name: 'Google Doc', exact: true }),
+  ).toBeVisible()
+  await row.getByRole('button', { name: '任務詳情：整理分享連結' }).click()
+  const dialog = page.getByRole('dialog')
+  for (const [label, url] of entries) {
+    const link = dialog.locator('.detail-links a').filter({ hasText: url })
+    await expect(link.locator('span').first()).toHaveText(label)
+    await expect(link).toHaveAttribute('href', url)
+  }
+  const [, removedUrl] = entries[0]
+  await dialog.getByRole('button', { name: `刪除連結：${removedUrl}` }).click()
+  await expect(dialog.locator('.detail-links a')).toHaveCount(
+    entries.length - 1,
+  )
+  await expect(dialog.locator(`a[href="${removedUrl}"]`)).toHaveCount(0)
+  await dialog.getByRole('button', { name: '關閉', exact: true }).click()
+  await expect(
+    row.getByRole('link', { name: 'Google Slides', exact: true }),
+  ).toBeVisible()
+  const saved = await (await request.get(`/api/tasks/${task.id}`)).json()
+  expect(saved.links).toEqual(entries.slice(1).map(([, url]) => ({ url })))
+  expect(saved.completed_at).not.toBeNull()
 })

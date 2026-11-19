@@ -399,8 +399,7 @@ a:focus-visible {
   padding-top: 14px;
   margin-top: 14px;
 }
-.detail-block h3,
-.finish-task h3 {
+.detail-block h3 {
   font-size: 14px;
   font-weight: 600;
   margin-bottom: 10px;
@@ -442,7 +441,14 @@ a:focus-visible {
   flex-direction: column;
   gap: 8px;
 }
+.detail-link {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
 .detail-links a {
+  min-width: 0;
+  flex: 1;
   display: flex;
   align-items: center;
   gap: 12px;
@@ -496,22 +502,6 @@ a:focus-visible {
   font-size: 12px;
   margin-top: 4px;
 }
-.finish-task {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 20px;
-  margin-top: 16px;
-  border-top: 1px solid var(--border);
-  padding-top: 14px;
-}
-.finish-task p {
-  font-size: 10px;
-  color: var(--muted-foreground);
-}
-.finish-task button {
-  flex-shrink: 0;
-}
 .toast {
   position: fixed;
   z-index: 100;
@@ -559,10 +549,6 @@ pre {
     width: 100%;
   }
 
-  .finish-task {
-    align-items: flex-start;
-    flex-direction: column;
-  }
   .link-form {
     grid-template-columns: 1fr;
   }
@@ -766,7 +752,7 @@ input.todo-title:focus {
   text-decoration: none;
   text-overflow: clip;
 }
-.row-detail-button {
+.row-action-button {
   display: grid;
   place-items: center;
   flex-shrink: 0;
@@ -775,9 +761,15 @@ input.todo-title:focus {
   height: 28px;
   border-radius: 3px;
 }
-.row-detail-button:hover {
+.row-action-button:enabled:hover {
   color: var(--primary);
   background: var(--accent);
+}
+.row-action-button:disabled {
+  opacity: 0.5;
+}
+.remove-link-button:enabled:hover {
+  color: var(--warning);
 }
 .inline-edit-error {
   color: var(--warning);
@@ -1234,11 +1226,24 @@ input.todo-title {
   color: var(--muted-foreground);
   font-size: 14px;
 }
+.task-detail-dialog {
+  inset: 0;
+  margin: auto;
+  height: fit-content;
+  translate: none;
+}
 .detail-heading {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
   margin-bottom: 16px;
 }
-.finish-task {
-  justify-content: flex-end;
+.detail-completion {
+  margin-top: 5px;
+}
+.detail-heading .dialog-title {
+  min-width: 0;
+  flex: 1;
 }
 @media (max-width: 700px) {
   .sidebar {
@@ -1304,7 +1309,7 @@ input.todo-title {
   }
   .todo-line {
     display: grid;
-    grid-template-columns: 18px 18px minmax(0, 1fr) 24px;
+    grid-template-columns: 18px 18px minmax(0, 1fr) 25px 25px;
     column-gap: 8px;
     row-gap: 4px;
     padding: 6px 2px;
@@ -1328,8 +1333,12 @@ input.todo-title {
     justify-content: flex-start;
     gap: 5px;
   }
-  .row-detail-button {
+  .todo-line > .date-picker {
     grid-column: 4;
+    grid-row: 1;
+  }
+  .row-detail-button {
+    grid-column: 5;
     grid-row: 1;
   }
   .task-chip {
@@ -1342,9 +1351,6 @@ input.todo-title {
   .draft-row .todo-title {
     flex: 1;
   }
-  .finish-task {
-    align-items: flex-end;
-  }
 }
 
 .date-navigation {
@@ -1352,17 +1358,6 @@ input.todo-title {
   align-items: center;
   flex-wrap: wrap;
   gap: 4px;
-}
-.calendar-jump input,
-.scheduled-date-field input {
-  min-width: 0;
-  max-width: 100%;
-  padding: 8px;
-  border: 1px solid var(--border);
-  border-radius: 5px;
-  background: var(--background);
-  color: var(--foreground);
-  font-size: 16px;
 }
 .daily-progress {
   margin: 12px 0;
@@ -1422,9 +1417,6 @@ input.todo-title {
 .calendar-heading h1 {
   font-size: 22px;
 }
-.today-picker {
-  position: relative;
-}
 .today-picker-button {
   display: inline-flex;
   align-items: stretch;
@@ -1451,11 +1443,11 @@ input.todo-title {
   border-radius: 0 5px 5px 0;
 }
 .calendar-popover {
-  position: absolute;
-  right: 0;
-  top: calc(100% + 8px);
+  position: fixed;
   z-index: 30;
   width: min(288px, calc(100vw - 24px));
+  max-height: calc(100dvh - 24px);
+  overflow: auto;
   padding: 12px;
   border: 1px solid var(--border);
   border-radius: 10px;
@@ -1470,8 +1462,12 @@ input.todo-title {
   font-size: 14px;
   font-weight: 600;
 }
+.calendar-view-button {
+  font-weight: inherit;
+}
 .calendar-weekdays,
-.calendar-days {
+.calendar-days,
+.calendar-periods {
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
   text-align: center;
@@ -1485,35 +1481,33 @@ input.todo-title {
 .calendar-weekdays span {
   padding: 6px 0;
 }
-.calendar-days button {
+.calendar-periods {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.calendar-days button,
+.calendar-periods button {
   height: 34px;
   border-radius: 5px;
   font-size: 14px;
 }
-.calendar-days button:hover {
+.calendar-days button:hover,
+.calendar-periods button:hover {
   background: var(--accent);
 }
 .calendar-days button[aria-current='date'] {
   box-shadow: inset 0 0 0 1px var(--primary);
 }
-.calendar-days button[aria-pressed='true'] {
+.calendar-days button[aria-pressed='true'],
+.calendar-periods button[aria-pressed='true'] {
   background: var(--primary);
   color: var(--primary-foreground);
 }
-.calendar-jump {
+.calendar-actions {
   display: flex;
-  align-items: center;
-  gap: 10px;
+  justify-content: flex-end;
   border-top: 1px solid var(--border);
-  padding-top: 10px;
-  margin-top: 10px;
-  color: var(--muted-foreground);
-  font-size: 12px;
-}
-.calendar-jump input {
-  flex: 1;
-  padding: 5px;
-  font-size: 14px;
+  padding-top: 6px;
+  margin-top: 8px;
 }
 @media (max-width: 700px) {
   .calendar-heading h1 {
@@ -1533,6 +1527,8 @@ input.todo-title {
   letter-spacing: 0;
 }
 
+.earlier-actions,
+.earlier-actions label,
 .undated-actions,
 .undated-actions label {
   display: flex;
@@ -1543,6 +1539,7 @@ input.todo-title {
 .undated-actions {
   margin: 12px 0;
 }
+.earlier-actions label,
 .undated-actions label {
   font-size: 14px;
   color: var(--muted-foreground);
@@ -1555,6 +1552,23 @@ input.todo-title {
 .undated-task > ul {
   flex: 1;
   min-width: 0;
+}
+.task-date-label {
+  font-size: 14px;
+}
+.task-date-button {
+  display: flex;
+  align-items: center;
+  min-height: 34px;
+  gap: 8px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--foreground);
+  font-size: 14px;
+}
+.task-date-button:enabled:hover {
+  background: var(--accent);
 }
 .date-clear {
   color: var(--muted-foreground);

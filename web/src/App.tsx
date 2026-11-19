@@ -13,10 +13,12 @@ import {
   PanelRightOpen,
   Search,
   Settings,
+  Trash2,
 } from 'lucide-react'
 import { PreferencesPage } from '@/components/preferences-page'
 import { useTheme } from '@/lib/theme'
 import { openSettingsEvent } from '@/lib/desktop'
+import { DatePicker } from '@/components/date-picker'
 import { DateNavigation } from '@/components/date-navigation'
 import { CalendarPage } from '@/components/calendar-page'
 import { localDate } from '@/lib/calendar'
@@ -292,7 +294,10 @@ function App() {
                   index={index}
                   hideCompletion={hideCompletion}
                   sortableDisabled={disabled || visibleDrafts.length > 0}
-                  busy={mutation.isPending}
+                  busy={mutation.isPending || reorder.isPending}
+                  onSetDate={(date) =>
+                    act(task, { op: 'update', scheduled_date: date })
+                  }
                   onOpen={() => setSelected(task.id)}
                   onComplete={() =>
                     act(task, {
@@ -354,7 +359,10 @@ function App() {
                         capture.drafts.length > 0
                       }
                       task={t}
-                      busy={mutation.isPending}
+                      busy={mutation.isPending || reorder.isPending}
+                      onSetDate={(date) =>
+                        act(t, { op: 'update', scheduled_date: date })
+                      }
                       onOpen={() => setSelected(t.id)}
                       onComplete={() => act(t, { op: 'complete_task' })}
                     />
@@ -385,7 +393,10 @@ function App() {
                       key={t.id}
                       index={index}
                       task={t}
-                      busy={mutation.isPending}
+                      busy={mutation.isPending || reorder.isPending}
+                      onSetDate={(date) =>
+                        act(t, { op: 'update', scheduled_date: date })
+                      }
                       onOpen={() => setSelected(t.id)}
                       onComplete={() => act(t, { op: 'reopen_task' })}
                     />
@@ -414,7 +425,7 @@ function App() {
             key={detail.id}
             task={detail}
             act={act}
-            busy={mutation.isPending}
+            busy={mutation.isPending || reorder.isPending}
           />
         )}
       </Dialog>
@@ -434,6 +445,7 @@ function TaskRow({
   busy,
   onOpen,
   onComplete,
+  onSetDate,
   index,
   sortableDisabled = false,
   hideCompletion = false,
@@ -442,6 +454,7 @@ function TaskRow({
   busy: boolean
   onOpen: () => void
   onComplete: () => void
+  onSetDate: (date: string) => void
   index: number
   sortableDisabled?: boolean
   hideCompletion?: boolean
@@ -479,8 +492,21 @@ function TaskRow({
         )}
         <TodoTitle task={t} title={title} onDeleted={() => {}} />
         <Links task={t} onOpen={onOpen} />
+        <DatePicker
+          date={t.scheduled_date}
+          onChange={onSetDate}
+          label={`設定日期：${title}`}
+          title={
+            t.scheduled_date ? `任務日期：${t.scheduled_date}` : '設定日期'
+          }
+          buttonClassName="row-action-button"
+          clearable
+          disabled={busy}
+        >
+          <CalendarDays size={15} />
+        </DatePicker>
         <button
-          className="row-detail-button"
+          className="row-action-button row-detail-button"
           onClick={onOpen}
           aria-label={`任務詳情：${title}`}
           title="備註與連結"
@@ -502,6 +528,7 @@ function Detail({
 }) {
   const [adding, setAdding] = useState(false)
   const [linkError, setLinkError] = useState('')
+  const [removeError, setRemoveError] = useState('')
   const completed = !!t.completed_at
   function addLink(e: FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -521,15 +548,34 @@ function Detail({
       setLinkError,
     )
   }
+  function removeLink(index: number) {
+    setRemoveError('')
+    act(t, { op: 'remove_link', link_index: index }, undefined, setRemoveError)
+  }
+
   return (
     <DialogContent
-      className="max-w-3xl"
+      className="task-detail-dialog max-w-3xl"
       onEscapeKeyDown={(event) => {
-        if ((event.target as Element)?.closest('.inline-content-editor'))
+        if (
+          (event.target as Element)?.closest(
+            '.inline-content-editor, .calendar-popover',
+          )
+        )
           event.preventDefault()
       }}
     >
       <div className="detail-heading">
+        <Checkbox
+          className="detail-completion size-6 rounded-full"
+          checked={completed}
+          disabled={busy}
+          aria-label={completed ? '恢復為未完成' : '完成任務'}
+          title={completed ? '恢復為未完成' : '完成任務'}
+          onCheckedChange={() =>
+            act(t, { op: completed ? 'reopen_task' : 'complete_task' })
+          }
+        />
         <DialogTitle className="dialog-title" aria-label={t.title}>
           <InlineContent task={t} field="title" busy={busy} />
         </DialogTitle>
@@ -564,15 +610,32 @@ function Detail({
         {t.links.length ? (
           <div className="detail-links">
             {t.links.map((l, i) => (
-              <a key={i} href={l.url} target="_blank" rel="noreferrer">
-                <span>{linkLabel(l.url)}</span>
-                <span>{l.url}</span>
-                <ExternalLink size={14} />
-              </a>
+              <div className="detail-link" key={`${l.url}-${i}`}>
+                <a href={l.url} target="_blank" rel="noreferrer" title={l.url}>
+                  <span>{linkLabel(l.url)}</span>
+                  <span>{l.url}</span>
+                  <ExternalLink size={14} />
+                </a>
+                <button
+                  type="button"
+                  className="row-action-button remove-link-button"
+                  aria-label={`刪除連結：${l.url}`}
+                  title="刪除連結"
+                  disabled={busy}
+                  onClick={() => removeLink(i)}
+                >
+                  <Trash2 size={15} />
+                </button>
+              </div>
             ))}
           </div>
         ) : (
           <p className="muted">尚無連結</p>
+        )}
+        {removeError && (
+          <p className="inline-edit-error" role="alert">
+            {removeError}
+          </p>
         )}
         {adding && (
           <form onSubmit={addLink}>
@@ -602,28 +665,6 @@ function Detail({
           </form>
         )}
       </div>
-      {!completed && (
-        <div className="finish-task">
-          <Button
-            disabled={busy}
-            onClick={() => act(t, { op: 'complete_task' })}
-          >
-            <CheckCheck />
-            完成任務
-          </Button>
-        </div>
-      )}
-      {completed && (
-        <div className="finish-task">
-          <Button
-            disabled={busy}
-            variant="outline"
-            onClick={() => act(t, { op: 'reopen_task' })}
-          >
-            恢復為未完成
-          </Button>
-        </div>
-      )}
     </DialogContent>
   )
 }

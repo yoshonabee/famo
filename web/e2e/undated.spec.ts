@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test'
+import { setTaskDate } from './date-picker'
 
 test.use({ timezoneId: 'Asia/Taipei' })
 
@@ -178,9 +179,9 @@ test('詳細頁日期自動儲存與清除，失敗保留選擇並可重試，�
       }),
     { times: 1 },
   )
-  await dialog.getByLabel('任務日期', { exact: true }).fill('2026-11-07')
+  await setTaskDate(dialog, '2026-11-07')
   await expect(dialog.getByRole('alert')).toContainText('date save failed')
-  await expect(dialog.getByLabel('任務日期', { exact: true })).toHaveValue(
+  await expect(dialog.getByRole('button', { name: /^任務日期：/ })).toHaveText(
     '2026-11-07',
   )
   expect(
@@ -198,8 +199,12 @@ test('詳細頁日期自動儲存與清除，失敗保留選擇並可重試，�
     (await (await request.get(`/api/tasks/${task.id}`)).json()).scheduled_date,
   ).toBe('2026-11-07')
   await dialog.getByRole('button', { name: '清除日期', exact: true }).click()
-  await expect(dialog.getByLabel('任務日期', { exact: true })).toBeEnabled()
-  await expect(dialog.getByLabel('任務日期', { exact: true })).toHaveValue('')
+  await expect(
+    dialog.getByRole('button', { name: /^任務日期：/ }),
+  ).toBeEnabled()
+  await expect(dialog.getByRole('button', { name: /^任務日期：/ })).toHaveText(
+    '未指定日期',
+  )
   const latest = await (await request.get(`/api/tasks/${task.id}`)).json()
   expect(latest.scheduled_date).toBe('')
   expect(latest.completed_at).not.toBeNull()

@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"net/url"
+	"slices"
 	"strings"
 	"time"
 )
@@ -42,6 +43,7 @@ type Action struct {
 	ScheduledDate *string `json:"scheduled_date"`
 	Version       int     `json:"version"`
 	Links         []Link  `json:"links"`
+	LinkIndex     *int    `json:"link_index"`
 	Title         *string `json:"title"`
 	Description   *string `json:"description"`
 }
@@ -110,6 +112,14 @@ func apply(t *Task, a Action, now time.Time) error {
 		if len(a.Links) == 0 {
 			return errors.New("請提供相關連結")
 		}
+	case "remove_link":
+		if a.LinkIndex == nil || *a.LinkIndex < 0 || *a.LinkIndex >= len(t.Links) {
+			return errors.New("找不到指定的連結")
+		}
+		if len(a.Links) != 0 {
+			return errors.New("刪除連結時不可同時新增連結")
+		}
+		t.Links = slices.Delete(t.Links, *a.LinkIndex, *a.LinkIndex+1)
 	case "update":
 		if a.ScheduledDate != nil {
 			t.ScheduledDate = *a.ScheduledDate
