@@ -131,7 +131,6 @@ test('備註直接編輯、Agent 更新與版本衝突', async ({ page, request 
   await expect(uncheckedIcon).toHaveAttribute('width', '20')
   await expect(uncheckedIcon).toHaveAttribute('fill', 'none')
   await expect(uncheckedIcon).toHaveAttribute('stroke-width', '1.5')
-  await expect(uncheckedIcon.locator('circle')).toBeVisible()
   await expect(uncheckedIcon.locator('path')).toBeVisible()
   const uncheckedColor = await completion.evaluate(
     (element) => getComputedStyle(element).color,
@@ -156,10 +155,12 @@ test('備註直接編輯、Agent 更新與版本衝突', async ({ page, request 
   )
   await expect(checkedCompletion).not.toHaveCSS('color', uncheckedColor)
   const checkedIcon = checkedCompletion.locator('svg')
-  await expect(checkedIcon).toHaveAttribute('fill', 'none')
-  await expect(checkedIcon).toHaveAttribute('stroke-width', '1.5')
-  await expect(checkedIcon.locator('circle')).toBeVisible()
-  await expect(checkedIcon.locator('path')).toBeVisible()
+  await expect(checkedIcon).toHaveAttribute('width', '20')
+  await expect(checkedIcon).toHaveAttribute('fill', 'currentColor')
+  await expect(checkedIcon.locator('path')).toHaveAttribute(
+    'fill-rule',
+    'evenodd',
+  )
   await dialog.getByRole('button', { name: '編輯備註', exact: true }).click()
   await dialog
     .getByRole('textbox', { name: '備註', exact: true })

@@ -2,10 +2,11 @@ import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { DragDropProvider } from '@dnd-kit/react'
 import { isSortable, useSortable } from '@dnd-kit/react/sortable'
+import { CheckCircleIcon as OutlineCheckCircle } from '@heroicons/react/24/outline'
+import { CheckCircleIcon as SolidCheckCircle } from '@heroicons/react/24/solid'
 import {
   CalendarDays,
   CheckCheck,
-  CircleCheck,
   ExternalLink,
   GripVertical,
   Inbox,
@@ -534,6 +535,7 @@ function Detail({
   const [linkError, setLinkError] = useState('')
   const [removeError, setRemoveError] = useState('')
   const completed = !!t.completed_at
+  const CompletionIcon = completed ? SolidCheckCircle : OutlineCheckCircle
   function addLink(e: FormEvent<HTMLFormElement>) {
     e.preventDefault()
     const form = e.currentTarget
@@ -585,7 +587,7 @@ function Detail({
             act(t, { op: completed ? 'reopen_task' : 'complete_task' })
           }
         >
-          <CircleCheck size={20} strokeWidth={1.5} aria-hidden="true" />
+          <CompletionIcon width={20} height={20} />
         </Checkbox>
         <DialogTitle className="dialog-title" aria-label={t.title}>
           <InlineContent task={t} field="title" busy={busy} />
