@@ -1345,6 +1345,30 @@ input.todo-title {
   color: var(--muted-foreground);
   font-size: 14px;
 }
+.recently-deleted-hint {
+  margin-bottom: 12px;
+}
+.recently-deleted-row .todo-line {
+  display: flex;
+  justify-content: space-between;
+}
+.recently-deleted-task {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+  overflow-wrap: anywhere;
+}
+.recently-deleted-meta {
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+.recently-deleted-row .todo-line > button {
+  flex-shrink: 0;
+}
+.recently-deleted-row .todo-line > button:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
 .task-detail-dialog {
   inset: 0;
   margin: auto;

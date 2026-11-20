@@ -50,7 +50,10 @@ test('設定位於側欄底部，桌面選單事件會開啟設定且保留新�
   const settings = page.getByRole('button', { name: '設定', exact: true })
   const box = await settings.boundingBox()
   expect(box!.y).toBeGreaterThan(720)
-  await expect(page.getByRole('navigation').getByRole('button')).toHaveCount(3)
+  const navigation = page.getByRole('navigation', { name: '主要導覽' })
+  await expect(
+    navigation.getByRole('button', { name: '設定', exact: true }),
+  ).toHaveCount(0)
   const capture = page.getByRole('textbox', { name: '快速新增任務名稱' })
   await capture.fill('選單切換前的草稿')
   await page.evaluate(() =>
