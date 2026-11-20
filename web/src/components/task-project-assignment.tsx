@@ -1,6 +1,6 @@
 import { useState } from 'react'
+import { X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Checkbox } from '@/components/ui/checkbox'
 import type { Project } from '@/lib/api'
 import { useLanguage } from '@/lib/i18n'
 
@@ -9,16 +9,18 @@ const unassigned = 'unassigned'
 export function TaskProjectAssignment({
   projects,
   selectedCount,
-  taskCount,
+  allSelected,
   busy,
   onSelectAll,
+  onClear,
   onAssign,
 }: {
   projects: Project[]
   selectedCount: number
-  taskCount: number
+  allSelected: boolean
   busy: boolean
-  onSelectAll: (checked: boolean) => void
+  onSelectAll: () => void
+  onClear: () => void
   onAssign: (projectId: string) => void
 }) {
   const { t } = useLanguage()
@@ -28,45 +30,58 @@ export function TaskProjectAssignment({
     projects.some((project) => project.id === targetId)
 
   return (
-    <div id="task-project-assignment" className="task-project-assignment">
-      <label>
-        <Checkbox
+    <section
+      className="task-project-assignment"
+      aria-label={t('batchTaskActions')}
+    >
+      <div className="task-selection-summary">
+        <span role="status">{t('selectedTaskCount', selectedCount)}</span>
+        <Button
+          variant="ghost"
+          size="sm"
           aria-label={t('selectAllVisible')}
-          checked={
-            selectedCount === 0
-              ? false
-              : selectedCount === taskCount
-                ? true
-                : 'indeterminate'
-          }
-          disabled={busy || taskCount === 0}
-          onCheckedChange={(checked) => onSelectAll(checked === true)}
-        />
-        {t('selectAll')}
-      </label>
-      <select
-        aria-label={t('assignmentProject')}
-        value={targetAvailable ? targetId : ''}
-        disabled={busy}
-        onChange={(event) => setTargetId(event.target.value)}
-      >
-        <option value="" disabled>
-          {t('chooseProject')}
-        </option>
-        <option value={unassigned}>{t('unassigned')}</option>
-        {projects.map((project) => (
-          <option key={project.id} value={project.id}>
-            {project.name}
+          disabled={busy || allSelected}
+          onClick={onSelectAll}
+        >
+          {t('selectAll')}
+        </Button>
+      </div>
+      <div className="task-assignment-actions">
+        <select
+          aria-label={t('assignmentProject')}
+          value={targetAvailable ? targetId : ''}
+          disabled={busy}
+          onChange={(event) => setTargetId(event.target.value)}
+        >
+          <option value="" disabled>
+            {t('chooseProject')}
           </option>
-        ))}
-      </select>
+          <option value={unassigned}>{t('unassigned')}</option>
+          {projects.map((project) => (
+            <option key={project.id} value={project.id}>
+              {project.name}
+            </option>
+          ))}
+        </select>
+        <Button
+          size="sm"
+          disabled={busy || !targetAvailable}
+          onClick={() => onAssign(targetId === unassigned ? '' : targetId)}
+        >
+          {t('assignProject')}
+        </Button>
+      </div>
       <Button
-        size="sm"
-        disabled={busy || !targetAvailable || selectedCount === 0}
-        onClick={() => onAssign(targetId === unassigned ? '' : targetId)}
+        className="task-selection-close"
+        variant="ghost"
+        size="icon"
+        aria-label={t('clearSelection')}
+        title={t('clearSelection')}
+        disabled={busy}
+        onClick={onClear}
       >
-        {t('assignTasks', selectedCount)}
+        <X />
       </Button>
-    </div>
+    </section>
   )
 }

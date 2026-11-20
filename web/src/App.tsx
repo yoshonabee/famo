@@ -85,6 +85,7 @@ import {
   type Task,
 } from '@/lib/api'
 import { useLanguage } from '@/lib/i18n'
+import { useTaskSelection } from '@/lib/task-selection'
 
 type Act = (
   t: Task,
@@ -405,6 +406,7 @@ function App() {
   const act: Act = (t, action, done, failed) =>
     mutation.mutate({ t, action, failed }, { onSuccess: done })
   const assignment = useMutation({
+    onMutate: () => setMessage(null),
     mutationFn: ({ projectId, items }: { projectId: string; items: Task[] }) =>
       request<Task[]>('/tasks/assign-project', {
         project_id: projectId,
@@ -419,7 +421,7 @@ function App() {
           return assigned && assigned.version > task.version ? assigned : task
         }),
       )
-      setProjectSelection(null)
+      selection.clear()
     },
     onError: (error) => {
       setMessage({ error: error.message })
@@ -477,46 +479,12 @@ function App() {
     currentBoard?.id,
     currentProjectId,
     isCalendarView ? date : null,
+    search,
+    projectFiltered ? todayFilter.hidden : null,
   ])
-  const [projectSelection, setProjectSelection] = useState<{
-    scope: string
-    ids: Set<string>
-  } | null>(null)
-  const selection =
-    projectSelection?.scope === selectionScope ? projectSelection.ids : null
-  if (projectSelection && !selection) setProjectSelection(null)
-  const selectionActive = selection !== null
-  const chosenTasks = selection
-    ? selectableTasks.filter((task) => selection.has(task.id))
-    : []
-  function selectTasks(items: Task[], checked: boolean) {
-    setProjectSelection((current) => {
-      if (!current) return current
-      const ids = new Set(current.ids)
-      for (const task of items) {
-        if (checked) ids.add(task.id)
-        else ids.delete(task.id)
-      }
-      return { ...current, ids }
-    })
-  }
-  const selectionButton = (selectionActive ||
-    (projectList.length > 0 && selectableTasks.length > 0)) && (
-    <Button
-      variant="outline"
-      size="sm"
-      disabled={busy || dragging}
-      aria-expanded={selectionActive}
-      aria-controls={selectionActive ? 'task-project-assignment' : undefined}
-      onClick={() =>
-        setProjectSelection(
-          selectionActive ? null : { scope: selectionScope, ids: new Set() },
-        )
-      }
-    >
-      {selectionActive ? t('exitSelection') : t('selectTasks')}
-    </Button>
-  )
+  const selection = useTaskSelection(selectionScope, busy || dragging)
+  const selectedIds = new Set(selection.ids)
+  const chosenTasks = selectableTasks.filter((task) => selectedIds.has(task.id))
   function renderTask(
     task: Task,
     index: number,
@@ -534,18 +502,9 @@ function App() {
             : undefined
         }
         hideCompletion={hideCompletion}
-        sortableDisabled={
-          sortableDisabled || selectionActive || visibleDrafts.length > 0
-        }
+        sortableDisabled={sortableDisabled || visibleDrafts.length > 0}
         busy={busy}
-        selection={
-          selection && !hideCompletion
-            ? {
-                checked: selection.has(task.id),
-                onChange: (checked) => selectTasks([task], checked),
-              }
-            : undefined
-        }
+        selectedForBatch={!hideCompletion && selectedIds.has(task.id)}
         onSetDate={(date) => act(task, { op: 'update', scheduled_date: date })}
         onOpen={() => setSelected(task.id)}
         onComplete={() =>
@@ -630,6 +589,7 @@ function App() {
   return (
     <div
       className={sidebarCollapsed ? 'app-shell sidebar-collapsed' : 'app-shell'}
+      data-has-batch-selection={chosenTasks.length > 0 || undefined}
     >
       <div className="window-titlebar" aria-hidden="true" />
       <aside className="sidebar">
@@ -698,7 +658,9 @@ function App() {
       <main>
         <div
           className="main-content"
+          data-has-batch-selection={chosenTasks.length > 0 || undefined}
           hidden={view === 'preferences' || view === 'recently-deleted'}
+          {...selection.handlers}
         >
           {isCalendarView ? (
             <header className="calendar-heading">
@@ -715,7 +677,6 @@ function App() {
                 </h1>
               )}
               <DateNavigation date={date} onChange={setDate} />
-              {selectionButton}
               {searchField}
             </header>
           ) : (
@@ -724,7 +685,6 @@ function App() {
                 <h1>{listTitle}</h1>
                 <span className="list-count">{listCount}</span>
               </div>
-              {selectionButton}
               {searchField}
             </div>
           )}
@@ -736,18 +696,6 @@ function App() {
             onSubmit={capture.submit}
             announcement={capture.announcement}
           />
-          {selectionActive && (
-            <TaskProjectAssignment
-              projects={projectList}
-              selectedCount={chosenTasks.length}
-              taskCount={selectableTasks.length}
-              busy={busy}
-              onSelectAll={(checked) => selectTasks(selectableTasks, checked)}
-              onAssign={(projectId) =>
-                assignment.mutate({ projectId, items: chosenTasks })
-              }
-            />
-          )}
           {isCalendarView && (
             <CalendarPage
               date={date}
@@ -864,6 +812,21 @@ function App() {
               <CheckCheck />
               {search ? t('noMatchingTasks') : t('noCompletedTasks')}
             </div>
+          )}
+          {chosenTasks.length > 0 && (
+            <TaskProjectAssignment
+              projects={projectList}
+              selectedCount={chosenTasks.length}
+              allSelected={chosenTasks.length === selectableTasks.length}
+              busy={busy}
+              onSelectAll={() =>
+                selection.selectAll(selectableTasks.map((task) => task.id))
+              }
+              onClear={selection.clear}
+              onAssign={(projectId) =>
+                assignment.mutate({ projectId, items: chosenTasks })
+              }
+            />
           )}
         </div>
         {view === 'recently-deleted' && (
@@ -986,7 +949,7 @@ function TaskRow({
   index,
   sortableDisabled = false,
   hideCompletion = false,
-  selection,
+  selectedForBatch,
 }: {
   task: Task
   project?: Project
@@ -997,7 +960,7 @@ function TaskRow({
   index: number
   sortableDisabled?: boolean
   hideCompletion?: boolean
-  selection?: { checked: boolean; onChange: (checked: boolean) => void }
+  selectedForBatch: boolean
 }) {
   const { t, locale } = useLanguage()
   const completed = !!task.completed_at
@@ -1011,7 +974,17 @@ function TaskRow({
     <li
       ref={ref}
       data-task-id={task.id}
-      data-project-selected={selection?.checked || undefined}
+      data-selectable-task={hideCompletion ? undefined : task.id}
+      data-batch-selected={selectedForBatch || undefined}
+      tabIndex={hideCompletion ? undefined : 0}
+      aria-label={
+        hideCompletion
+          ? undefined
+          : t(selectedForBatch ? 'selectedTask' : 'selectTask', title)
+      }
+      aria-keyshortcuts={
+        hideCompletion ? undefined : 'Space Shift+ArrowUp Shift+ArrowDown'
+      }
       className={`task-row ${completed ? 'is-completed' : ''} ${isDragging ? 'dragging' : ''}`}
     >
       <div className="todo-line">
@@ -1024,25 +997,16 @@ function TaskRow({
         >
           <GripVertical size={16} />
         </button>
-        {selection ? (
+        {!hideCompletion && (
           <Checkbox
-            checked={selection.checked}
+            checked={completed}
             disabled={busy}
-            aria-label={t('selectTask', title)}
-            onCheckedChange={(checked) => selection.onChange(checked === true)}
+            aria-label={t(
+              completed ? 'reopenNamedTask' : 'completeNamedTask',
+              title,
+            )}
+            onCheckedChange={onComplete}
           />
-        ) : (
-          !hideCompletion && (
-            <Checkbox
-              checked={completed}
-              disabled={busy}
-              aria-label={t(
-                completed ? 'reopenNamedTask' : 'completeNamedTask',
-                title,
-              )}
-              onCheckedChange={onComplete}
-            />
-          )
         )}
         <TodoTitle task={task} title={title} onDeleted={() => {}} />
         <Links task={task} onOpen={onOpen} />
