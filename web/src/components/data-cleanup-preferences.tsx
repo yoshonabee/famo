@@ -21,17 +21,9 @@ export function DataCleanupPreferences() {
   })
 
   return (
-    <section
-      className="mt-8 grid gap-3 border-t border-input pt-6"
-      aria-labelledby="local-data-heading"
-    >
-      <h2 id="local-data-heading" className="text-base font-semibold">
-        本機資料
-      </h2>
-      <p
-        id="data-cleanup-description"
-        className="preferences-description mt-0!"
-      >
+    <div className="preferences-card">
+      <h3>清理已刪除的任務</h3>
+      <p id="data-cleanup-description" className="preferences-description">
         將刪除滿 7 天的任務及其排序資料從本機 SQLite 永久移除。
       </p>
       <Dialog
@@ -91,6 +83,6 @@ export function DataCleanupPreferences() {
             : `已永久清理 ${cleanup.data.deleted_count} 筆已刪除任務。`}
         </p>
       )}
-    </section>
+    </div>
   )
 }

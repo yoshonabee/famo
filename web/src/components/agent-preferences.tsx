@@ -188,96 +188,104 @@ export function AgentPreferences() {
   }
 
   return (
-    <section
-      className="agent-preferences"
-      aria-labelledby="agent-preferences-heading"
-    >
-      <h2 id="agent-preferences-heading">本機 Agent</h2>
-      {desktop ? (
-        <DesktopAgentTools />
-      ) : (
-        <>
-          <p className="preferences-description">
-            網頁版與 Agent 共用本機服務。桌面版可單獨開關 Agent API。
-          </p>
-          <CopyCommand
-            command="./bin/famo-agent cli install"
-            label="CLI 安裝指令"
-          />
-          <CopyCommand
-            command="./bin/famo-agent skill install"
-            label="Skill 安裝指令"
-          />
-        </>
-      )}
-      {value ? (
-        <form className="agent-workspace" onSubmit={submit}>
-          <div className="agent-inline agent-workspace-path">
+    <div className="agent-preferences">
+      <section
+        className="preferences-card"
+        aria-labelledby="agent-tools-heading"
+      >
+        <h3 id="agent-tools-heading">Agent 工具</h3>
+        {desktop ? (
+          <DesktopAgentTools />
+        ) : (
+          <>
+            <p className="preferences-description">
+              網頁版與 Agent 共用本機服務。桌面版可單獨開關 Agent API。
+            </p>
+            <CopyCommand
+              command="./bin/famo-agent cli install"
+              label="CLI 安裝指令"
+            />
+            <CopyCommand
+              command="./bin/famo-agent skill install"
+              label="Skill 安裝指令"
+            />
+          </>
+        )}
+      </section>
+      <section
+        className="preferences-card"
+        aria-labelledby="agent-workspace-heading"
+      >
+        <h3 id="agent-workspace-heading">預設工作區</h3>
+        {value ? (
+          <form className="agent-workspace" onSubmit={submit}>
+            <div className="agent-inline agent-workspace-path">
+              <label className="field">
+                <span>工作區路徑</span>
+                <input
+                  value={value.dir}
+                  placeholder="/Users/你/project"
+                  disabled={busy}
+                  onChange={(event) =>
+                    setDraft({ ...value, dir: event.target.value })
+                  }
+                />
+              </label>
+              {desktop && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={busy}
+                  onClick={() => picker.mutate()}
+                >
+                  選擇資料夾
+                </Button>
+              )}
+            </div>
             <label className="field">
-              <span>工作區路徑</span>
-              <input
-                value={value.dir}
-                placeholder="/Users/你/project"
+              <span>工作區指引（選填）</span>
+              <textarea
+                rows={3}
+                maxLength={2000}
+                value={value.prompt}
+                placeholder="例如先看 docs/decisions/，修改後端後跑 Go 測試。"
                 disabled={busy}
                 onChange={(event) =>
-                  setDraft({ ...value, dir: event.target.value })
+                  setDraft({ ...value, prompt: event.target.value })
                 }
               />
             </label>
-            {desktop && (
-              <Button
-                type="button"
-                variant="outline"
-                disabled={busy}
-                onClick={() => picker.mutate()}
-              >
-                選擇資料夾
+            <div className="agent-inline">
+              <Button type="submit" size="sm" disabled={busy || !dirty}>
+                儲存工作區
               </Button>
+              {save.isSuccess && !dirty && (
+                <span role="status">工作區已儲存</span>
+              )}
+            </div>
+            {(save.isError || picker.isError) && (
+              <p role="alert" className="inline-edit-error">
+                {save.error?.message ?? picker.error?.message}
+              </p>
             )}
-          </div>
-          <label className="field">
-            <span>工作區指引（選填）</span>
-            <textarea
-              rows={3}
-              maxLength={2000}
-              value={value.prompt}
-              placeholder="例如先看 docs/decisions/，修改後端後跑 Go 測試。"
-              disabled={busy}
-              onChange={(event) =>
-                setDraft({ ...value, prompt: event.target.value })
-              }
-            />
-          </label>
+          </form>
+        ) : workspace.isError ? (
           <div className="agent-inline">
-            <Button type="submit" size="sm" disabled={busy || !dirty}>
-              儲存工作區
-            </Button>
-            {save.isSuccess && !dirty && (
-              <span role="status">工作區已儲存</span>
-            )}
-          </div>
-          {(save.isError || picker.isError) && (
             <p role="alert" className="inline-edit-error">
-              {save.error?.message ?? picker.error?.message}
+              {workspace.error.message}
             </p>
-          )}
-        </form>
-      ) : workspace.isError ? (
-        <div className="agent-inline">
-          <p role="alert" className="inline-edit-error">
-            {workspace.error.message}
-          </p>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => void workspace.refetch()}
-          >
-            重試
-          </Button>
-        </div>
-      ) : (
-        <p role="status">正在讀取工作區…</p>
-      )}
-    </section>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => void workspace.refetch()}
+            >
+              重試
+            </Button>
+          </div>
+        ) : (
+          <p role="status">正在讀取工作區…</p>
+        )}
+      </section>
+    </div>
   )
 }

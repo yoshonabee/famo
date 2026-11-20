@@ -2177,32 +2177,109 @@ input.todo-title {
 }
 
 .preferences-page {
-  max-width: 1000px;
+  container: preferences / inline-size;
+  max-width: 1080px;
   padding-bottom: 24px;
 }
 .preferences-heading {
-  margin-bottom: 32px;
+  margin-bottom: 28px;
 }
-.preferences-heading p,
+.preferences-layout {
+  display: grid;
+  grid-template-columns: minmax(135px, 160px) minmax(0, 1fr);
+  align-items: start;
+  gap: clamp(18px, 3vw, 30px);
+}
+.preferences-nav {
+  position: sticky;
+  top: calc(var(--window-titlebar-height) + 20px);
+  display: grid;
+  gap: 4px;
+  padding-right: 12px;
+  border-right: 1px solid var(--border);
+}
+.preferences-nav > button {
+  justify-content: flex-start;
+  min-width: 0;
+  height: auto;
+  min-height: 36px;
+  padding: 8px 10px;
+  text-align: start;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  color: var(--muted-foreground);
+}
+.preferences-nav > button[aria-current='true'] {
+  color: var(--foreground);
+  background: var(--accent);
+  font-weight: 600;
+}
+.preferences-nav > button svg {
+  flex-shrink: 0;
+}
+.preferences-nav > button:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+.preferences-panel > h2 {
+  margin: 0 0 12px;
+  font-size: 18px;
+  font-weight: 600;
+}
 .preferences-description {
   margin-top: 8px;
   color: var(--muted-foreground);
   font-size: 14px;
   line-height: 1.7;
 }
-.agent-preferences {
+.preferences-card {
   display: grid;
-  gap: 14px;
-  padding-bottom: 24px;
-  margin-bottom: 24px;
-  border-bottom: 1px solid var(--border);
+  justify-items: start;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--background);
+  overflow-wrap: anywhere;
 }
-.agent-preferences h2 {
-  font-size: 17px;
+.preferences-card > h3 {
+  font-size: 15px;
   font-weight: 600;
 }
-.agent-preferences > .preferences-description {
+.preferences-card > .preferences-description {
   margin-top: 0;
+}
+.preferences-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+}
+@container preferences (max-width: 670px) {
+  .preferences-heading {
+    margin-bottom: 18px;
+  }
+  .preferences-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .preferences-nav {
+    position: static;
+    display: flex;
+    flex-wrap: wrap;
+    padding: 0 0 8px;
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+  }
+}
+@container preferences (max-width: 420px) {
+  .preferences-nav {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+.agent-preferences {
+  display: grid;
+  gap: 16px;
 }
 .agent-inline,
 .agent-api {
@@ -2243,7 +2320,7 @@ input.todo-title {
 }
 .agent-workspace {
   gap: 12px;
-  max-width: 700px;
+  width: 100%;
 }
 .agent-workspace-path {
   align-items: end;
@@ -2255,10 +2332,6 @@ input.todo-title {
   border: 0;
   padding: 0;
   min-width: 0;
-}
-.theme-settings > legend {
-  font-size: 17px;
-  font-weight: 600;
 }
 .system-theme-option,
 .theme-option {
@@ -2292,8 +2365,7 @@ input.todo-title {
   display: flex;
   align-items: center;
   gap: 14px;
-  padding: 18px;
-  margin-top: 20px;
+  padding: 14px 16px;
 }
 .system-theme-option > svg:first-of-type {
   color: var(--primary);
@@ -2312,7 +2384,7 @@ input.todo-title {
 .theme-group {
   margin-top: 28px;
 }
-.theme-group h2 {
+.theme-group h3 {
   margin-bottom: 12px;
   font-size: 14px;
   font-weight: 600;
@@ -2429,9 +2501,6 @@ label:has(> input:checked) .theme-check {
   }
 }
 @media (max-width: 700px) {
-  .preferences-heading {
-    margin-bottom: 24px;
-  }
   .theme-grid {
     gap: 12px;
   }
@@ -2459,7 +2528,7 @@ label:has(> input:checked) .theme-check {
   gap: 10px;
 }
 .theme-tools {
-  margin-bottom: 24px;
+  margin: 16px 0 20px;
 }
 .theme-notice {
   margin: 12px 0;
@@ -2472,7 +2541,7 @@ label:has(> input:checked) .theme-check {
   border-radius: 10px;
   background: var(--background);
 }
-.theme-editor h2 {
+.theme-editor h3 {
   font-size: 17px;
   font-weight: 600;
 }
@@ -2497,7 +2566,7 @@ label:has(> input:checked) .theme-check {
   padding: 0;
 }
 .theme-palette legend,
-.palette-preview-area h3 {
+.palette-preview-area h4 {
   margin-bottom: 14px;
   font-size: 14px;
   font-weight: 600;
@@ -2736,7 +2805,7 @@ label:has(> input:checked) .theme-check {
   justify-content: space-between;
   margin-bottom: 12px;
 }
-.custom-themes-heading h2 {
+.custom-themes-heading h3 {
   margin: 0;
 }
 .custom-theme-card {

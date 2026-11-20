@@ -42,7 +42,7 @@ export function ThemeEditor({
 
   return (
     <section className="theme-editor" aria-labelledby="theme-editor-heading">
-      <h2 id="theme-editor-heading">{editingId ? '編輯主題' : '新增主題'}</h2>
+      <h3 id="theme-editor-heading">{editingId ? '編輯主題' : '新增主題'}</h3>
       <p className="preferences-description">
         從現有主題開始調色，預覽滿意後再儲存。
       </p>
@@ -152,7 +152,7 @@ export function ThemeEditor({
             ))}
           </fieldset>
           <div className="palette-preview-area">
-            <h3>即時預覽</h3>
+            <h4>即時預覽</h4>
             <TodayThemePreview theme={preview} />
             <p className="preferences-description">
               儲存後才會套用到整個介面。

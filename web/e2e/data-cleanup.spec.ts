@@ -14,6 +14,10 @@ test('清理資料會說明永久刪除，確認後才送出並顯示結果', as
   })
   await page.goto('/')
   await page.getByRole('button', { name: '設定', exact: true }).click()
+  await page
+    .getByRole('navigation', { name: '設定分類' })
+    .getByRole('button', { name: '本機資料', exact: true })
+    .click()
   const section = page.getByRole('region', { name: '本機資料' })
   const open = section.getByRole('button', { name: '清理資料' })
   await expect(open).toHaveAccessibleDescription(/刪除滿 7 天.*永久移除/)
