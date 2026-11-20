@@ -104,7 +104,21 @@ test('Board 保存各自的今日 Project 篩選並支援重新編輯', async ({
   await boardButton('工作清單 Board').click()
   await expect(task('Board 審閱報告')).toBeVisible()
 
-  await nav.getByRole('button', { name: '編輯 Board：工作清單 Board' }).click()
+  const editWork = nav.getByRole('button', {
+    name: '編輯 Board：工作清單 Board',
+  })
+  await page.getByRole('main').hover()
+  await expect(editWork).toHaveCSS('opacity', '0')
+  await boardButton('工作清單 Board').hover()
+  await expect(editWork).toHaveCSS('opacity', '1')
+  await page.getByRole('main').hover()
+  await expect(editWork).toHaveCSS('opacity', '0')
+  await boardButton('工作清單 Board').focus()
+  await page.keyboard.press('Tab')
+  await expect(editWork).toBeFocused()
+  await expect(editWork).toHaveCSS('opacity', '1')
+  await boardButton('工作清單 Board').hover()
+  await editWork.click()
   const editor = page.getByRole('dialog', { name: '編輯 Board' })
   const choice = (name: string) =>
     editor.getByRole('checkbox', { name, exact: true })
@@ -237,6 +251,7 @@ test('從側欄編輯並刪除 Board，保留任務和 Project', async ({
   const nav = boardNavigation(page)
   const tab = nav.getByRole('button', { name: '待刪除 Board', exact: true })
   await tab.click()
+  await tab.hover()
   await expect(
     page.getByRole('main').getByRole('button', { name: /編輯 Board/ }),
   ).toHaveCount(0)

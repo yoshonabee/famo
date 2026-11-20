@@ -1177,6 +1177,17 @@ button:disabled {
   color: var(--primary);
   background: var(--accent);
 }
+@media (hover: hover) {
+  .sidebar-edit-button {
+    opacity: 0;
+    pointer-events: none;
+  }
+  .sidebar-nav-row:hover .sidebar-edit-button,
+  .sidebar-edit-button:focus-visible {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
 .sidebar-sort-handle {
   flex-basis: 18px;
   cursor: grab;

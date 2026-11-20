@@ -77,7 +77,13 @@ test('Project 新增、改名、指派和日期檢視', async ({ page }) => {
       .getByRole('textbox', { name: '編輯任務標題：整理家裡文件' }),
   ).toBeVisible()
 
-  await nav.getByRole('button', { name: '編輯 Project：網站改版' }).click()
+  const editWebsite = nav.getByRole('button', {
+    name: '編輯 Project：網站改版',
+  })
+  await expect(editWebsite).toHaveCSS('opacity', '0')
+  await nav.getByRole('button', { name: '網站改版', exact: true }).hover()
+  await expect(editWebsite).toHaveCSS('opacity', '1')
+  await editWebsite.click()
   const rename = page.getByRole('dialog', { name: '編輯 Project' })
   await rename.getByRole('textbox').fill('網站維護')
   await rename.getByRole('radio', { name: '自訂' }).check()
@@ -132,6 +138,7 @@ test('從側欄刪除 Project 會保留任務並移除 Board 的關聯', async (
     exact: true,
   })
   await project.click()
+  await project.hover()
   await expect(
     page.getByRole('main').getByRole('button', { name: /編輯 Project/ }),
   ).toHaveCount(0)
