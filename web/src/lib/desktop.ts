@@ -61,6 +61,13 @@ export async function openFamo() {
   window.location.assign('/')
 }
 
+export async function hideMenuBar() {
+  if (window.location.protocol === 'wails:') {
+    const { Window } = await import('@wailsio/runtime')
+    await Window.Hide()
+  }
+}
+
 export async function exportThemeFile(contents: string, filename: string) {
   if (window.location.protocol === 'wails:') {
     const { Call } = await import('@wailsio/runtime')

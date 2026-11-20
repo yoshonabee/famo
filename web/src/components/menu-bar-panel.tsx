@@ -1,17 +1,12 @@
 import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import {
-  ArrowUpRight,
-  ChevronDown,
-  Circle,
-  LayoutGrid,
-  RefreshCw,
-} from 'lucide-react'
+import { ArrowUpRight, Circle, RefreshCw } from 'lucide-react'
+import { MenuBarBoardPicker } from '@/components/menu-bar-board-picker'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { ApiError, request, type Board, type Task } from '@/lib/api'
 import { localDate } from '@/lib/calendar'
-import { openFamo } from '@/lib/desktop'
+import { hideMenuBar, openFamo } from '@/lib/desktop'
 import { useTheme } from '@/lib/theme'
 
 const boardStorageKey = 'famo.menu-bar.board'
@@ -84,11 +79,18 @@ export function MenuBarPanel() {
   })
   useEffect(() => {
     const update = () => setDate(localDate())
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        void hideMenuBar().catch(() => setOpenError('無法關閉面板，請重試。'))
+      }
+    }
     const timer = window.setInterval(update, 1_000)
     window.addEventListener('focus', update)
+    document.addEventListener('keydown', onKeyDown)
     return () => {
       window.clearInterval(timer)
       window.removeEventListener('focus', update)
+      document.removeEventListener('keydown', onKeyDown)
     }
   }, [])
   const currentBoard = boards.data?.find((board) => board.id === boardId)
@@ -113,35 +115,18 @@ export function MenuBarPanel() {
   return (
     <div className="menu-bar-panel">
       <header className="menu-bar-heading">
-        <label className="menu-bar-board-picker" title={currentBoard?.name}>
-          <LayoutGrid
-            className="menu-bar-board-icon"
-            size={16}
-            aria-hidden="true"
-          />
-          <span aria-hidden="true">{currentBoard?.name ?? '今日'}</span>
-          <ChevronDown size={13} aria-hidden="true" />
-          <select
-            aria-label="選擇 Board"
-            value={currentBoard?.id ?? ''}
-            onChange={(event) => {
-              const id = event.currentTarget.value
-              setBoardId(id)
-              try {
-                localStorage.setItem(boardStorageKey, id)
-              } catch {
-                // Keep the selection in the current panel if storage is unavailable.
-              }
-            }}
-          >
-            <option value="">今日</option>
-            {boards.data?.map((board) => (
-              <option key={board.id} value={board.id}>
-                {board.name}
-              </option>
-            ))}
-          </select>
-        </label>
+        <MenuBarBoardPicker
+          boards={boards.data ?? []}
+          board={currentBoard}
+          onChange={(id) => {
+            setBoardId(id)
+            try {
+              localStorage.setItem(boardStorageKey, id)
+            } catch {
+              // Keep the selection in the current panel if storage is unavailable.
+            }
+          }}
+        />
         <div className="menu-bar-heading-actions">
           <time dateTime={date}>{date.replaceAll('-', '/')}</time>
           <Button

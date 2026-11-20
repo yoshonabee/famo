@@ -105,7 +105,6 @@ test('panel switches today’s tasks and progress by Board and remembers the sel
     data: { name: '選單列空白 Board', project_ids: [] },
   })
   await expect(empty).toBeOK()
-  const { id: emptyId } = await empty.json()
 
   for (const input of [
     { title: '整理工作', project_id: projectId, scheduled_date: date },
@@ -116,33 +115,55 @@ test('panel switches today’s tasks and progress by Board and remembers the sel
   }
 
   await page.goto('/menu-bar.html')
-  const picker = page.getByRole('combobox', { name: '選擇 Board' })
+  const picker = page.getByRole('button', { name: /^選擇 Board/ })
+  const menu = page.getByRole('menu', { name: 'Board' })
+  const choice = (name: string) =>
+    menu.getByRole('menuitemradio', { name, exact: true })
   const list = page.getByRole('list', { name: '今日任務列表' })
-  await expect(picker).toHaveValue('')
+  await expect(picker).toHaveText('今日')
+  await expect(picker).toHaveCSS('font-size', '14px')
   await expect(list.getByRole('listitem')).toHaveCount(2)
   await expect(page.locator('footer')).toHaveText(/^famo \d+\.\d+\.\d+$/)
 
-  await picker.selectOption(workId)
-  await expect(page.locator('.menu-bar-board-picker span')).toHaveText('工作')
+  await picker.press('ArrowDown')
+  await expect(choice('今日')).toBeFocused()
+  await expect(choice('今日')).toHaveAttribute('aria-checked', 'true')
+  await page.keyboard.press('ArrowDown')
+  await expect(choice('今日')).not.toBeFocused()
+  await page.keyboard.press('Escape')
+  await expect(menu).toBeHidden()
+  await expect(picker).toBeFocused()
+  await expect(picker).toHaveCSS('outline-style', 'none')
+
+  await picker.click()
+  await choice('工作').click()
+  await expect(picker).toHaveText('工作')
   await expect(list.getByRole('listitem')).toHaveCount(1)
   await expect(list).toHaveText('整理工作')
   await list.getByRole('checkbox').click()
   await expect(page.getByRole('status')).toContainText('已完成 1 / 1 件')
   await page.screenshot({ path: '/private/tmp/famo-menu-bar-board.png' })
+  await picker.click()
+  await expect(choice('工作')).toHaveAttribute('aria-checked', 'true')
+  await page.screenshot({ path: '/private/tmp/famo-menu-bar-board-open.png' })
+  await page.locator('time').click()
+  await expect(menu).toBeHidden()
 
   await page.reload()
-  await expect(picker).toHaveValue(workId)
+  await expect(picker).toHaveText('工作')
   await expect(list).toHaveText('整理工作')
-  await picker.selectOption(emptyId)
+  await picker.click()
+  await choice('選單列空白 Board').press('Enter')
   await expect(page.getByText('這個 Board 今天沒有任務。')).toBeVisible()
   await expect(page.getByRole('progressbar')).toHaveAttribute('value', '0')
-  await picker.selectOption(workId)
+  await picker.click()
+  await choice('工作').click()
 
   const deleted = await request.post(`/api/boards/${workId}/delete`, {
     data: { version: workVersion },
   })
   await expect(deleted).toBeOK()
-  await expect(picker).toHaveValue('')
+  await expect(picker).toHaveText('今日')
   await expect(page.getByRole('status')).toHaveText('已完成 1 / 2 件')
 })
 

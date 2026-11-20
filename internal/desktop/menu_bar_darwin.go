@@ -35,7 +35,8 @@ func setupMenuBar(app *application.App, backend *Backend) {
 	panel := app.Window.NewWithOptions(application.WebviewWindowOptions{
 		Name: "menu-bar", Title: "Famo 今日任務", URL: "/menu-bar.html",
 		Width: 360, Height: 480, Frameless: true, AlwaysOnTop: true,
-		Hidden: true, DisableResize: true, HideOnFocusLost: true, HideOnEscape: true,
+		// Escape is handled in the WebView so it can dismiss an open Board menu first.
+		Hidden: true, DisableResize: true, HideOnFocusLost: true,
 		BackgroundColour: application.NewRGB(248, 249, 246),
 		Mac: application.MacWindow{
 			// Stay in the current Space, including another app's fullscreen Space,

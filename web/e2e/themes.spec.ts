@@ -84,8 +84,8 @@ test('設定提供 12 款主題，切換立即生效並在重開後保留', asyn
   expect((await request.get('/api/settings')).status()).toBe(404)
   expect(await (await request.get('/api/tasks')).json()).toEqual(tasks)
   await page.goto('/menu-bar.html')
-  await expect(page.locator('.menu-bar-board-icon')).toHaveCSS(
-    'color',
+  await expect(page.locator('.menu-bar-board-trigger .brand-mark')).toHaveCSS(
+    'background-color',
     iconColor,
   )
 })
