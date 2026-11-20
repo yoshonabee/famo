@@ -96,6 +96,9 @@ func Run(cfg Config) error {
 		Name: "famo", Title: "Famo", URL: "/",
 		Width: 1100, Height: 780, MinWidth: 620, MinHeight: 480,
 		BackgroundColour: application.NewRGB(248, 247, 244),
+		Mac:              application.MacWindow{TitleBar: application.MacTitleBarHidden},
+		// Wails injects CSS as a JavaScript string literal on macOS.
+		CSS: ":root { --window-titlebar-height: 30px; --window-controls-width: 78px; }",
 	})
 	mainWindow.RegisterHook(events.Common.WindowClosing, func(event *application.WindowEvent) {
 		event.Cancel()

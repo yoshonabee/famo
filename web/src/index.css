@@ -166,6 +166,8 @@
 }
 :root {
   color-scheme: light;
+  --window-titlebar-height: 0px;
+  scroll-padding-top: var(--window-titlebar-height);
   --canvas: #f8f9f6;
   --background: #fdfdfb;
   --sidebar: #f1f3ec;
@@ -233,7 +235,25 @@ select {
   min-height: 100dvh;
 }
 .app-shell.sidebar-collapsed {
-  --sidebar-width: 56px;
+  --sidebar-width: var(--window-controls-width, 56px);
+}
+/* The native main window sets the height for its transparent title bar. */
+.window-titlebar {
+  position: fixed;
+  inset: 0 0 auto;
+  z-index: 1;
+  height: var(--window-titlebar-height);
+  background: var(--canvas);
+  --wails-draggable: drag;
+}
+.window-titlebar::before {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: var(--sidebar-width);
+  border-right: 1px solid var(--border);
+  background: var(--sidebar);
+  pointer-events: none;
 }
 
 .task-list {
@@ -1049,6 +1069,7 @@ button:disabled {
 .sidebar {
   width: var(--sidebar-width);
   padding: 20px 12px;
+  padding-top: calc(20px + var(--window-titlebar-height));
   flex-shrink: 0;
   border-right: 1px solid var(--border);
   background: var(--sidebar);
@@ -1139,6 +1160,7 @@ button:disabled {
 main {
   width: calc(100% - var(--sidebar-width));
   margin-left: var(--sidebar-width);
+  padding-top: var(--window-titlebar-height);
 }
 .main-content {
   padding: 22px 24px;
@@ -1371,10 +1393,17 @@ input.todo-title {
   padding-block: 0;
 }
 @media (max-width: 700px) {
+  .window-titlebar {
+    background: var(--sidebar);
+  }
+  .window-titlebar::before {
+    content: none;
+  }
   .sidebar {
     position: static;
     width: 100%;
     padding: 12px;
+    padding-top: calc(12px + var(--window-titlebar-height));
     border-right: 0;
     border-bottom: 1px solid var(--border);
     gap: 10px;
@@ -1417,6 +1446,7 @@ input.todo-title {
   main {
     width: 100%;
     margin: 0;
+    padding-top: 0;
   }
   .main-content {
     padding: 14px 12px;
