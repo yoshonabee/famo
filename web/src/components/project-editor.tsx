@@ -10,6 +10,7 @@ import {
 } from '@/components/ui/dialog'
 import { ApiError, request, type Project } from '@/lib/api'
 import { agentTool, isDesktop } from '@/lib/desktop'
+import { useLanguage } from '@/lib/i18n'
 
 type ProjectInput = Pick<Project, 'name'> &
   Partial<Pick<Project, 'color' | 'workspace_dir' | 'workspace_prompt'>>
@@ -23,6 +24,7 @@ export function ProjectEditor({
   onSaved: (project: Project) => void
   onDeleted: (id: string) => void
 }) {
+  const { t, errorText } = useLanguage()
   const client = useQueryClient()
   const [name, setName] = useState(project?.name ?? '')
   const colorGroup = useId()
@@ -106,14 +108,14 @@ export function ProjectEditor({
       }}
     >
       <DialogTitle className="dialog-title">
-        {project ? '編輯 Project' : '新增 Project'}
+        {project ? t('editProject') : t('addProject')}
       </DialogTitle>
       <DialogDescription className="sr-only">
-        編輯 Project 名稱、顏色和 Agent 工作區。
+        {t('projectEditorDescription')}
       </DialogDescription>
       <form className="project-form" onSubmit={submit}>
         <label className="field">
-          <span>Project 名稱</span>
+          <span>{t('projectName')}</span>
           <input
             value={name}
             onChange={(event) => setName(event.target.value)}
@@ -122,7 +124,7 @@ export function ProjectEditor({
           />
         </label>
         <fieldset className="project-color-options" disabled={busy}>
-          <legend>Project 顏色</legend>
+          <legend>{t('projectColor')}</legend>
           <div className="project-color-choices">
             {!project && (
               <label className="project-color-option">
@@ -132,15 +134,19 @@ export function ProjectEditor({
                   checked={choice === 'random'}
                   onChange={() => setChoice('random')}
                 />
-                隨機
+                {t('randomColor')}
               </label>
             )}
             {projectColors.map(({ value, label }) => (
-              <label className="project-color-option" key={value} title={label}>
+              <label
+                className="project-color-option"
+                key={value}
+                title={t(label)}
+              >
                 <input
                   type="radio"
                   name={colorGroup}
-                  aria-label={label}
+                  aria-label={t(label)}
                   checked={choice === value}
                   onChange={() => setChoice(value)}
                 />
@@ -154,14 +160,14 @@ export function ProjectEditor({
                 checked={choice === 'custom'}
                 onChange={() => setChoice('custom')}
               />
-              自訂
+              {t('customColor')}
             </label>
           </div>
           {choice === 'custom' && (
             <div className="project-custom-color">
               <input
                 type="color"
-                aria-label="Project 調色盤"
+                aria-label={t('projectColorPicker')}
                 value={validColor ? customColor : '#64748B'}
                 onChange={(event) =>
                   setCustomColor(event.target.value.toUpperCase())
@@ -169,7 +175,7 @@ export function ProjectEditor({
               />
               <input
                 type="text"
-                aria-label="Project 色碼"
+                aria-label={t('projectHexColor')}
                 placeholder="#RRGGBB"
                 pattern="#[0-9a-fA-F]{6}"
                 maxLength={7}
@@ -182,11 +188,11 @@ export function ProjectEditor({
           )}
         </fieldset>
         <details className="project-workspace">
-          <summary>Agent 工作區</summary>
+          <summary>{t('agentWorkspace')}</summary>
           <div className="project-workspace-fields">
             <div className="project-workspace-path">
               <label className="field">
-                <span>工作區路徑</span>
+                <span>{t('workspacePath')}</span>
                 <input
                   value={workspaceDir ?? project?.workspace_dir ?? ''}
                   placeholder="/path/to/project"
@@ -201,12 +207,12 @@ export function ProjectEditor({
                   disabled={busy}
                   onClick={() => picker.mutate()}
                 >
-                  選擇資料夾
+                  {t('chooseFolder')}
                 </Button>
               )}
             </div>
             <label className="field">
-              <span>工作區指引（選填）</span>
+              <span>{t('workspaceInstructions')}</span>
               <textarea
                 rows={2}
                 maxLength={2000}
@@ -216,20 +222,20 @@ export function ProjectEditor({
               />
             </label>
             <p className="project-workspace-description">
-              Agent 處理此 Project 的任務時，會取得這裡的路徑和指引。
+              {t('projectWorkspaceDescription')}
             </p>
           </div>
         </details>
         {picker.isError && (
           <p className="inline-edit-error" role="alert">
-            {picker.error.message}
+            {errorText(picker.error)}
           </p>
         )}
         {save.isError && (
           <p className="inline-edit-error" role="alert">
             {conflict
-              ? `Project 已更新，目前名稱為「${project?.name}」。請確認後再儲存。`
-              : save.error.message}
+              ? t('projectConflict', project?.name ?? '')
+              : errorText(save.error)}
           </p>
         )}
         <div className="collection-editor-actions">
@@ -242,7 +248,7 @@ export function ProjectEditor({
             />
           )}
           <Button disabled={busy || !name.trim() || !validColor}>
-            {save.isPending ? '儲存中…' : '儲存'}
+            {save.isPending ? t('saving') : t('save')}
           </Button>
         </div>
       </form>

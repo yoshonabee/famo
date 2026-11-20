@@ -1,7 +1,8 @@
 import { useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { adjacentDate, localDate } from '@/lib/calendar'
+import { adjacentDate, formatTaskDate, localDate } from '@/lib/calendar'
+import { useLanguage } from '@/lib/i18n'
 
 type Alignment = 'start' | 'end'
 type View = 'days' | 'months' | 'years'
@@ -22,6 +23,7 @@ function Calendar({
   onSelect: (date: string) => void
   onClear?: () => void
 }) {
+  const { t, locale } = useLanguage()
   const today = localDate()
   const [focused, setFocused] = useState(date || today)
   const [month, setMonth] = useState(focused.slice(0, 7))
@@ -84,15 +86,22 @@ function Calendar({
     }
   }
 
+  const shortMonth = new Intl.DateTimeFormat(locale, { month: 'short' })
+  const weekday = new Intl.DateTimeFormat(locale, {
+    weekday: locale === 'en' ? 'short' : 'narrow',
+  })
   const heading = {
-    days: `${year} 年 ${first.getMonth() + 1} 月`,
-    months: `${year} 年`,
-    years: `${firstYear}–${lastYear} 年`,
+    days:
+      locale === 'zh-TW'
+        ? t('calendarMonthHeading', year, first.getMonth() + 1)
+        : first.toLocaleDateString(locale, { month: 'long', year: 'numeric' }),
+    months: t('calendarYear', year),
+    years: t('yearRange', firstYear, lastYear),
   }[view]
   const [previousLabel, nextLabel] = {
-    days: ['上一個月', '下一個月'],
-    months: ['上一年', '下一年'],
-    years: ['上一組年份', '下一組年份'],
+    days: [t('previousMonth'), t('nextMonth')],
+    months: [t('previousYear'), t('nextYear')],
+    years: [t('previousYears'), t('nextYears')],
   }[view]
 
   return (
@@ -101,7 +110,7 @@ function Calendar({
       ref={calendar}
       id={id}
       role="dialog"
-      aria-label="選擇日期"
+      aria-label={t('chooseDate')}
     >
       <div className="calendar-month">
         <Button
@@ -159,11 +168,13 @@ function Calendar({
       {view === 'days' && (
         <>
           <div className="calendar-weekdays" aria-hidden="true">
-            {['日', '一', '二', '三', '四', '五', '六'].map((day) => (
-              <span key={day}>{day}</span>
+            {Array.from({ length: 7 }, (_, index) => (
+              <span key={index}>
+                {weekday.format(new Date(1970, 0, 4 + index))}
+              </span>
             ))}
           </div>
-          <div className="calendar-days" role="group" aria-label="日期">
+          <div className="calendar-days" role="group" aria-label={t('days')}>
             {Array.from({ length: first.getDay() }, (_, index) => (
               <span key={`blank-${index}`} />
             ))}
@@ -174,7 +185,7 @@ function Calendar({
                   type="button"
                   key={value}
                   data-date={value}
-                  aria-label={value}
+                  aria-label={formatTaskDate(value, locale)}
                   aria-pressed={value === date}
                   aria-current={value === today ? 'date' : undefined}
                   tabIndex={
@@ -212,7 +223,7 @@ function Calendar({
         </>
       )}
       {view === 'months' && (
-        <div className="calendar-periods" role="group" aria-label="月份">
+        <div className="calendar-periods" role="group" aria-label={t('months')}>
           {Array.from({ length: 12 }, (_, index) => {
             const value = `${month.slice(0, 4)}-${String(index + 1).padStart(2, '0')}`
             return (
@@ -227,14 +238,16 @@ function Calendar({
                   setView('days')
                 }}
               >
-                {index + 1} 月
+                {locale === 'zh-TW'
+                  ? t('calendarMonth', index + 1)
+                  : shortMonth.format(new Date(year, index, 1))}
               </button>
             )
           })}
         </div>
       )}
       {view === 'years' && (
-        <div className="calendar-periods" role="group" aria-label="年份">
+        <div className="calendar-periods" role="group" aria-label={t('years')}>
           {Array.from({ length: lastYear - firstYear + 1 }, (_, index) => {
             const value = firstYear + index
             return (
@@ -250,7 +263,7 @@ function Calendar({
                   setView('months')
                 }}
               >
-                {value} 年
+                {t('calendarYear', value)}
               </button>
             )
           })}
@@ -259,7 +272,7 @@ function Calendar({
       {onClear && (
         <div className="calendar-actions">
           <Button variant="ghost" size="sm" onClick={onClear}>
-            清除日期
+            {t('clearDate')}
           </Button>
         </div>
       )}
@@ -292,6 +305,7 @@ export function DatePicker({
   showToday?: boolean
   children: ReactNode
 }) {
+  const { t } = useLanguage()
   const [open, setOpen] = useState(false)
   const root = useRef<HTMLDivElement>(null)
   const trigger = useRef<HTMLButtonElement>(null)
@@ -342,7 +356,7 @@ export function DatePicker({
               onChange(localDate())
             }}
           >
-            今日
+            {t('today')}
           </button>
         )}
         <button

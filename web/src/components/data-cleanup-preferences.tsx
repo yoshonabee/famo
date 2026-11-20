@@ -9,8 +9,10 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { request } from '@/lib/api'
+import { useLanguage } from '@/lib/i18n'
 
 export function DataCleanupPreferences() {
+  const { t, errorText } = useLanguage()
   const [open, setOpen] = useState(false)
   const cleanup = useMutation({
     mutationFn: () =>
@@ -22,9 +24,9 @@ export function DataCleanupPreferences() {
 
   return (
     <div className="preferences-card">
-      <h3>清理已刪除的任務</h3>
+      <h3>{t('purgeDeletedTasks')}</h3>
       <p id="data-cleanup-description" className="preferences-description">
-        將刪除滿 7 天的任務及其排序資料從本機 SQLite 永久移除。
+        {t('purgeDescription')}
       </p>
       <Dialog
         open={open}
@@ -42,18 +44,17 @@ export function DataCleanupPreferences() {
             className="justify-self-start"
             aria-describedby="data-cleanup-description"
           >
-            清理資料
+            {t('purgeData')}
           </Button>
         </DialogTrigger>
         <DialogContent className="max-w-md" showCloseButton={false}>
-          <DialogTitle className="dialog-title">清理資料</DialogTitle>
+          <DialogTitle className="dialog-title">{t('purgeData')}</DialogTitle>
           <DialogDescription className="preferences-description">
-            確認後會永久移除已刪除滿 7 天的任務及其排序資料，之後無法在 Famo
-            還原這些任務。
+            {t('confirmPurgeDescription')}
           </DialogDescription>
           {cleanup.isError && (
             <p className="inline-edit-error mt-3" role="alert">
-              {cleanup.error.message}
+              {errorText(cleanup.error)}
             </p>
           )}
           <div className="mt-5 flex flex-wrap justify-end gap-2">
@@ -63,7 +64,7 @@ export function DataCleanupPreferences() {
               disabled={cleanup.isPending}
               onClick={() => setOpen(false)}
             >
-              取消
+              {t('cancel')}
             </Button>
             <Button
               type="button"
@@ -71,7 +72,7 @@ export function DataCleanupPreferences() {
               disabled={cleanup.isPending}
               onClick={() => cleanup.mutate()}
             >
-              {cleanup.isPending ? '清理中…' : '永久清理'}
+              {cleanup.isPending ? t('purging') : t('purgePermanently')}
             </Button>
           </div>
         </DialogContent>
@@ -79,8 +80,8 @@ export function DataCleanupPreferences() {
       {cleanup.data && (
         <p role="status" className="text-sm text-muted-foreground">
           {cleanup.data.deleted_count === 0
-            ? '沒有到期的已刪除任務。'
-            : `已永久清理 ${cleanup.data.deleted_count} 筆已刪除任務。`}
+            ? t('nothingToPurge')
+            : t('purgedTasks', cleanup.data.deleted_count)}
         </p>
       )}
     </div>

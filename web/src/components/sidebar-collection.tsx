@@ -3,6 +3,7 @@ import { SidebarEditButton } from '@/components/primary-navigation'
 import { ProjectColorDot } from '@/components/project-appearance'
 import { Button } from '@/components/ui/button'
 import type { Project } from '@/lib/api'
+import { useLanguage } from '@/lib/i18n'
 
 export function ProjectNavigation({
   projects,
@@ -25,6 +26,7 @@ export function ProjectNavigation({
   onEdit: (id: string) => void
   onRetry: () => void
 }) {
+  const { t } = useLanguage()
   if (collapsed)
     return (
       <button
@@ -35,23 +37,23 @@ export function ProjectNavigation({
             : 'nav-item collection-expand'
         }
         onClick={onExpand}
-        aria-label="展開 Project 導覽"
-        title="展開 Project 導覽"
+        aria-label={t('expandProjectNavigation')}
+        title={t('expandProjectNavigation')}
       >
         <Folder size={17} />
       </button>
     )
 
   return (
-    <section className="sidebar-collection" aria-label="Project 導覽">
+    <section className="sidebar-collection" aria-label={t('projectNavigation')}>
       <div className="sidebar-collection-heading">
         <h2>Projects</h2>
         <Button
           variant="ghost"
           size="icon"
           className="sidebar-collection-add"
-          aria-label="新增 Project"
-          title="新增 Project"
+          aria-label={t('addProject')}
+          title={t('addProject')}
           onClick={onCreate}
         >
           <Plus />
@@ -61,7 +63,7 @@ export function ProjectNavigation({
         <div className="sidebar-collection-error" role="alert">
           {error}
           <Button variant="outline" size="sm" onClick={onRetry}>
-            重新讀取 Projects
+            {t('reloadProjects')}
           </Button>
         </div>
       )}

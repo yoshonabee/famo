@@ -1,4 +1,5 @@
 import { notifyTasksChanged } from '@/lib/desktop'
+import type { Locale } from '@/lib/i18n'
 
 export type Link = { url: string }
 export type Project = {
@@ -98,9 +99,9 @@ export function compareCompletionTime(a: Task, b: Task) {
   )
 }
 
-export const dateTime = (v: string | null) =>
+export const dateTime = (v: string | null, locale: Locale) =>
   v
-    ? new Date(v).toLocaleString('zh-TW', {
+    ? new Date(v).toLocaleString(locale, {
         month: 'numeric',
         day: 'numeric',
         hour: '2-digit',

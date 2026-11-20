@@ -2,6 +2,7 @@ import { DragDropProvider } from '@dnd-kit/react'
 import { isSortable, useSortable } from '@dnd-kit/react/sortable'
 import { GripVertical, Pencil, Plus, type LucideIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { useLanguage } from '@/lib/i18n'
 
 export type PrimaryNavItem = {
   id: string
@@ -30,8 +31,9 @@ export function PrimaryNavigation({
   onCreate: () => void
   onRetry: () => void
 }) {
+  const { t } = useLanguage()
   return (
-    <nav className="sidebar-main-nav" aria-label="主要導覽">
+    <nav className="sidebar-main-nav" aria-label={t('mainNavigation')}>
       <DragDropProvider
         onDragEnd={(event) => {
           if (event.canceled || !isSortable(event.operation.source)) return
@@ -59,18 +61,18 @@ export function PrimaryNavigation({
       <button
         type="button"
         className="nav-item sidebar-add-board"
-        aria-label="新增 Board"
-        title="新增 Board"
+        aria-label={t('addBoard')}
+        title={t('addBoard')}
         onClick={onCreate}
       >
         <Plus size={16} aria-hidden="true" />
-        <span className="nav-label">新增 Board</span>
+        <span className="nav-label">{t('addBoard')}</span>
       </button>
       {error && !collapsed && (
         <div className="sidebar-collection-error" role="alert">
           {error}
           <Button variant="outline" size="sm" onClick={onRetry}>
-            重新讀取 Boards
+            {t('reloadBoards')}
           </Button>
         </div>
       )}
@@ -87,6 +89,7 @@ function NavigationRow({
   index: number
   collapsed: boolean
 }) {
+  const { t } = useLanguage()
   const { ref, handleRef, isDragging } = useSortable({
     id: item.id,
     index,
@@ -103,8 +106,8 @@ function NavigationRow({
           ref={handleRef}
           type="button"
           className="sidebar-row-action sidebar-sort-handle"
-          aria-label={`調整順序：${item.label}`}
-          title="拖曳調整順序"
+          aria-label={t('reorderNavigation', item.label)}
+          title={t('dragToReorder')}
         >
           <GripVertical size={13} aria-hidden="true" />
         </button>
@@ -144,12 +147,13 @@ export function SidebarEditButton({
   kind: 'Board' | 'Project'
   onEdit: () => void
 }) {
+  const { t } = useLanguage()
   return (
     <button
       type="button"
       className="sidebar-row-action sidebar-edit-button"
-      aria-label={`編輯 ${kind}：${name}`}
-      title={`編輯 ${kind}：${name}`}
+      aria-label={t('editCollection', kind, name)}
+      title={t('editCollection', kind, name)}
       onClick={onEdit}
     >
       <Pencil size={14} aria-hidden="true" />

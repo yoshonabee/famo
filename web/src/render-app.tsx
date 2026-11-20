@@ -1,11 +1,12 @@
 import React, { type ReactNode } from 'react'
 import ReactDOM from 'react-dom/client'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { LanguageProvider } from './lib/i18n'
 import { initializeDesktop } from './lib/desktop'
 import { initializeTheme } from './lib/theme'
 import './index.css'
 
-export function renderApp(content: ReactNode) {
+export function renderApp(content: ReactNode, { panel = false } = {}) {
   initializeTheme()
   const client = new QueryClient({
     defaultOptions: { queries: { staleTime: 10_000, retry: 1 } },
@@ -17,7 +18,9 @@ export function renderApp(content: ReactNode) {
   })
   ReactDOM.createRoot(document.getElementById('root')!).render(
     <React.StrictMode>
-      <QueryClientProvider client={client}>{content}</QueryClientProvider>
+      <LanguageProvider panel={panel}>
+        <QueryClientProvider client={client}>{content}</QueryClientProvider>
+      </LanguageProvider>
     </React.StrictMode>,
   )
 }

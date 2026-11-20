@@ -2,6 +2,7 @@ import * as DialogPrimitive from '@radix-ui/react-dialog'
 import { X } from 'lucide-react'
 import type { ComponentProps } from 'react'
 import { cn } from '@/lib/utils'
+import { useLanguage } from '@/lib/i18n'
 export const Dialog = DialogPrimitive.Root
 export const DialogTitle = DialogPrimitive.Title
 export const DialogDescription = DialogPrimitive.Description
@@ -15,6 +16,7 @@ export function DialogContent({
   showCloseButton?: boolean
   overlayClassName?: string
 }) {
+  const { t } = useLanguage()
   return (
     <DialogPrimitive.Portal>
       <DialogPrimitive.Overlay
@@ -34,7 +36,7 @@ export function DialogContent({
         {showCloseButton && (
           <DialogPrimitive.Close className="absolute right-4 top-4 rounded p-1 text-muted-foreground hover:bg-accent">
             <X className="size-4" />
-            <span className="sr-only">關閉</span>
+            <span className="sr-only">{t('close')}</span>
           </DialogPrimitive.Close>
         )}
       </DialogPrimitive.Content>

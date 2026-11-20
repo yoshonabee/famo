@@ -8,17 +8,21 @@ import {
   isDesktop,
   type AgentToolsState,
 } from '@/lib/desktop'
+import { useLanguage } from '@/lib/i18n'
 
 type Workspace = { dir: string; prompt: string }
 
 function CopyCommand({ command, label }: { command: string; label: string }) {
-  const [message, setMessage] = useState('')
+  const { t } = useLanguage()
+  const [message, setMessage] = useState<'commandCopied' | 'copyFailed' | null>(
+    null,
+  )
   async function copy() {
     try {
       await copyText(command)
-      setMessage('已複製指令')
+      setMessage('commandCopied')
     } catch {
-      setMessage('無法複製，請手動選取指令。')
+      setMessage('copyFailed')
     }
   }
   return (
@@ -30,18 +34,19 @@ function CopyCommand({ command, label }: { command: string; label: string }) {
           type="button"
           variant="outline"
           size="sm"
-          aria-label={`複製 ${label}`}
+          aria-label={t('copyNamed', label)}
           onClick={() => void copy()}
         >
-          複製
+          {t('copy')}
         </Button>
       </div>
-      {message && <p role="status">{message}</p>}
+      {message && <p role="status">{t(message)}</p>}
     </div>
   )
 }
 
 function DesktopAgentTools() {
+  const { t, errorText } = useLanguage()
   const client = useQueryClient()
   const status = useQuery({
     queryKey: ['agent-tools'],
@@ -66,18 +71,18 @@ function DesktopAgentTools() {
     return status.isError ? (
       <div className="agent-inline">
         <p role="alert" className="inline-edit-error">
-          {status.error.message}
+          {errorText(status.error)}
         </p>
         <Button
           variant="outline"
           size="sm"
           onClick={() => void status.refetch()}
         >
-          重試
+          {t('retry')}
         </Button>
       </div>
     ) : (
-      <p role="status">正在讀取 Agent 工具設定…</p>
+      <p role="status">{t('loadingAgentTools')}</p>
     )
   }
   return (
@@ -96,7 +101,7 @@ function DesktopAgentTools() {
               })
             }
           />
-          開啟本機 Agent API
+          {t('enableAgentApi')}
         </label>
         {state.api_url && <code>{state.api_url}</code>}
       </div>
@@ -108,7 +113,7 @@ function DesktopAgentTools() {
             disabled={mutation.isPending || !!state.cli_error}
             onClick={() => mutation.mutate({ method: 'InstallCLI' })}
           >
-            {state.cli_installed ? '更新 CLI' : '安裝 CLI'}
+            {state.cli_installed ? t('updateCli') : t('installCli')}
           </Button>
         )}
         {state.cli_installed && (
@@ -118,36 +123,40 @@ function DesktopAgentTools() {
             disabled={mutation.isPending}
             onClick={() => mutation.mutate({ method: 'RemoveCLI' })}
           >
-            移除 CLI
+            {t('removeCli')}
           </Button>
         )}
         {state.cli_installed && (
           <span className="agent-cli-path">
-            CLI 已安裝至 <code>{state.cli_path}</code>
+            {t('cliInstalledAt')} <code>{state.cli_path}</code>
           </span>
         )}
       </div>
       {state.cli_error && (
         <p className="inline-edit-error" role="alert">
-          {state.cli_error}
+          {errorText(state.cli_error)}
         </p>
       )}
       {!state.cli_available && !state.cli_installed && (
-        <p role="status">此桌面建置缺少 CLI，請使用包含 CLI 的 Famo.app。</p>
+        <p role="status">{t('cliMissing')}</p>
       )}
       {mutation.isError && (
         <p className="inline-edit-error" role="alert">
-          {mutation.error.message}
+          {errorText(mutation.error)}
         </p>
       )}
       {state.skill_command && (
-        <CopyCommand command={state.skill_command} label="Skill 安裝指令" />
+        <CopyCommand
+          command={state.skill_command}
+          label={t('skillInstallCommand')}
+        />
       )}
     </>
   )
 }
 
 export function AgentPreferences() {
+  const { t, errorText } = useLanguage()
   const client = useQueryClient()
   const desktop = isDesktop()
   const [draft, setDraft] = useState<Workspace | null>(null)
@@ -193,21 +202,21 @@ export function AgentPreferences() {
         className="preferences-card"
         aria-labelledby="agent-tools-heading"
       >
-        <h3 id="agent-tools-heading">Agent 工具</h3>
+        <h3 id="agent-tools-heading">{t('agentTools')}</h3>
         {desktop ? (
           <DesktopAgentTools />
         ) : (
           <>
             <p className="preferences-description">
-              網頁版與 Agent 共用本機服務。桌面版可單獨開關 Agent API。
+              {t('agentWebDescription')}
             </p>
             <CopyCommand
               command="./bin/famo-agent cli install"
-              label="CLI 安裝指令"
+              label={t('cliInstallCommand')}
             />
             <CopyCommand
               command="./bin/famo-agent skill install"
-              label="Skill 安裝指令"
+              label={t('skillInstallCommand')}
             />
           </>
         )}
@@ -216,15 +225,15 @@ export function AgentPreferences() {
         className="preferences-card"
         aria-labelledby="agent-workspace-heading"
       >
-        <h3 id="agent-workspace-heading">預設工作區</h3>
+        <h3 id="agent-workspace-heading">{t('defaultWorkspace')}</h3>
         {value ? (
           <form className="agent-workspace" onSubmit={submit}>
             <div className="agent-inline agent-workspace-path">
               <label className="field">
-                <span>工作區路徑</span>
+                <span>{t('workspacePath')}</span>
                 <input
                   value={value.dir}
-                  placeholder="/Users/你/project"
+                  placeholder={t('workspacePlaceholder')}
                   disabled={busy}
                   onChange={(event) =>
                     setDraft({ ...value, dir: event.target.value })
@@ -238,17 +247,17 @@ export function AgentPreferences() {
                   disabled={busy}
                   onClick={() => picker.mutate()}
                 >
-                  選擇資料夾
+                  {t('chooseFolder')}
                 </Button>
               )}
             </div>
             <label className="field">
-              <span>工作區指引（選填）</span>
+              <span>{t('workspaceInstructions')}</span>
               <textarea
                 rows={3}
                 maxLength={2000}
                 value={value.prompt}
-                placeholder="例如先看 docs/decisions/，修改後端後跑 Go 測試。"
+                placeholder={t('workspacePromptPlaceholder')}
                 disabled={busy}
                 onChange={(event) =>
                   setDraft({ ...value, prompt: event.target.value })
@@ -257,33 +266,33 @@ export function AgentPreferences() {
             </label>
             <div className="agent-inline">
               <Button type="submit" size="sm" disabled={busy || !dirty}>
-                儲存工作區
+                {t('saveWorkspace')}
               </Button>
               {save.isSuccess && !dirty && (
-                <span role="status">工作區已儲存</span>
+                <span role="status">{t('workspaceSaved')}</span>
               )}
             </div>
             {(save.isError || picker.isError) && (
               <p role="alert" className="inline-edit-error">
-                {save.error?.message ?? picker.error?.message}
+                {errorText(save.error ?? picker.error)}
               </p>
             )}
           </form>
         ) : workspace.isError ? (
           <div className="agent-inline">
             <p role="alert" className="inline-edit-error">
-              {workspace.error.message}
+              {errorText(workspace.error)}
             </p>
             <Button
               variant="outline"
               size="sm"
               onClick={() => void workspace.refetch()}
             >
-              重試
+              {t('retry')}
             </Button>
           </div>
         ) : (
-          <p role="status">正在讀取工作區…</p>
+          <p role="status">{t('loadingWorkspace')}</p>
         )}
       </section>
     </div>

@@ -306,6 +306,9 @@ select {
   display: flex;
   min-height: 100dvh;
 }
+.app-shell:lang(en):not(.sidebar-collapsed) {
+  --sidebar-width: 192px;
+}
 .app-shell.sidebar-collapsed {
   --sidebar-width: var(--window-controls-width, 56px);
 }

@@ -12,10 +12,12 @@ import {
   useSidebarPreferences,
 } from '@/lib/sidebar-preferences'
 import { useTheme } from '@/lib/theme'
+import { useLanguage } from '@/lib/i18n'
 
 const boardStorageKey = 'famo.menu-bar.board'
 
 function MenuBarTask({ task }: { task: Task }) {
+  const { t, errorText } = useLanguage()
   const client = useQueryClient()
   const toggle = useMutation({
     mutationFn: (snapshot: Task) =>
@@ -39,7 +41,10 @@ function MenuBarTask({ task }: { task: Task }) {
     <li className={task.completed_at ? 'done' : ''}>
       <Checkbox
         className="menu-bar-task-checkbox"
-        aria-label={`${task.completed_at ? '恢復' : '完成'}任務：${task.title}`}
+        aria-label={t(
+          task.completed_at ? 'reopenNamedTask' : 'completeNamedTask',
+          task.title,
+        )}
         checked={!!task.completed_at}
         disabled={toggle.isPending}
         onCheckedChange={() => toggle.mutate(task)}
@@ -49,8 +54,8 @@ function MenuBarTask({ task }: { task: Task }) {
         {toggle.isError && (
           <p className="menu-bar-task-error" role="alert">
             {toggle.error instanceof ApiError && toggle.error.status === 409
-              ? '任務已變更，已重新讀取，請再試一次。'
-              : `無法更新任務：${toggle.error.message}，請再試一次。`}
+              ? t('menuTaskConflict')
+              : t('menuTaskUpdateFailed', errorText(toggle.error))}
           </p>
         )}
       </div>
@@ -59,9 +64,12 @@ function MenuBarTask({ task }: { task: Task }) {
 }
 
 export function MenuBarPanel() {
+  const { t } = useLanguage()
   useTheme()
   const [date, setDate] = useState(localDate)
-  const [openError, setOpenError] = useState('')
+  const [openError, setOpenError] = useState<
+    'openFamoFailed' | 'closePanelFailed' | null
+  >(null)
   const [boardId, setBoardId] = useState(() => {
     try {
       return localStorage.getItem(boardStorageKey)
@@ -87,7 +95,7 @@ export function MenuBarPanel() {
     const update = () => setDate(localDate())
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
-        void hideMenuBar().catch(() => setOpenError('無法關閉面板，請重試。'))
+        void hideMenuBar().catch(() => setOpenError('closePanelFailed'))
       }
     }
     const timer = window.setInterval(update, 1_000)
@@ -155,71 +163,77 @@ export function MenuBarPanel() {
             size="sm"
             disabled={boards.isPending}
             onClick={() => {
-              setOpenError('')
+              setOpenError(null)
               void openFamo(selectedBoardId).catch(() =>
-                setOpenError('無法開啟 Famo，請重試。'),
+                setOpenError('openFamoFailed'),
               )
             }}
           >
-            Open Famo <ArrowUpRight size={12} />
+            {t('openFamo')} <ArrowUpRight size={12} />
           </Button>
         </div>
       </header>
       {openError && (
         <p className="menu-bar-heading-error" role="alert">
-          {openError}
+          {t(openError)}
         </p>
       )}
       {boards.isLoadingError && (
         <p className="menu-bar-heading-error" role="alert">
-          無法讀取 Board。{' '}
+          {t('loadBoardFailed')}{' '}
           <button type="button" onClick={() => void boards.refetch()}>
-            重試
+            {t('retry')}
           </button>
         </p>
       )}
-      <section className="menu-bar-progress" aria-label="今日完成進度">
+      <section className="menu-bar-progress" aria-label={t('todayProgress')}>
         <div>
-          <h1>今日任務</h1>
+          <h1>{t('todayTasks')}</h1>
           <span>{loading || tasks.isError ? '—' : `${percentage}%`}</span>
         </div>
         <progress
-          aria-label="今日完成比例"
+          aria-label={t('todayCompletionRate')}
           max={Math.max(today.length, 1)}
           value={tasks.isError ? 0 : completed}
         />
         <p role="status">
           {tasks.isError
-            ? '今日進度暫時無法更新'
+            ? t('progressUnavailable')
             : loading
-              ? '正在讀取今日任務…'
+              ? t('loadingToday')
               : today.length
-                ? `已完成 ${completed} / ${today.length} 件${completed === today.length ? '，今天的任務都完成了！' : ''}`
-                : '今天還沒有安排任務'}
+                ? t(
+                    completed === today.length
+                      ? 'panelAllCompleted'
+                      : 'panelProgress',
+                    completed,
+                    today.length,
+                  )
+                : t('nothingScheduledToday')}
         </p>
       </section>
       <div className="menu-bar-tasks">
         {tasks.isError ? (
           <div className="menu-bar-empty" role="alert">
-            <p>無法讀取任務，請重試。</p>
+            <p>{t('loadTasksFailed')}</p>
             <Button variant="outline" onClick={() => void tasks.refetch()}>
-              <RefreshCw size={14} /> 重試
+              <RefreshCw size={14} /> {t('retry')}
             </Button>
           </div>
         ) : !loading && today.length === 0 ? (
           <div className="menu-bar-empty">
             <Circle size={28} aria-hidden="true" />
             {currentBoard ? (
-              <p>這個 Board 今天沒有任務。</p>
+              <p>{t('boardEmptyToday')}</p>
             ) : (
               <>
-                <p>留一點時間，完成重要的小事。</p>
-                <span>開啟 Famo，安排今天的第一件任務。</span>
+                <p>{t('menuEmptyEncouragement')}</p>
+                <span>{t('menuEmptyNextStep')}</span>
               </>
             )}
           </div>
         ) : (
-          <ul aria-label="今日任務列表">
+          <ul aria-label={t('todayTaskList')}>
             {ordered.map((task) => (
               <MenuBarTask key={task.id} task={task} />
             ))}

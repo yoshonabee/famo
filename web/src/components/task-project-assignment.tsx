@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import type { Project } from '@/lib/api'
+import { useLanguage } from '@/lib/i18n'
 
 const unassigned = 'unassigned'
 
@@ -20,6 +21,7 @@ export function TaskProjectAssignment({
   onSelectAll: (checked: boolean) => void
   onAssign: (projectId: string) => void
 }) {
+  const { t } = useLanguage()
   const [targetId, setTargetId] = useState('')
   const targetAvailable =
     targetId === unassigned ||
@@ -29,7 +31,7 @@ export function TaskProjectAssignment({
     <div id="task-project-assignment" className="task-project-assignment">
       <label>
         <Checkbox
-          aria-label="全選可見任務"
+          aria-label={t('selectAllVisible')}
           checked={
             selectedCount === 0
               ? false
@@ -40,18 +42,18 @@ export function TaskProjectAssignment({
           disabled={busy || taskCount === 0}
           onCheckedChange={(checked) => onSelectAll(checked === true)}
         />
-        全選
+        {t('selectAll')}
       </label>
       <select
-        aria-label="指派目標 Project"
+        aria-label={t('assignmentProject')}
         value={targetAvailable ? targetId : ''}
         disabled={busy}
         onChange={(event) => setTargetId(event.target.value)}
       >
         <option value="" disabled>
-          選擇 Project
+          {t('chooseProject')}
         </option>
-        <option value={unassigned}>未分類</option>
+        <option value={unassigned}>{t('unassigned')}</option>
         {projects.map((project) => (
           <option key={project.id} value={project.id}>
             {project.name}
@@ -63,7 +65,7 @@ export function TaskProjectAssignment({
         disabled={busy || !targetAvailable || selectedCount === 0}
         onClick={() => onAssign(targetId === unassigned ? '' : targetId)}
       >
-        指派（{selectedCount}）
+        {t('assignTasks', selectedCount)}
       </Button>
     </div>
   )

@@ -1,0 +1,119 @@
+import { expect, test, type Page } from '@playwright/test'
+
+async function showLanguageSettings(page: Page) {
+  await page.getByRole('button', { name: /^(設定|Settings)$/ }).click()
+  await page.getByRole('button', { name: /^(語言|Language)$/ }).click()
+  return page.getByRole('combobox', { name: /^(顯示語言|Display language)$/ })
+}
+
+test.use({ timezoneId: 'Asia/Taipei' })
+
+test('switches language immediately across the main and menu bar windows and saves the choice', async ({
+  page,
+  context,
+  request,
+}) => {
+  const panel = await context.newPage()
+  await panel.setViewportSize({ width: 360, height: 480 })
+  const time = new Date('2047-06-12T03:00:00Z')
+  await page.clock.setFixedTime(time)
+  await panel.clock.setFixedTime(time)
+  await panel.addInitScript(() =>
+    localStorage.setItem('famo.menu-bar.board', ''),
+  )
+  const taskName = '保留原文的任務'
+  const created = await request.post('/api/tasks', {
+    data: { title: taskName, scheduled_date: '2047-06-12' },
+  })
+  expect(created.ok()).toBe(true)
+
+  await page.goto('/')
+  await panel.goto('/menu-bar.html')
+  await expect(page.locator('html')).toHaveAttribute('lang', 'zh-TW')
+  await expect(panel.getByRole('heading', { name: '今日任務' })).toBeVisible()
+
+  const language = await showLanguageSettings(page)
+  await expect(language).toHaveValue('zh-TW')
+  await language.selectOption('en')
+  await expect(page.locator('html')).toHaveAttribute('lang', 'en')
+  await expect(page).toHaveTitle('Famo · Personal task workspace')
+  await expect(language).toHaveValue('en')
+  await expect(panel).toHaveTitle("Famo · Today's tasks")
+  await expect(panel.locator('html')).toHaveAttribute('lang', 'en')
+  await expect(
+    panel.getByRole('heading', { name: "Today's tasks" }),
+  ).toBeVisible()
+  await expect(
+    panel.getByRole('checkbox', { name: `Complete task: ${taskName}` }),
+  ).toBeVisible()
+
+  await page.reload()
+  await expect(page.locator('h1 time')).toHaveText('June 12, 2047')
+  await page.getByRole('button', { name: 'Open calendar' }).click()
+  const calendar = page.getByRole('dialog', { name: 'Choose a date' })
+  await expect(
+    calendar.getByRole('button', { name: 'June 2047' }),
+  ).toBeVisible()
+  await calendar.getByRole('button', { name: 'June 2047' }).click()
+  await expect(
+    calendar
+      .getByRole('group', { name: 'Months' })
+      .getByRole('button', { name: 'Jun', exact: true }),
+  ).toBeVisible()
+  await page.keyboard.press('Escape')
+
+  const savedLanguage = await showLanguageSettings(page)
+  await expect(savedLanguage).toHaveValue('en')
+  await page.getByRole('button', { name: 'Appearance', exact: true }).click()
+  await expect(
+    page.getByRole('radio', { name: 'Moss', exact: true }),
+  ).toBeChecked()
+  await page.screenshot({
+    path: '/private/tmp/famo-language-settings-en.png',
+    fullPage: true,
+  })
+
+  await page.getByRole('button', { name: 'Language', exact: true }).click()
+  await savedLanguage.selectOption('zh-TW')
+  await expect(page.locator('html')).toHaveAttribute('lang', 'zh-TW')
+  await expect(panel.getByRole('heading', { name: '今日任務' })).toBeVisible()
+  await expect(
+    panel.getByRole('checkbox', { name: `完成任務：${taskName}` }),
+  ).toBeVisible()
+})
+
+test('a language change in another tab translates a visible validation error and keeps the form draft', async ({
+  page,
+  context,
+}) => {
+  const settings = await context.newPage()
+  await settings.goto('/')
+  const language = await showLanguageSettings(settings)
+  await language.selectOption('en')
+  await page.goto('/')
+  await page.getByRole('button', { name: 'Add Project', exact: true }).click()
+  const dialog = page.getByRole('dialog', { name: 'Add Project' })
+  await dialog
+    .getByRole('textbox', { name: 'Project name' })
+    .fill('原始 Project 名稱')
+  await dialog.getByText('Agent workspace', { exact: true }).click()
+  await dialog
+    .getByRole('textbox', { name: 'Workspace path' })
+    .fill('relative/path')
+  await dialog.getByRole('button', { name: 'Save', exact: true }).click()
+  await expect(dialog.getByRole('alert')).toHaveText(
+    'Invalid input: Enter an absolute workspace path',
+  )
+
+  await language.selectOption('zh-TW')
+  const translated = page.getByRole('dialog', { name: '新增 Project' })
+  await expect(translated.getByRole('alert')).toHaveText(
+    '無效的輸入：工作區請使用完整路徑',
+  )
+  await expect(
+    translated.getByRole('textbox', { name: 'Project 名稱' }),
+  ).toHaveValue('原始 Project 名稱')
+  await expect(
+    translated.getByRole('textbox', { name: '工作區路徑' }),
+  ).toHaveValue('relative/path')
+})

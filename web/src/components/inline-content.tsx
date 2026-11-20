@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { ApiError, request, type Task } from '@/lib/api'
+import { LocalizedError, useLanguage } from '@/lib/i18n'
 
 export function InlineContent({
   task,
@@ -11,13 +12,14 @@ export function InlineContent({
   field: 'title' | 'description'
   busy: boolean
 }) {
+  const { t, errorText } = useLanguage()
   const client = useQueryClient()
   const [edit, setEdit] = useState<{
     version: number
     original: string
     value: string
   } | null>(null)
-  const [error, setError] = useState('')
+  const [error, setError] = useState<Error | null>(null)
   const submitting = useRef(false)
   const cancelling = useRef(false)
   const composing = useRef(false)
@@ -34,10 +36,10 @@ export function InlineContent({
       )
       void client.invalidateQueries({ queryKey: ['tasks'] })
       setEdit(null)
-      setError('')
+      setError(null)
     },
     onError: (e) => {
-      setError(e.message)
+      setError(e)
       if (e instanceof ApiError && e.status === 409)
         void client.invalidateQueries({ queryKey: ['tasks'] })
     },
@@ -45,12 +47,12 @@ export function InlineContent({
   function cancel() {
     cancelling.current = true
     setEdit(null)
-    setError('')
+    setError(null)
   }
   async function commit() {
     if (!edit || submitting.current || cancelling.current) return
     if (field === 'title' && !edit.value.trim()) {
-      setError('標題不可空白')
+      setError(new LocalizedError((translate) => translate('blankTaskTitle')))
       return
     }
     if (edit.original === edit.value) {
@@ -58,7 +60,7 @@ export function InlineContent({
       return
     }
     if (edit.version !== task.version) {
-      setError('任務已更新，請先確認最新內容。草稿仍保留。')
+      setError(new LocalizedError((translate) => translate('inlineConflict')))
       return
     }
     submitting.current = true
@@ -70,13 +72,13 @@ export function InlineContent({
       submitting.current = false
     }
   }
-  const label = field === 'title' ? '任務標題' : '備註'
+  const label = field === 'title' ? t('taskTitle') : t('notes')
   if (!edit)
     return (
       <button
         type="button"
         className={`inline-content ${field === 'description' && !task[field] ? 'muted' : ''}`}
-        aria-label={`編輯${label}`}
+        aria-label={t('editField', label)}
         disabled={busy}
         onClick={() => {
           cancelling.current = false
@@ -85,10 +87,10 @@ export function InlineContent({
             original: task[field],
             value: task[field],
           })
-          setError('')
+          setError(null)
         }}
       >
-        {task[field] || '新增備註…'}
+        {task[field] || t('addNotes')}
       </button>
     )
   const props = {
@@ -132,13 +134,13 @@ export function InlineContent({
       )}
       {(error || edit.version !== task.version) && (
         <span role="alert" className="inline-edit-error">
-          {error || '任務已更新，草稿仍保留。'}
+          {error ? errorText(error) : t('draftConflict')}
           <button
             type="button"
             onPointerDown={(e) => e.preventDefault()}
             onClick={cancel}
           >
-            取消並讀取最新內容
+            {t('discardDraftAndReload')}
           </button>
         </span>
       )}
@@ -149,7 +151,7 @@ export function InlineContent({
           disabled={save.isPending || edit.version !== task.version}
           onClick={() => void commit()}
         >
-          {save.isPending ? '儲存中…' : '儲存'}
+          {save.isPending ? t('saving') : t('save')}
         </button>
         <button
           type="button"
@@ -157,7 +159,7 @@ export function InlineContent({
           disabled={save.isPending}
           onClick={cancel}
         >
-          取消
+          {t('cancel')}
         </button>
       </span>
     </span>

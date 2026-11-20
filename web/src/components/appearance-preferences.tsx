@@ -16,11 +16,14 @@ import {
   maxThemeFileSize,
   parseThemeFile,
   serializeThemes,
+  themeName,
+  themeDescription,
   themes,
   type Theme,
   type ThemeController,
   type ThemePreference,
 } from '@/lib/theme'
+import { LocalizedError, useLanguage } from '@/lib/i18n'
 
 function ThemeOption({
   theme,
@@ -31,24 +34,27 @@ function ThemeOption({
   preference: ThemePreference
   onChange: (id: string) => void
 }) {
+  const { t } = useLanguage()
   return (
     <label className="theme-option">
       <input
         type="radio"
         name="theme"
         value={theme.id}
-        aria-label={theme.name}
+        aria-label={themeName(theme, t)}
         checked={preference === theme.id}
         onChange={() => onChange(theme.id)}
       />
       <ThemePreview theme={theme} />
       <span className="theme-option-heading">
-        <strong>{theme.name}</strong>
+        <strong>{themeName(theme, t)}</strong>
         <Check className="theme-check" size={16} aria-hidden="true" />
       </span>
       <span className="theme-option-description">
-        {theme.description ||
-          (theme.mode === 'light' ? '自訂淺色主題' : '自訂深色主題')}
+        {themeDescription(theme, t) ||
+          (theme.mode === 'light'
+            ? t('customLightTheme')
+            : t('customDarkTheme'))}
       </span>
     </label>
   )
@@ -59,6 +65,7 @@ export function AppearancePreferences({
 }: {
   appearance: ThemeController
 }) {
+  const { t, errorText } = useLanguage()
   const {
     preference,
     theme,
@@ -71,8 +78,12 @@ export function AppearancePreferences({
     null,
   )
   const [pendingDelete, setPendingDelete] = useState<string | null>(null)
-  const [notice, setNotice] = useState('')
-  const [error, setError] = useState('')
+  const [notice, setNotice] = useState<
+    | { key: 'themesImported' | 'themesExported'; count: number }
+    | 'themeSaved'
+    | null
+  >(null)
+  const [error, setError] = useState<Error | null>(null)
   const [busy, setBusy] = useState(false)
   const fileInput = useRef<HTMLInputElement>(null)
 
@@ -80,25 +91,25 @@ export function AppearancePreferences({
     const file = event.target.files?.[0]
     event.target.value = ''
     if (!file) return
-    setError('')
-    setNotice('')
+    setError(null)
+    setNotice(null)
     setBusy(true)
     try {
       if (file.size > maxThemeFileSize)
-        throw new Error('主題檔案不可超過 1 MB。')
+        throw new LocalizedError((translate) => translate('themeFileTooLarge'))
       const imported = parseThemeFile(await file.text())
       if (appearance.importThemes(imported))
-        setNotice(`已匯入 ${imported.length} 款主題。`)
+        setNotice({ key: 'themesImported', count: imported.length })
     } catch (error) {
-      setError((error as Error).message)
+      setError(error as Error)
     } finally {
       setBusy(false)
     }
   }
 
   async function exportSelection(selection: Theme[]) {
-    setError('')
-    setNotice('')
+    setError(null)
+    setNotice(null)
     setBusy(true)
     try {
       const filename =
@@ -106,9 +117,13 @@ export function AppearancePreferences({
           ? `famo-theme-${selection[0].name.replace(/[/\\:*?"<>|]/g, '-')}.json`
           : 'famo-themes.json'
       if (await exportThemeFile(serializeThemes(selection), filename))
-        setNotice(`已匯出 ${selection.length} 款主題。`)
+        setNotice({ key: 'themesExported', count: selection.length })
     } catch (error) {
-      setError(`匯出失敗：${(error as Error).message}`)
+      setError(
+        new LocalizedError((translate) =>
+          translate('exportFailed', (error as Error).message),
+        ),
+      )
     } finally {
       setBusy(false)
     }
@@ -117,7 +132,7 @@ export function AppearancePreferences({
   return (
     <>
       <p id="theme-description" className="preferences-description">
-        選擇主題後立即套用，並自動記住你的偏好。
+        {t('applyThemeDescription')}
       </p>
       <div className="theme-tools">
         <Button
@@ -125,12 +140,12 @@ export function AppearancePreferences({
           disabled={busy}
           onClick={() => {
             setEditor({ base: theme })
-            setError('')
-            setNotice('')
+            setError(null)
+            setNotice(null)
           }}
         >
           <Palette />
-          新增主題
+          {t('addTheme')}
         </Button>
         <Button
           variant="outline"
@@ -138,7 +153,7 @@ export function AppearancePreferences({
           onClick={() => fileInput.current?.click()}
         >
           <Upload />
-          匯入主題
+          {t('importTheme')}
         </Button>
         <Button
           variant="outline"
@@ -146,25 +161,25 @@ export function AppearancePreferences({
           onClick={() => void exportSelection([theme])}
         >
           <Download />
-          匯出目前主題
+          {t('exportCurrentTheme')}
         </Button>
         <input
           ref={fileInput}
           hidden
           type="file"
           accept=".json,application/json"
-          aria-label="匯入主題檔案"
+          aria-label={t('importThemeFile')}
           onChange={(event) => void importFile(event)}
         />
       </div>
       {(error || storageError) && (
         <p className="inline-edit-error theme-notice" role="alert">
-          {error || storageError}
+          {errorText(error) || storageError}
         </p>
       )}
       {notice && (
         <p className="theme-notice" role="status">
-          {notice}
+          {notice === 'themeSaved' ? t(notice) : t(notice.key, notice.count)}
         </p>
       )}
       {editor && (
@@ -177,14 +192,14 @@ export function AppearancePreferences({
           onSave={(draft, id) => {
             if (!appearance.saveTheme(draft, id)) return false
             setEditor(null)
-            setNotice('主題已儲存並套用。')
+            setNotice('themeSaved')
             return true
           }}
         />
       )}
       <fieldset
         className="theme-settings"
-        aria-label="外觀主題"
+        aria-label={t('appearanceTheme')}
         aria-describedby="theme-description"
       >
         <label className="system-theme-option">
@@ -192,21 +207,21 @@ export function AppearancePreferences({
             type="radio"
             name="theme"
             value="system"
-            aria-label="跟隨系統"
+            aria-label={t('followSystem')}
             checked={preference === 'system'}
             onChange={() => selectTheme('system')}
           />
           <Monitor size={22} aria-hidden="true" />
           <span>
-            <strong>跟隨系統</strong>
-            <span>隨系統切換淺色「苔綠」與深色「午夜」</span>
+            <strong>{t('followSystem')}</strong>
+            <span>{t('followSystemDescription')}</span>
           </span>
           <Check className="theme-check" size={18} aria-hidden="true" />
         </label>
         {customThemes.length > 0 && (
           <section className="theme-group" aria-labelledby="custom-themes">
             <div className="custom-themes-heading">
-              <h3 id="custom-themes">自訂主題</h3>
+              <h3 id="custom-themes">{t('customThemes')}</h3>
               <Button
                 variant="ghost"
                 size="sm"
@@ -214,7 +229,7 @@ export function AppearancePreferences({
                 onClick={() => void exportSelection(customThemes)}
               >
                 <Download />
-                匯出全部自訂主題
+                {t('exportCustomThemes')}
               </Button>
             </div>
             <div className="theme-grid">
@@ -228,13 +243,13 @@ export function AppearancePreferences({
                   <div className="custom-theme-actions">
                     {pendingDelete === item.id ? (
                       <>
-                        <span>刪除此主題？</span>
+                        <span>{t('deleteThemeQuestion')}</span>
                         <Button
                           variant="ghost"
                           size="sm"
                           onClick={() => setPendingDelete(null)}
                         >
-                          取消
+                          {t('cancel')}
                         </Button>
                         <Button
                           variant="ghost"
@@ -246,7 +261,7 @@ export function AppearancePreferences({
                             }
                           }}
                         >
-                          確認刪除
+                          {t('confirmDelete')}
                         </Button>
                       </>
                     ) : (
@@ -254,20 +269,20 @@ export function AppearancePreferences({
                         <Button
                           variant="ghost"
                           size="sm"
-                          aria-label={`編輯主題：${item.name}`}
+                          aria-label={t('editNamedTheme', item.name)}
                           onClick={() => setEditor({ base: item, id: item.id })}
                         >
                           <Pencil />
-                          編輯
+                          {t('edit')}
                         </Button>
                         <Button
                           variant="ghost"
                           size="sm"
-                          aria-label={`刪除主題：${item.name}`}
+                          aria-label={t('deleteNamedTheme', item.name)}
                           onClick={() => setPendingDelete(item.id)}
                         >
                           <Trash2 />
-                          刪除
+                          {t('delete')}
                         </Button>
                       </>
                     )}
@@ -284,7 +299,7 @@ export function AppearancePreferences({
             aria-labelledby={`${mode}-themes`}
           >
             <h3 id={`${mode}-themes`}>
-              {mode === 'light' ? '淺色主題' : '深色主題'}
+              {mode === 'light' ? t('lightThemes') : t('darkThemes')}
             </h3>
             <div className="theme-grid">
               {themes
@@ -303,8 +318,8 @@ export function AppearancePreferences({
       </fieldset>
       <p className="theme-status" role="status" aria-live="polite">
         {preference === 'system'
-          ? `跟隨系統 · 目前為${theme.name}`
-          : `目前主題：${theme.name}`}
+          ? t('systemCurrentTheme', themeName(theme, t))
+          : t('currentTheme', themeName(theme, t))}
       </p>
     </>
   )
