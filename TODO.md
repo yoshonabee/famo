@@ -43,6 +43,10 @@
 - [x] 可設定預設 workspace dir 和選填的自訂 prompt。CLI 一併回傳路徑及 prompt，留空時 Agent 依 Skill 的預設方式查找脈絡。
 - [ ] Project 功能加入後可設定各 Project 的 workspace dir 和選填 prompt。未歸類的任務使用預設 workspace，已歸類的任務使用所屬 Project 的 workspace。
 
+## 資料備份
+
+- [ ] 支援將 Famo 資料備份到 Google Drive。
+
 ## 舊任務功能與資料清理
 
 - [x] 移除已從主要介面撤下的舊功能及對應 API，包含任務類型、流程階段、優先順序、等待與下次查看、子步驟與下一步、獨立目標／背景脈絡／驗收條件、類型 metadata、進展歷程及手動連結種類設定。
