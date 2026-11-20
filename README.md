@@ -34,6 +34,8 @@
 
 在任務詳情的「Project」欄位可指派或變更分類，選擇「未分類」可清除歸屬。任務可同時有日期與 Project。「今日」和其他日期會一起顯示當天各 Project 的任務，原有「任務」與「已完成」仍跨 Project 檢視。
 
+在任務、已完成、Project 或日期清單按「多選任務」，勾選要移動的任務，選擇目標 Project 再按「指派」。選擇「未分類」可批次清除歸屬。全選僅勾選符合目前搜尋與篩選條件的任務。批次指派會一併檢查每件任務的版本，有任務已變更時會更新清單，保留仍可見的選取項目供重試。
+
 「今日」上方的「篩選 Project」可複選要顯示的分類與未分類任務。今日進度、已完成、先前未完成與未指定日期區段都會套用篩選。選擇會記在目前的瀏覽器或桌面 WebView，按「顯示全部」即可重設。
 
 ## Boards
@@ -221,6 +223,7 @@ npm run format:check
 | `POST /tasks` | 建立任務 |
 | `GET /tasks/recently-deleted` | 最近 7 天軟刪除的任務，依刪除時間由新到舊排列 |
 | `POST /tasks/reorder` | `{"task_ids":["id2","id1"]}` 調整未完成任務的相對順序 |
+| `POST /tasks/assign-project` | 以 `{"project_id":"project-id","tasks":[{"id":"task-id","version":1}]}` 一次指派所有選取的任務，回傳更新後的任務。傳入空字串可清除歸屬。任何任務的版本不符時，整批指派都不會寫入 |
 | `GET /tasks/{id}` | 完整任務 |
 | `GET /tasks/{id}/context` | Agent 脈絡，與完整任務相同 |
 | `POST /tasks/{id}/actions` | 具版本檢查的任務操作 |

@@ -150,12 +150,12 @@ func projectVersionError(ctx context.Context, db schemaReader, id string) error 
 	return fmt.Errorf("%w：Project 已被更新", ErrConflict)
 }
 
-func (s *Store) validateProject(ctx context.Context, id string) error {
+func validateProject(ctx context.Context, db schemaReader, id string) error {
 	if id == "" {
 		return nil
 	}
 	var exists bool
-	if err := s.db.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM projects WHERE id=?)", id).Scan(&exists); err != nil {
+	if err := db.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM projects WHERE id=?)", id).Scan(&exists); err != nil {
 		return err
 	}
 	if !exists {
