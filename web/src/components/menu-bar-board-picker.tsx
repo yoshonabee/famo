@@ -5,10 +5,12 @@ import type { Board } from '@/lib/api'
 export function MenuBarBoardPicker({
   boards,
   board,
+  showToday,
   onChange,
 }: {
   boards: Board[]
   board?: Board
+  showToday: boolean
   onChange: (id: string) => void
 }) {
   const [open, setOpen] = useState(false)
@@ -18,7 +20,7 @@ export function MenuBarBoardPicker({
   const menuId = useId()
   const selectedId = board?.id ?? ''
   const name = board?.name ?? '今日'
-  const choices = [{ id: '', name: '今日' }, ...boards]
+  const choices = showToday ? [{ id: '', name: '今日' }, ...boards] : boards
 
   useLayoutEffect(() => {
     if (!open) return

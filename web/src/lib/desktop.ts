@@ -1,5 +1,6 @@
 const tasksChangedEvent = 'famo:tasks-changed'
 let taskChannel: BroadcastChannel | undefined
+let menuBarBoardUpdate = Promise.resolve()
 
 // Load Wails only inside the macOS app; the browser build keeps using HTTP.
 export async function initializeDesktop(onTasksChanged: () => void) {
@@ -14,6 +15,9 @@ export async function initializeDesktop(onTasksChanged: () => void) {
   Events.On(tasksChangedEvent, onTasksChanged)
   Events.On(openSettingsEvent, () => {
     window.dispatchEvent(new Event(openSettingsEvent))
+  })
+  Events.On(openBoardEvent, ({ data }) => {
+    window.dispatchEvent(new CustomEvent(openBoardEvent, { detail: data }))
   })
   Events.On(shortcutEvent, ({ data }) => {
     window.dispatchEvent(new CustomEvent(shortcutEvent, { detail: data }))
@@ -35,6 +39,7 @@ export async function initializeDesktop(onTasksChanged: () => void) {
   )
 }
 export const openSettingsEvent = 'famo:open-settings'
+export const openBoardEvent = 'famo:open-board'
 export const shortcutEvent = 'famo:shortcut'
 
 // Publish only after a successful write. Each WebView owns a separate query
@@ -52,13 +57,24 @@ export async function notifyTasksChanged() {
   }
 }
 
-export async function openFamo() {
-  if (window.location.protocol === 'wails:') {
+export function selectMenuBarBoard(id: string) {
+  if (!isDesktop()) return
+  // Keep native updates in the order the panel committed them.
+  menuBarBoardUpdate = menuBarBoardUpdate
+    .then(async () => {
+      const { Call } = await import('@wailsio/runtime')
+      await Call.ByName('famo/internal/desktop.MenuBar.SelectBoard', id)
+    })
+    .catch((error: unknown) => console.error('無法更新選單列的 Board', error))
+}
+
+export async function openFamo(boardId: string) {
+  if (isDesktop()) {
     const { Call } = await import('@wailsio/runtime')
-    await Call.ByName('famo/internal/desktop.MenuBar.OpenFamo')
+    await Call.ByName('famo/internal/desktop.MenuBar.OpenFamo', boardId)
     return
   }
-  window.location.assign('/')
+  window.location.assign(`/?${new URLSearchParams({ board: boardId })}`)
 }
 
 export async function hideMenuBar() {

@@ -6,7 +6,11 @@ import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { ApiError, request, type Board, type Task } from '@/lib/api'
 import { localDate } from '@/lib/calendar'
-import { hideMenuBar, openFamo } from '@/lib/desktop'
+import { hideMenuBar, openFamo, selectMenuBarBoard } from '@/lib/desktop'
+import {
+  orderSidebarItems,
+  useSidebarPreferences,
+} from '@/lib/sidebar-preferences'
 import { useTheme } from '@/lib/theme'
 
 const boardStorageKey = 'famo.menu-bar.board'
@@ -60,15 +64,17 @@ export function MenuBarPanel() {
   const [openError, setOpenError] = useState('')
   const [boardId, setBoardId] = useState(() => {
     try {
-      return localStorage.getItem(boardStorageKey) ?? ''
+      return localStorage.getItem(boardStorageKey)
     } catch {
-      return ''
+      return null
     }
   })
+  const { preferences } = useSidebarPreferences()
   const boards = useQuery({
     queryKey: ['boards'],
     queryFn: ({ signal }) => request<Board[]>('/boards', undefined, signal),
     refetchInterval: 2_000,
+    refetchIntervalInBackground: true,
     refetchOnWindowFocus: 'always',
   })
   const tasks = useQuery({
@@ -93,9 +99,24 @@ export function MenuBarPanel() {
       document.removeEventListener('keydown', onKeyDown)
     }
   }, [])
-  const currentBoard = boards.data?.find((board) => board.id === boardId)
+  const boardsByNavId = new Map(
+    boards.data?.map((board) => [`board:${board.id}`, board]),
+  )
+  const orderedBoards = orderSidebarItems(
+    [...boardsByNavId.keys()],
+    preferences.order,
+  ).map((id) => boardsByNavId.get(id)!)
+  const showToday = preferences.showToday || orderedBoards.length === 0
+  const currentBoard =
+    showToday && boardId === ''
+      ? undefined
+      : (boardsByNavId.get(`board:${boardId}`) ?? orderedBoards[0])
+  const selectedBoardId = currentBoard?.id ?? ''
+  useEffect(() => {
+    if (!boards.isPending) selectMenuBarBoard(selectedBoardId)
+  }, [boards.isPending, selectedBoardId])
   const projectIds = currentBoard ? new Set(currentBoard.project_ids) : null
-  const loading = tasks.isPending || (!!boardId && boards.isPending)
+  const loading = tasks.isPending || boards.isPending
   const today = loading
     ? []
     : (tasks.data ?? []).filter(
@@ -116,8 +137,9 @@ export function MenuBarPanel() {
     <div className="menu-bar-panel">
       <header className="menu-bar-heading">
         <MenuBarBoardPicker
-          boards={boards.data ?? []}
+          boards={orderedBoards}
           board={currentBoard}
+          showToday={showToday}
           onChange={(id) => {
             setBoardId(id)
             try {
@@ -131,9 +153,10 @@ export function MenuBarPanel() {
           <time dateTime={date}>{date.replaceAll('-', '/')}</time>
           <Button
             size="sm"
+            disabled={boards.isPending}
             onClick={() => {
               setOpenError('')
-              void openFamo().catch(() =>
+              void openFamo(selectedBoardId).catch(() =>
                 setOpenError('無法開啟 Famo，請重試。'),
               )
             }}
