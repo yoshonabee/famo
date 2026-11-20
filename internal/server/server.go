@@ -66,6 +66,14 @@ func newHandler(store *tasks.Store, assets fs.FS, access func(http.Handler) http
 			}
 			write(w, 200, list)
 		})
+		r.Get("/tasks/recently-deleted", func(w http.ResponseWriter, r *http.Request) {
+			list, err := store.ListRecentlyDeleted(r.Context())
+			if err != nil {
+				fail(w, err)
+				return
+			}
+			write(w, 200, list)
+		})
 		r.Post("/tasks", func(w http.ResponseWriter, r *http.Request) {
 			var in tasks.CreateInput
 			if !decode(w, r, &in) {
@@ -106,6 +114,20 @@ func newHandler(store *tasks.Store, assets fs.FS, access func(http.Handler) http
 		}
 		r.Get("/tasks/{id}", get)
 		r.Get("/tasks/{id}/context", get)
+		r.Post("/tasks/{id}/restore", func(w http.ResponseWriter, r *http.Request) {
+			var in struct {
+				Version int `json:"version"`
+			}
+			if !decode(w, r, &in) {
+				return
+			}
+			t, err := store.Restore(r.Context(), chi.URLParam(r, "id"), in.Version)
+			if err != nil {
+				fail(w, err)
+				return
+			}
+			write(w, 200, t)
+		})
 		r.Post("/tasks/{id}/actions", func(w http.ResponseWriter, r *http.Request) {
 			var a tasks.Action
 			if !decode(w, r, &a) {

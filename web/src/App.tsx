@@ -25,6 +25,7 @@ import {
   Trash2,
 } from 'lucide-react'
 import { PreferencesPage } from '@/components/preferences-page'
+import { RecentlyDeletedPage } from '@/components/recently-deleted-page'
 import { useTheme } from '@/lib/theme'
 import { isDesktop, openSettingsEvent, shortcutEvent } from '@/lib/desktop'
 import { DatePicker } from '@/components/date-picker'
@@ -112,7 +113,7 @@ function App() {
     refetchInterval: 30_000,
   })
   const [view, setView] = useState<
-    'active' | 'date' | 'completed' | 'preferences'
+    'active' | 'date' | 'completed' | 'recently-deleted' | 'preferences'
   >('date')
   const [date, setDate] = useState(localDate)
   const [search, setSearch] = useState('')
@@ -227,7 +228,9 @@ function App() {
       }),
     onSuccess: (t) => {
       client.setQueryData<Task[]>(['tasks'], (old) =>
-        old?.map((item) => (item.id === t.id ? t : item)),
+        t.deleted_at
+          ? old?.filter((item) => item.id !== t.id)
+          : old?.map((item) => (item.id === t.id ? t : item)),
       )
       void client.invalidateQueries({ queryKey: ['tasks'] })
     },
@@ -308,6 +311,18 @@ function App() {
             <span className="nav-label">已完成</span>
             <span className="nav-count">{all.length - active.length}</span>
           </button>
+          <button
+            className={
+              view === 'recently-deleted' ? 'nav-item active' : 'nav-item'
+            }
+            onClick={() => setView('recently-deleted')}
+            aria-current={view === 'recently-deleted' ? 'page' : undefined}
+            aria-label="最近刪除"
+            title="最近刪除"
+          >
+            <Trash2 size={17} />
+            <span className="nav-label">最近刪除</span>
+          </button>
         </nav>
         <div className="sidebar-footer">
           <button
@@ -323,7 +338,10 @@ function App() {
         </div>
       </aside>
       <main>
-        <div className="main-content" hidden={view === 'preferences'}>
+        <div
+          className="main-content"
+          hidden={view === 'preferences' || view === 'recently-deleted'}
+        >
           {view === 'date' && (
             <header className="calendar-heading">
               <h1>
@@ -486,6 +504,11 @@ function App() {
               </div>
             ))}
         </div>
+        {view === 'recently-deleted' && (
+          <div className="main-content">
+            <RecentlyDeletedPage search={search} onSearchChange={setSearch} />
+          </div>
+        )}
         <div className="main-content" hidden={view !== 'preferences'}>
           <PreferencesPage appearance={theme} />
         </div>

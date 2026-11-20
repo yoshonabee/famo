@@ -12,7 +12,12 @@ test('首頁是當地今日，小步驟直接新增與完成，不需維護分�
     'datetime',
     '2026-11-04',
   )
-  await expect(page.getByRole('navigation').getByRole('button')).toHaveCount(3)
+  const navigation = page.getByRole('navigation', { name: '主要導覽' })
+  for (const name of ['今日任務', '任務列表', '已完成']) {
+    await expect(
+      navigation.getByRole('button', { name, exact: true }),
+    ).toBeVisible()
+  }
   const capture = page.getByRole('textbox', { name: '快速新增任務名稱' })
   await capture.fill('討論登入修正 spec')
   await capture.press('Enter')

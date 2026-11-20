@@ -39,6 +39,10 @@ func (s *Store) List(ctx context.Context) ([]Task, error) {
 	if err != nil {
 		return nil, err
 	}
+	return readTasks(rows)
+}
+
+func readTasks(rows *sql.Rows) ([]Task, error) {
 	defer rows.Close()
 	out := []Task{}
 	for rows.Next() {
@@ -105,8 +109,12 @@ func (s *Store) Reorder(ctx context.Context, ids []string) error {
 	return tx.Commit()
 }
 func (s *Store) Get(ctx context.Context, id string) (Task, error) {
+	return readTask(s.db.QueryRowContext(ctx, `SELECT document FROM tasks WHERE id=? AND deleted_at IS NULL`, id))
+}
+
+func readTask(row *sql.Row) (Task, error) {
 	var raw string
-	err := s.db.QueryRowContext(ctx, `SELECT document FROM tasks WHERE id=? AND deleted_at IS NULL`, id).Scan(&raw)
+	err := row.Scan(&raw)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Task{}, ErrNotFound
 	}
