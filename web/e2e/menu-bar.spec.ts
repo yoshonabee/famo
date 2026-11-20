@@ -1,7 +1,16 @@
-import { expect, test } from '@playwright/test'
+import { expect, test, type Page } from '@playwright/test'
 import type { Task } from '../src/lib/api'
 
 test.use({ timezoneId: 'Asia/Taipei', viewport: { width: 360, height: 480 } })
+
+async function openTodayPanel(page: Page) {
+  await page.addInitScript(() => {
+    if (localStorage.getItem('famo.menu-bar.board') === null) {
+      localStorage.setItem('famo.menu-bar.board', '')
+    }
+  })
+  await page.goto('/menu-bar.html')
+}
 
 test('dedicated panel entry stays compact after opening settings and reloading', async ({
   page,
@@ -14,7 +23,7 @@ test('dedicated panel entry stays compact after opening settings and reloading',
     main.getByRole('heading', { name: '設定', exact: true }),
   ).toBeVisible()
 
-  await page.goto('/menu-bar.html')
+  await openTodayPanel(page)
   await expect(page.getByRole('heading', { name: '今日任務' })).toBeVisible()
   await page.evaluate(() =>
     window.dispatchEvent(new Event('famo:open-settings')),
@@ -54,7 +63,7 @@ test('panel counts scheduled local tasks, reflects API edits and rolls over at m
   await request.post(`/api/tasks/${second.id}/actions`, {
     data: { op: 'complete_task', version: second.version },
   })
-  await page.goto('/menu-bar.html')
+  await openTodayPanel(page)
   const list = page.getByRole('list', { name: '今日任務列表' })
   await expect(list.getByRole('listitem')).toHaveCount(2)
   await expect(page.getByRole('status')).toHaveText('已完成 1 / 2 件')
@@ -85,6 +94,103 @@ test('panel counts scheduled local tasks, reflects API edits and rolls over at m
   await expect(page.getByRole('status')).toHaveText('已完成 0 / 1 件')
 })
 
+test('panel switches today’s tasks and progress by Board and remembers the selection', async ({
+  page,
+  request,
+}) => {
+  const date = '2040-02-01'
+  await page.clock.setFixedTime(new Date(`${date}T12:00:00+08:00`))
+  const project = await request.post('/api/projects', {
+    data: { name: '選單列工作' },
+  })
+  await expect(project).toBeOK()
+  const { id: projectId } = await project.json()
+  const work = await request.post('/api/boards', {
+    data: { name: '工作', project_ids: [projectId] },
+  })
+  await expect(work).toBeOK()
+  const { id: workId, version: workVersion } = await work.json()
+  const empty = await request.post('/api/boards', {
+    data: { name: '選單列空白 Board', project_ids: [] },
+  })
+  await expect(empty).toBeOK()
+  const { id: emptyId } = await empty.json()
+  await page.addInitScript((id) => {
+    localStorage.setItem(
+      'famo.sidebar',
+      JSON.stringify({ showToday: true, order: [`board:${id}`] }),
+    )
+  }, emptyId)
+
+  for (const input of [
+    { title: '整理工作', project_id: projectId, scheduled_date: date },
+    { title: '下班採買', scheduled_date: date },
+    { title: '明天寄出', project_id: projectId, scheduled_date: '2040-02-02' },
+  ]) {
+    await expect(await request.post('/api/tasks', { data: input })).toBeOK()
+  }
+
+  await openTodayPanel(page)
+  const picker = page.getByRole('button', { name: /^選擇 Board/ })
+  const menu = page.getByRole('menu', { name: 'Board' })
+  const choice = (name: string) =>
+    menu.getByRole('menuitemradio', { name, exact: true })
+  const list = page.getByRole('list', { name: '今日任務列表' })
+  await expect(picker).toHaveText('今日')
+  await expect(picker).toHaveCSS('font-size', '16px')
+  await expect(list.getByRole('listitem')).toHaveCount(2)
+  await expect(page.locator('footer')).toHaveText(/^famo \d+\.\d+\.\d+$/)
+
+  await picker.press('ArrowDown')
+  await expect(choice('今日')).toBeFocused()
+  await expect(choice('今日')).toHaveAttribute('aria-checked', 'true')
+  await expect(choice('今日')).toHaveCSS('font-size', '16px')
+  await expect(choice('今日').locator('span')).toHaveCSS(
+    'text-decoration-line',
+    'none',
+  )
+  await page.keyboard.press('ArrowDown')
+  await expect(choice('今日')).not.toBeFocused()
+  await page.keyboard.press('Escape')
+  await expect(menu).toBeHidden()
+  await expect(picker).toBeFocused()
+  await expect(picker).toHaveCSS('outline-style', 'none')
+
+  await picker.click()
+  await choice('工作').click()
+  await expect(picker).toHaveText('工作')
+  await expect(list.getByRole('listitem')).toHaveCount(1)
+  await expect(list).toHaveText('整理工作')
+  await list.getByRole('checkbox').click()
+  await expect(page.getByRole('status')).toContainText('已完成 1 / 1 件')
+  await page.screenshot({ path: '/private/tmp/famo-menu-bar-board.png' })
+  await picker.click()
+  await expect(choice('工作')).toHaveAttribute('aria-checked', 'true')
+  await page.screenshot({ path: '/private/tmp/famo-menu-bar-board-open.png' })
+  await page.locator('time').click()
+  await expect(menu).toBeHidden()
+
+  await page.reload()
+  await expect(picker).toHaveText('工作')
+  await expect(list).toHaveText('整理工作')
+  await picker.click()
+  await choice('選單列空白 Board').press('Enter')
+  await expect(page.getByText('這個 Board 今天沒有任務。')).toBeVisible()
+  await expect(page.getByRole('progressbar')).toHaveAttribute('value', '0')
+  await picker.click()
+  await choice('工作').click()
+
+  const deleted = await request.post(`/api/boards/${workId}/delete`, {
+    data: { version: workVersion },
+  })
+  await expect(deleted).toBeOK()
+  await expect(picker).toHaveText('選單列空白 Board')
+  await picker.click()
+  await choice('今日').click()
+  await expect(picker).toHaveText('今日')
+  await expect(page.getByRole('status')).toHaveText('已完成 1 / 2 件')
+})
+
 test('square checkboxes complete and reopen tasks, preserve dates and recover from failures and conflicts', async ({
   page,
   request,
@@ -98,7 +204,7 @@ test('square checkboxes complete and reopen tasks, preserve dates and recover fr
     },
   })
   const task = (await response.json()) as Task
-  await page.goto('/menu-bar.html')
+  await openTodayPanel(page)
   const complete = page.getByRole('checkbox', {
     name: `完成任務：${task.title}`,
     exact: true,
@@ -192,7 +298,7 @@ test('panel writes refresh an already open main window without focus or polling'
   const initialReads = mainReads
   const panel = await context.newPage()
   await panel.clock.install({ time })
-  await panel.goto('/menu-bar.html')
+  await openTodayPanel(panel)
   await panel
     .getByRole('checkbox', { name: `完成任務：${task.title}`, exact: true })
     .click()
@@ -241,7 +347,7 @@ test('empty panel follows theme changes and Open Famo returns to the main app', 
   context,
 }) => {
   await page.clock.install({ time: new Date('2041-02-03T04:00:00Z') })
-  await page.goto('/menu-bar.html')
+  await openTodayPanel(page)
   await expect(page.getByRole('status')).toHaveText('今天還沒有安排任務')
   await expect(page.getByRole('progressbar')).toHaveAttribute('value', '0')
   const other = await context.newPage()
@@ -259,10 +365,87 @@ test('empty panel follows theme changes and Open Famo returns to the main app', 
   await page.screenshot({ path: '/private/tmp/famo-menu-bar-dark.png' })
   await other.close()
   await page.getByRole('button', { name: 'Open Famo', exact: true }).click()
-  await expect(page).toHaveURL('/')
+  await expect(page).toHaveURL('/?board=')
   await expect(
     page.getByRole('button', { name: '今日任務', exact: true }),
   ).toBeVisible()
+})
+
+test('panel uses sidebar order, follows Today visibility, and opens the selected Board', async ({
+  page,
+  context,
+  request,
+}) => {
+  const first = await request.post('/api/boards', {
+    data: { name: '選單列排序 Z', project_ids: [] },
+  })
+  const second = await request.post('/api/boards', {
+    data: { name: '選單列排序 A', project_ids: [] },
+  })
+  await expect(first).toBeOK()
+  await expect(second).toBeOK()
+  const { id: firstId } = await first.json()
+  const { id: secondId } = await second.json()
+  const main = await context.newPage()
+  await main.goto('/')
+  await main.evaluate(
+    (order) => localStorage.setItem('famo.sidebar', JSON.stringify({ order })),
+    [`board:${firstId}`, `board:${secondId}`],
+  )
+  await main.reload()
+  await page.goto('/menu-bar.html')
+  const picker = page.getByRole('button', { name: /^選擇 Board/ })
+  const menu = page.getByRole('menu', { name: 'Board' })
+  await expect(picker).toHaveText('選單列排序 Z')
+  await picker.click()
+  await menu.getByRole('menuitemradio', { name: '今日', exact: true }).click()
+  await expect(picker).toHaveText('今日')
+
+  await main.getByRole('button', { name: '設定', exact: true }).click()
+  await main.getByRole('checkbox', { name: '顯示預設的「今日」分頁' }).uncheck()
+  await page.bringToFront()
+  await expect(picker).toHaveText('選單列排序 Z')
+  await picker.click()
+  const choices = menu.getByRole('menuitemradio')
+  await expect(choices.first()).toHaveText('選單列排序 Z')
+  await expect(choices.nth(1)).toHaveText('選單列排序 A')
+  await expect(
+    menu.getByRole('menuitemradio', { name: '今日', exact: true }),
+  ).toHaveCount(0)
+  await menu.getByRole('menuitemradio', { name: '選單列排序 A' }).click()
+  await page.getByRole('button', { name: 'Open Famo', exact: true }).click()
+  await expect(page).toHaveURL(`/?board=${secondId}`)
+  await expect(
+    page.getByRole('heading', { name: '選單列排序 A' }),
+  ).toBeVisible()
+  await page.evaluate((id) => {
+    window.dispatchEvent(new CustomEvent('famo:open-board', { detail: id }))
+  }, firstId)
+  await expect(
+    page.getByRole('heading', { name: '選單列排序 Z' }),
+  ).toBeVisible()
+  await main.close()
+})
+
+test('Today is available in the panel when no Boards exist', async ({
+  page,
+}) => {
+  await page.clock.setFixedTime(new Date('2040-03-01T12:00:00+08:00'))
+  await page.addInitScript(() => {
+    localStorage.setItem('famo.sidebar', JSON.stringify({ showToday: false }))
+  })
+  await page.route('**/api/boards', (route) => route.fulfill({ json: [] }))
+  await page.goto('/menu-bar.html')
+  const picker = page.getByRole('button', { name: '選擇 Board：今日' })
+  await picker.click()
+  const choices = page.getByRole('menuitemradio')
+  await expect(choices).toHaveCount(1)
+  await expect(choices.first()).toHaveText('今日')
+  await page.keyboard.press('Escape')
+  await page.getByRole('button', { name: 'Open Famo', exact: true }).click()
+  await expect(
+    page.getByRole('heading', { level: 1 }).locator('time'),
+  ).toHaveAttribute('datetime', '2040-03-01')
 })
 
 test('failed reads show an error and retry recovers without claiming an empty day', async ({

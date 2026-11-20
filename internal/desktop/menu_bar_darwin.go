@@ -5,6 +5,7 @@ package desktop
 import (
 	"context"
 	_ "embed"
+	"sync/atomic"
 	"time"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -16,10 +17,33 @@ import (
 //go:embed menu-bar-template.png
 var menuBarIcon []byte
 
-// MenuBar exposes native navigation only to the desktop WebView.
-type MenuBar struct{}
+// MenuBar connects the panel's Board selection to the native tray and window.
+type MenuBar struct {
+	boardID atomic.Value
+	refresh chan struct{}
+}
 
-func (*MenuBar) OpenFamo() {
+func (m *MenuBar) SelectBoard(id string) {
+	if m.boardID.Swap(id) != id {
+		select {
+		case m.refresh <- struct{}{}:
+		default:
+		}
+	}
+}
+
+func (m *MenuBar) selectedBoardID() string {
+	id, _ := m.boardID.Load().(string)
+	return id
+}
+
+func (*MenuBar) OpenFamo(boardID string) {
+	if window := showFamo(); window != nil {
+		window.EmitEvent("famo:open-board", boardID)
+	}
+}
+
+func showFamo() application.Window {
 	app := application.Get()
 	if panel, ok := app.Window.GetByName("menu-bar"); ok {
 		panel.Hide()
@@ -28,14 +52,17 @@ func (*MenuBar) OpenFamo() {
 		window.Show()
 		window.UnMinimise()
 		window.Focus()
+		return window
 	}
+	return nil
 }
 
-func setupMenuBar(app *application.App, backend *Backend) {
+func setupMenuBar(app *application.App, backend *Backend, menuBar *MenuBar) {
 	panel := app.Window.NewWithOptions(application.WebviewWindowOptions{
 		Name: "menu-bar", Title: "Famo 今日任務", URL: "/menu-bar.html",
 		Width: 360, Height: 480, Frameless: true, AlwaysOnTop: true,
-		Hidden: true, DisableResize: true, HideOnFocusLost: true, HideOnEscape: true,
+		// Escape is handled in the WebView so it can dismiss an open Board menu first.
+		Hidden: true, DisableResize: true, HideOnFocusLost: true,
 		BackgroundColour: application.NewRGB(248, 249, 246),
 		Mac: application.MacWindow{
 			// Stay in the current Space, including another app's fullscreen Space,
@@ -58,7 +85,7 @@ func setupMenuBar(app *application.App, backend *Backend) {
 	tray.SetTooltip("Famo · 今日任務")
 	tray.AttachWindow(panel).WindowOffset(6)
 	menu := app.NewMenu()
-	menu.Add("Open Famo").OnClick(func(*application.Context) { (&MenuBar{}).OpenFamo() })
+	menu.Add("Open Famo").OnClick(func(*application.Context) { menuBar.OpenFamo(menuBar.selectedBoardID()) })
 	menu.AddSeparator()
 	menu.Add("Quit Famo").OnClick(func(*application.Context) { app.Quit() })
 	tray.SetMenu(menu)
@@ -76,22 +103,32 @@ func setupMenuBar(app *application.App, backend *Backend) {
 					return
 				}
 				queryCtx, queryCancel := context.WithTimeout(ctx, time.Second)
-				progress, err := backend.todayProgress(queryCtx, time.Now())
+				boardID := menuBar.selectedBoardID()
+				progress, err := backend.todayProgress(queryCtx, time.Now(), boardID)
 				queryCancel()
 				if ctx.Err() != nil {
 					return
+				}
+				if boardID != menuBar.selectedBoardID() {
+					continue
 				}
 				if err != nil {
 					tray.SetLabel("—")
 					tray.SetTooltip("Famo · 無法讀取今日進度")
 				} else {
-					tray.SetLabel(progress.Label())
-					tray.SetTooltip("Famo · 今日已完成 " + progress.Label())
+					label := progress.Label()
+					tooltip := "Famo · "
+					if progress.BoardName != "" {
+						tooltip += progress.BoardName + " · "
+					}
+					tray.SetLabel(label)
+					tray.SetTooltip(tooltip + "今日已完成 " + label)
 				}
 				select {
 				case <-ctx.Done():
 					return
 				case <-ticker.C:
+				case <-menuBar.refresh:
 				}
 			}
 		}()

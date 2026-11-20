@@ -1,12 +1,19 @@
 import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ArrowUpRight, Circle, RefreshCw } from 'lucide-react'
+import { MenuBarBoardPicker } from '@/components/menu-bar-board-picker'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
-import { ApiError, request, type Task } from '@/lib/api'
+import { ApiError, request, type Board, type Task } from '@/lib/api'
 import { localDate } from '@/lib/calendar'
-import { openFamo } from '@/lib/desktop'
+import { hideMenuBar, openFamo, selectMenuBarBoard } from '@/lib/desktop'
+import {
+  orderSidebarItems,
+  useSidebarPreferences,
+} from '@/lib/sidebar-preferences'
 import { useTheme } from '@/lib/theme'
+
+const boardStorageKey = 'famo.menu-bar.board'
 
 function MenuBarTask({ task }: { task: Task }) {
   const client = useQueryClient()
@@ -55,6 +62,21 @@ export function MenuBarPanel() {
   useTheme()
   const [date, setDate] = useState(localDate)
   const [openError, setOpenError] = useState('')
+  const [boardId, setBoardId] = useState(() => {
+    try {
+      return localStorage.getItem(boardStorageKey)
+    } catch {
+      return null
+    }
+  })
+  const { preferences } = useSidebarPreferences()
+  const boards = useQuery({
+    queryKey: ['boards'],
+    queryFn: ({ signal }) => request<Board[]>('/boards', undefined, signal),
+    refetchInterval: 2_000,
+    refetchIntervalInBackground: true,
+    refetchOnWindowFocus: 'always',
+  })
   const tasks = useQuery({
     queryKey: ['tasks'],
     queryFn: ({ signal }) => request<Task[]>('/tasks', undefined, signal),
@@ -63,16 +85,46 @@ export function MenuBarPanel() {
   })
   useEffect(() => {
     const update = () => setDate(localDate())
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        void hideMenuBar().catch(() => setOpenError('無法關閉面板，請重試。'))
+      }
+    }
     const timer = window.setInterval(update, 1_000)
     window.addEventListener('focus', update)
+    document.addEventListener('keydown', onKeyDown)
     return () => {
       window.clearInterval(timer)
       window.removeEventListener('focus', update)
+      document.removeEventListener('keydown', onKeyDown)
     }
   }, [])
-  const today = (tasks.data ?? []).filter(
-    (task) => task.scheduled_date === date && !task.deleted_at,
+  const boardsByNavId = new Map(
+    boards.data?.map((board) => [`board:${board.id}`, board]),
   )
+  const orderedBoards = orderSidebarItems(
+    [...boardsByNavId.keys()],
+    preferences.order,
+  ).map((id) => boardsByNavId.get(id)!)
+  const showToday = preferences.showToday || orderedBoards.length === 0
+  const currentBoard =
+    showToday && boardId === ''
+      ? undefined
+      : (boardsByNavId.get(`board:${boardId}`) ?? orderedBoards[0])
+  const selectedBoardId = currentBoard?.id ?? ''
+  useEffect(() => {
+    if (!boards.isPending) selectMenuBarBoard(selectedBoardId)
+  }, [boards.isPending, selectedBoardId])
+  const projectIds = currentBoard ? new Set(currentBoard.project_ids) : null
+  const loading = tasks.isPending || boards.isPending
+  const today = loading
+    ? []
+    : (tasks.data ?? []).filter(
+        (task) =>
+          task.scheduled_date === date &&
+          !task.deleted_at &&
+          (!projectIds || projectIds.has(task.project_id ?? '')),
+      )
   const completed = today.filter((task) => task.completed_at).length
   const percentage = today.length
     ? Math.round((completed / today.length) * 100)
@@ -84,17 +136,27 @@ export function MenuBarPanel() {
   return (
     <div className="menu-bar-panel">
       <header className="menu-bar-heading">
-        <div className="menu-bar-brand">
-          <span className="brand-mark" aria-hidden="true" />
-          <span>famo</span>
-        </div>
+        <MenuBarBoardPicker
+          boards={orderedBoards}
+          board={currentBoard}
+          showToday={showToday}
+          onChange={(id) => {
+            setBoardId(id)
+            try {
+              localStorage.setItem(boardStorageKey, id)
+            } catch {
+              // Keep the selection in the current panel if storage is unavailable.
+            }
+          }}
+        />
         <div className="menu-bar-heading-actions">
           <time dateTime={date}>{date.replaceAll('-', '/')}</time>
           <Button
             size="sm"
+            disabled={boards.isPending}
             onClick={() => {
               setOpenError('')
-              void openFamo().catch(() =>
+              void openFamo(selectedBoardId).catch(() =>
                 setOpenError('無法開啟 Famo，請重試。'),
               )
             }}
@@ -104,16 +166,22 @@ export function MenuBarPanel() {
         </div>
       </header>
       {openError && (
-        <p className="menu-bar-open-error" role="alert">
+        <p className="menu-bar-heading-error" role="alert">
           {openError}
+        </p>
+      )}
+      {boards.isLoadingError && (
+        <p className="menu-bar-heading-error" role="alert">
+          無法讀取 Board。{' '}
+          <button type="button" onClick={() => void boards.refetch()}>
+            重試
+          </button>
         </p>
       )}
       <section className="menu-bar-progress" aria-label="今日完成進度">
         <div>
           <h1>今日任務</h1>
-          <span>
-            {tasks.isPending || tasks.isError ? '—' : `${percentage}%`}
-          </span>
+          <span>{loading || tasks.isError ? '—' : `${percentage}%`}</span>
         </div>
         <progress
           aria-label="今日完成比例"
@@ -121,10 +189,10 @@ export function MenuBarPanel() {
           value={tasks.isError ? 0 : completed}
         />
         <p role="status">
-          {tasks.isPending
-            ? '正在讀取今日任務…'
-            : tasks.isError
-              ? '今日進度暫時無法更新'
+          {tasks.isError
+            ? '今日進度暫時無法更新'
+            : loading
+              ? '正在讀取今日任務…'
               : today.length
                 ? `已完成 ${completed} / ${today.length} 件${completed === today.length ? '，今天的任務都完成了！' : ''}`
                 : '今天還沒有安排任務'}
@@ -138,11 +206,17 @@ export function MenuBarPanel() {
               <RefreshCw size={14} /> 重試
             </Button>
           </div>
-        ) : !tasks.isPending && today.length === 0 ? (
+        ) : !loading && today.length === 0 ? (
           <div className="menu-bar-empty">
             <Circle size={28} aria-hidden="true" />
-            <p>留一點時間，完成重要的小事。</p>
-            <span>開啟 Famo，安排今天的第一件任務。</span>
+            {currentBoard ? (
+              <p>這個 Board 今天沒有任務。</p>
+            ) : (
+              <>
+                <p>留一點時間，完成重要的小事。</p>
+                <span>開啟 Famo，安排今天的第一件任務。</span>
+              </>
+            )}
           </div>
         ) : (
           <ul aria-label="今日任務列表">
@@ -152,6 +226,9 @@ export function MenuBarPanel() {
           </ul>
         )}
       </div>
+      <footer className="menu-bar-version">
+        famo {import.meta.env.FAMO_VERSION}
+      </footer>
     </div>
   )
 }

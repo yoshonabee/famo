@@ -40,7 +40,12 @@ import {
   useTodayProjectFilter,
 } from '@/components/today-project-filter'
 import { useTheme } from '@/lib/theme'
-import { isDesktop, openSettingsEvent, shortcutEvent } from '@/lib/desktop'
+import {
+  isDesktop,
+  openBoardEvent,
+  openSettingsEvent,
+  shortcutEvent,
+} from '@/lib/desktop'
 import { DatePicker } from '@/components/date-picker'
 import { CalendarDate, DateNavigation } from '@/components/date-navigation'
 import { CalendarPage } from '@/components/calendar-page'
@@ -92,6 +97,7 @@ const shortcuts = new Map([
   ['f', 'search'],
 ])
 const defaultNavigation = ['date', 'active', 'completed']
+const initialBoardId = new URLSearchParams(window.location.search).get('board')
 
 function Links({ task, onOpen }: { task: Task; onOpen: () => void }) {
   if (!task.links.length) return null
@@ -140,7 +146,14 @@ function App() {
     | 'preferences'
     | 'project'
     | 'board'
-  >('date')
+    | 'menu-bar-today'
+  >(
+    initialBoardId === null
+      ? 'date'
+      : initialBoardId
+        ? 'board'
+        : 'menu-bar-today',
+  )
   const boards = useQuery({
     queryKey: ['boards'],
     queryFn: ({ signal }) => request<Board[]>('/boards', undefined, signal),
@@ -156,7 +169,7 @@ function App() {
     [...defaultNavigation, ...boardsByNavId.keys()],
     order,
   )
-  const [boardId, setBoardId] = useState<string>()
+  const [boardId, setBoardId] = useState(initialBoardId ?? undefined)
   const [boardEditor, setBoardEditor] = useState<Board | 'new' | null>(null)
   const projects = useQuery({
     queryKey: ['projects'],
@@ -175,7 +188,7 @@ function App() {
     projectEditor && projectEditor !== 'new'
       ? (projectsById.get(projectEditor.id) ?? projectEditor)
       : undefined
-  let view = requestedView
+  let view = requestedView === 'menu-bar-today' ? 'date' : requestedView
   let currentBoard =
     view === 'board' ? boardsByNavId.get(`board:${boardId}`) : undefined
   if (
@@ -183,7 +196,7 @@ function App() {
     (view === 'project' && !projectsById.has(projectId ?? ''))
   )
     view = 'date'
-  if (view === 'date' && !showToday) {
+  if (view === 'date' && !showToday && requestedView !== 'menu-bar-today') {
     const firstBoardId = orderedNavIds.find((id) => boardsByNavId.has(id))
     currentBoard = boardsByNavId.get(firstBoardId ?? '')
     view = currentBoard ? 'board' : 'active'
@@ -239,9 +252,12 @@ function App() {
     setSearch('')
     window.scrollTo(0, 0)
   }
-  function goToToday() {
+  function goToToday(fromMenuBar = false) {
     setDate(localDate())
-    if (!showToday && currentBoard) {
+    if (fromMenuBar) {
+      setView('menu-bar-today')
+      setSearch('')
+    } else if (!showToday && currentBoard) {
       setBoardId(currentBoard.id)
       setView('board')
     } else setView('date')
@@ -249,6 +265,16 @@ function App() {
     setPalette(null)
     window.scrollTo(0, 0)
   }
+  const openBoard = useEffectEvent((id: unknown) => {
+    if (typeof id !== 'string') return
+    if (id === '') {
+      goToToday(true)
+      return
+    }
+    void client.invalidateQueries({ queryKey: ['boards'] })
+    setDate(localDate())
+    goToBoard(id)
+  })
   const runShortcut = useEffectEvent((action: unknown) => {
     if (projectEditor !== null || boardEditor !== null) return
     switch (action) {
@@ -271,6 +297,13 @@ function App() {
         break
     }
   })
+  useEffect(() => {
+    function onOpenBoard(event: Event) {
+      openBoard((event as CustomEvent<unknown>).detail)
+    }
+    window.addEventListener(openBoardEvent, onOpenBoard)
+    return () => window.removeEventListener(openBoardEvent, onOpenBoard)
+  }, [])
   useEffect(() => {
     const openSettings = () => {
       setSelected(null)
@@ -430,7 +463,7 @@ function App() {
         current: view === 'date',
         ariaLabel: '今日任務',
         shortcut: 'Meta+K Control+K',
-        onSelect: goToToday,
+        onSelect: () => goToToday(),
       },
     ],
     [

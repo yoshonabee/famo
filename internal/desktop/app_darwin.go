@@ -17,6 +17,7 @@ import (
 func Run(cfg Config) error {
 	var backend *Backend
 	agentTools := &AgentTools{}
+	menuBar := &MenuBar{refresh: make(chan struct{}, 1)}
 	assets := application.BundledAssetFileServer(web.Assets())
 	app := application.New(application.Options{
 		Name: "Famo", Description: "每天一小步。",
@@ -32,7 +33,7 @@ func Run(cfg Config) error {
 			DisableLogging: true,
 		},
 		Mac:      application.MacOptions{ApplicationShouldTerminateAfterLastWindowClosed: false},
-		Services: []application.Service{application.NewService(&ThemeFiles{}), application.NewService(&MenuBar{}), application.NewService(agentTools)},
+		Services: []application.Service{application.NewService(&ThemeFiles{}), application.NewService(menuBar), application.NewService(agentTools)},
 		SingleInstance: &application.SingleInstanceOptions{
 			UniqueID: "io.github.yoshonabee.famo",
 			OnSecondInstanceLaunch: func(application.SecondInstanceData) {
@@ -74,7 +75,7 @@ func Run(cfg Config) error {
 	addShortcut := func(menu *application.Menu, title, key, action string) {
 		menu.Add(title).SetAccelerator("CmdOrCtrl+" + key).OnClick(func(*application.Context) {
 			if window, ok := app.Window.GetByName("famo"); ok {
-				(&MenuBar{}).OpenFamo()
+				showFamo()
 				window.EmitEvent("famo:shortcut", action)
 			}
 		})
@@ -105,9 +106,9 @@ func Run(cfg Config) error {
 		mainWindow.Hide()
 	})
 	app.Event.OnApplicationEvent(events.Mac.ApplicationShouldHandleReopen, func(*application.ApplicationEvent) {
-		(&MenuBar{}).OpenFamo()
+		showFamo()
 	})
-	setupMenuBar(app, backend)
+	setupMenuBar(app, backend, menuBar)
 	app.OnShutdown(func() {
 		if err := backend.Close(); err != nil {
 			log.Printf("關閉 Famo：%v", err)
