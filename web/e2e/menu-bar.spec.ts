@@ -121,13 +121,18 @@ test('panel switches today’s tasks and progress by Board and remembers the sel
     menu.getByRole('menuitemradio', { name, exact: true })
   const list = page.getByRole('list', { name: '今日任務列表' })
   await expect(picker).toHaveText('今日')
-  await expect(picker).toHaveCSS('font-size', '14px')
+  await expect(picker).toHaveCSS('font-size', '16px')
   await expect(list.getByRole('listitem')).toHaveCount(2)
   await expect(page.locator('footer')).toHaveText(/^famo \d+\.\d+\.\d+$/)
 
   await picker.press('ArrowDown')
   await expect(choice('今日')).toBeFocused()
   await expect(choice('今日')).toHaveAttribute('aria-checked', 'true')
+  await expect(choice('今日')).toHaveCSS('font-size', '16px')
+  await expect(choice('今日').locator('span')).toHaveCSS(
+    'text-decoration-line',
+    'none',
+  )
   await page.keyboard.press('ArrowDown')
   await expect(choice('今日')).not.toBeFocused()
   await page.keyboard.press('Escape')

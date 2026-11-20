@@ -30,7 +30,7 @@
   min-height: 36px;
   padding: 0 6px;
   color: var(--foreground);
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 600;
   cursor: pointer;
 }
@@ -75,16 +75,12 @@
   padding: 6px 9px;
   border-radius: 6px;
   color: var(--foreground);
-  font-size: 14px;
+  font-size: 16px;
   text-align: left;
   cursor: pointer;
 }
 .menu-bar-board-menu button:hover {
   background: var(--accent);
-}
-.menu-bar-board-menu button:focus-visible span {
-  text-decoration: underline;
-  text-underline-offset: 3px;
 }
 .menu-bar-board-menu span {
   overflow-wrap: anywhere;
