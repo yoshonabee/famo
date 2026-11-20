@@ -9,6 +9,10 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { ApiError, request, type Project } from '@/lib/api'
+import { agentTool, isDesktop } from '@/lib/desktop'
+
+type ProjectInput = Pick<Project, 'name'> &
+  Partial<Pick<Project, 'color' | 'workspace_dir' | 'workspace_prompt'>>
 
 export function ProjectEditor({
   project,
@@ -29,12 +33,14 @@ export function ProjectEditor({
       : 'custom'
   })
   const [customColor, setCustomColor] = useState(project?.color ?? '#64748B')
+  const [workspaceDir, setWorkspaceDir] = useState<string>()
+  const [workspacePrompt, setWorkspacePrompt] = useState<string>()
   const color =
     choice === 'random' ? undefined : choice === 'custom' ? customColor : choice
   const validColor = color === undefined || /^#[0-9a-fA-F]{6}$/.test(color)
   const returnFocus = useRef<HTMLElement | null>(null)
   const save = useMutation({
-    mutationFn: (input: { name: string; color?: string }) =>
+    mutationFn: (input: ProjectInput) =>
       project
         ? request<Project>(`/projects/${project.id}`, {
             ...input,
@@ -55,22 +61,40 @@ export function ProjectEditor({
         void client.invalidateQueries({ queryKey: ['projects'] })
     },
   })
+  const picker = useMutation({
+    mutationFn: () => agentTool<string>('ChooseWorkspace'),
+    onSuccess: (dir) => {
+      if (dir) setWorkspaceDir(dir)
+    },
+  })
   const conflict = save.error instanceof ApiError && save.error.status === 409
+  const busy = save.isPending || picker.isPending
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (!save.isPending && name.trim() && validColor)
-      save.mutate({ name, color })
+    if (!busy && name.trim() && validColor)
+      save.mutate({
+        name,
+        color,
+        workspace_dir:
+          workspaceDir === (project?.workspace_dir ?? '')
+            ? undefined
+            : workspaceDir,
+        workspace_prompt:
+          workspacePrompt === (project?.workspace_prompt ?? '')
+            ? undefined
+            : workspacePrompt,
+      })
   }
 
   return (
     <DialogContent
       className="project-editor max-w-md"
-      showCloseButton={!save.isPending}
+      showCloseButton={!busy}
       onEscapeKeyDown={(event) => {
-        if (save.isPending) event.preventDefault()
+        if (busy) event.preventDefault()
       }}
       onInteractOutside={(event) => {
-        if (save.isPending) event.preventDefault()
+        if (busy) event.preventDefault()
       }}
       onOpenAutoFocus={() => {
         if (document.activeElement instanceof HTMLElement)
@@ -85,7 +109,7 @@ export function ProjectEditor({
         {project ? '編輯 Project' : '新增 Project'}
       </DialogTitle>
       <DialogDescription className="sr-only">
-        設定 Project 名稱和顏色後儲存。
+        編輯 Project 名稱、顏色和 Agent 工作區。
       </DialogDescription>
       <form className="project-form" onSubmit={submit}>
         <label className="field">
@@ -93,11 +117,11 @@ export function ProjectEditor({
           <input
             value={name}
             onChange={(event) => setName(event.target.value)}
-            readOnly={save.isPending}
+            readOnly={busy}
             required
           />
         </label>
-        <fieldset className="project-color-options" disabled={save.isPending}>
+        <fieldset className="project-color-options" disabled={busy}>
           <legend>Project 顏色</legend>
           <div className="project-color-choices">
             {!project && (
@@ -157,6 +181,50 @@ export function ProjectEditor({
             </div>
           )}
         </fieldset>
+        <details className="project-workspace">
+          <summary>Agent 工作區</summary>
+          <div className="project-workspace-fields">
+            <div className="project-workspace-path">
+              <label className="field">
+                <span>工作區路徑</span>
+                <input
+                  value={workspaceDir ?? project?.workspace_dir ?? ''}
+                  placeholder="/path/to/project"
+                  disabled={busy}
+                  onChange={(event) => setWorkspaceDir(event.target.value)}
+                />
+              </label>
+              {isDesktop() && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={busy}
+                  onClick={() => picker.mutate()}
+                >
+                  選擇資料夾
+                </Button>
+              )}
+            </div>
+            <label className="field">
+              <span>工作區指引（選填）</span>
+              <textarea
+                rows={2}
+                maxLength={2000}
+                value={workspacePrompt ?? project?.workspace_prompt ?? ''}
+                disabled={busy}
+                onChange={(event) => setWorkspacePrompt(event.target.value)}
+              />
+            </label>
+            <p className="project-workspace-description">
+              Agent 處理此 Project 的任務時，會取得這裡的路徑和指引。
+            </p>
+          </div>
+        </details>
+        {picker.isError && (
+          <p className="inline-edit-error" role="alert">
+            {picker.error.message}
+          </p>
+        )}
         {save.isError && (
           <p className="inline-edit-error" role="alert">
             {conflict
@@ -169,11 +237,11 @@ export function ProjectEditor({
             <DeleteCollectionButton
               collection="projects"
               item={project}
-              disabled={save.isPending}
+              disabled={busy}
               onDeleted={onDeleted}
             />
           )}
-          <Button disabled={save.isPending || !name.trim() || !validColor}>
+          <Button disabled={busy || !name.trim() || !validColor}>
             {save.isPending ? '儲存中…' : '儲存'}
           </Button>
         </div>

@@ -25,6 +25,7 @@ type task struct {
 	Title         string     `json:"title"`
 	Description   string     `json:"description"`
 	ScheduledDate string     `json:"scheduled_date"`
+	ProjectID     string     `json:"project_id,omitempty"`
 	CompletedAt   *time.Time `json:"completed_at"`
 	Version       int        `json:"version"`
 	Links         []struct {
@@ -144,18 +145,25 @@ func runTaskCommand(ctx context.Context, c *client, command string, args []strin
 		if len(args) != 1 || args[0] == "" || strings.HasPrefix(args[0], "-") {
 			return nil, errors.New("usage: famo-agent context ID")
 		}
-		current, err := call[task](ctx, c, taskPath(args[0])+"/context", nil)
+		current, err := call[struct {
+			task
+			Workspace *agent.Workspace `json:"workspace"`
+		}](ctx, c, taskPath(args[0])+"/context", nil)
 		if err != nil {
 			return nil, err
 		}
-		workspace, err := readWorkspace(ctx, c)
-		if err != nil {
-			return nil, err
+		if current.Workspace == nil {
+			// Older API versions return the task alone and only support a global workspace.
+			workspace, err := readWorkspace(ctx, c)
+			if err != nil {
+				return nil, err
+			}
+			current.Workspace = &workspace
 		}
 		return struct {
 			Task      task            `json:"task"`
 			Workspace agent.Workspace `json:"workspace"`
-		}{current, workspace}, nil
+		}{current.task, *current.Workspace}, nil
 	case "add":
 		title := flags.String("title", "", "task title")
 		date := flags.String("date", "", "scheduled date")

@@ -1371,6 +1371,28 @@ button:disabled {
   display: grid;
   gap: 12px;
 }
+.project-workspace summary {
+  width: fit-content;
+  cursor: pointer;
+  font-size: 14px;
+}
+.project-workspace-fields {
+  display: grid;
+  gap: 8px;
+  margin-top: 8px;
+}
+.project-workspace-path {
+  display: flex;
+  align-items: end;
+  gap: 8px;
+}
+.project-workspace-path .field {
+  flex: 1;
+}
+.project-workspace-description {
+  color: var(--muted-foreground);
+  font-size: 13px;
+}
 .collection-editor-actions {
   display: flex;
   justify-content: flex-end;

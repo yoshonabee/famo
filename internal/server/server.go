@@ -76,7 +76,7 @@ func newHandler(store *tasks.Store, assets fs.FS, access func(http.Handler) http
 				write(w, 200, saved)
 			})
 		}
-		projectRoutes(r, store)
+		projectRoutes(r, store, settingsEditable)
 		boardRoutes(r, store)
 		r.Get("/tasks", func(w http.ResponseWriter, r *http.Request) {
 			list, err := store.List(r.Context())
@@ -152,7 +152,14 @@ func newHandler(store *tasks.Store, assets fs.FS, access func(http.Handler) http
 			write(w, 200, t)
 		}
 		r.Get("/tasks/{id}", get)
-		r.Get("/tasks/{id}/context", get)
+		r.Get("/tasks/{id}/context", func(w http.ResponseWriter, r *http.Request) {
+			current, err := store.GetContext(r.Context(), chi.URLParam(r, "id"))
+			if err != nil {
+				fail(w, err)
+				return
+			}
+			write(w, 200, current)
+		})
 		r.Post("/tasks/{id}/restore", func(w http.ResponseWriter, r *http.Request) {
 			var in struct {
 				Version int `json:"version"`
