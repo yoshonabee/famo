@@ -117,7 +117,12 @@ function App() {
     refetchInterval: 30_000,
   })
   const [view, setView] = useState<
-    'active' | 'date' | 'completed' | 'recently-deleted' | 'preferences' | 'project'
+    | 'active'
+    | 'date'
+    | 'completed'
+    | 'recently-deleted'
+    | 'preferences'
+    | 'project'
   >('date')
   const projects = useQuery({
     queryKey: ['projects'],
