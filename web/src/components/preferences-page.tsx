@@ -10,6 +10,7 @@ import {
 import { useRef, useState, type ChangeEvent } from 'react'
 import { AgentPreferences } from '@/components/agent-preferences'
 import { Button } from '@/components/ui/button'
+import { DataCleanupPreferences } from '@/components/data-cleanup-preferences'
 import { ThemeEditor } from '@/components/theme-editor'
 import { ThemePreview } from '@/components/theme-preview'
 import { exportThemeFile } from '@/lib/desktop'
@@ -308,6 +309,7 @@ export function PreferencesPage({
           ? `跟隨系統 · 目前為${theme.name}`
           : `目前主題：${theme.name}`}
       </p>
+      <DataCleanupPreferences />
     </div>
   )
 }
