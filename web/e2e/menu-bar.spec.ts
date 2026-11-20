@@ -85,6 +85,67 @@ test('panel counts scheduled local tasks, reflects API edits and rolls over at m
   await expect(page.getByRole('status')).toHaveText('已完成 0 / 1 件')
 })
 
+test('panel switches today’s tasks and progress by Board and remembers the selection', async ({
+  page,
+  request,
+}) => {
+  const date = '2040-02-01'
+  await page.clock.setFixedTime(new Date(`${date}T12:00:00+08:00`))
+  const project = await request.post('/api/projects', {
+    data: { name: '選單列工作' },
+  })
+  await expect(project).toBeOK()
+  const { id: projectId } = await project.json()
+  const work = await request.post('/api/boards', {
+    data: { name: '工作', project_ids: [projectId] },
+  })
+  await expect(work).toBeOK()
+  const { id: workId, version: workVersion } = await work.json()
+  const empty = await request.post('/api/boards', {
+    data: { name: '選單列空白 Board', project_ids: [] },
+  })
+  await expect(empty).toBeOK()
+  const { id: emptyId } = await empty.json()
+
+  for (const input of [
+    { title: '整理工作', project_id: projectId, scheduled_date: date },
+    { title: '下班採買', scheduled_date: date },
+    { title: '明天寄出', project_id: projectId, scheduled_date: '2040-02-02' },
+  ]) {
+    await expect(await request.post('/api/tasks', { data: input })).toBeOK()
+  }
+
+  await page.goto('/menu-bar.html')
+  const picker = page.getByRole('combobox', { name: '選擇 Board' })
+  const list = page.getByRole('list', { name: '今日任務列表' })
+  await expect(picker).toHaveValue('')
+  await expect(list.getByRole('listitem')).toHaveCount(2)
+  await expect(page.locator('footer')).toHaveText(/^famo \d+\.\d+\.\d+$/)
+
+  await picker.selectOption(workId)
+  await expect(page.locator('.menu-bar-board-picker span')).toHaveText('工作')
+  await expect(list.getByRole('listitem')).toHaveCount(1)
+  await expect(list).toHaveText('整理工作')
+  await list.getByRole('checkbox').click()
+  await expect(page.getByRole('status')).toContainText('已完成 1 / 1 件')
+  await page.screenshot({ path: '/private/tmp/famo-menu-bar-board.png' })
+
+  await page.reload()
+  await expect(picker).toHaveValue(workId)
+  await expect(list).toHaveText('整理工作')
+  await picker.selectOption(emptyId)
+  await expect(page.getByText('這個 Board 今天沒有任務。')).toBeVisible()
+  await expect(page.getByRole('progressbar')).toHaveAttribute('value', '0')
+  await picker.selectOption(workId)
+
+  const deleted = await request.post(`/api/boards/${workId}/delete`, {
+    data: { version: workVersion },
+  })
+  await expect(deleted).toBeOK()
+  await expect(picker).toHaveValue('')
+  await expect(page.getByRole('status')).toHaveText('已完成 1 / 2 件')
+})
+
 test('square checkboxes complete and reopen tasks, preserve dates and recover from failures and conflicts', async ({
   page,
   request,

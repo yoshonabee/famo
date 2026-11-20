@@ -1,12 +1,20 @@
 import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowUpRight, Circle, RefreshCw } from 'lucide-react'
+import {
+  ArrowUpRight,
+  ChevronDown,
+  Circle,
+  LayoutGrid,
+  RefreshCw,
+} from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
-import { ApiError, request, type Task } from '@/lib/api'
+import { ApiError, request, type Board, type Task } from '@/lib/api'
 import { localDate } from '@/lib/calendar'
 import { openFamo } from '@/lib/desktop'
 import { useTheme } from '@/lib/theme'
+
+const boardStorageKey = 'famo.menu-bar.board'
 
 function MenuBarTask({ task }: { task: Task }) {
   const client = useQueryClient()
@@ -55,6 +63,19 @@ export function MenuBarPanel() {
   useTheme()
   const [date, setDate] = useState(localDate)
   const [openError, setOpenError] = useState('')
+  const [boardId, setBoardId] = useState(() => {
+    try {
+      return localStorage.getItem(boardStorageKey) ?? ''
+    } catch {
+      return ''
+    }
+  })
+  const boards = useQuery({
+    queryKey: ['boards'],
+    queryFn: ({ signal }) => request<Board[]>('/boards', undefined, signal),
+    refetchInterval: 2_000,
+    refetchOnWindowFocus: 'always',
+  })
   const tasks = useQuery({
     queryKey: ['tasks'],
     queryFn: ({ signal }) => request<Task[]>('/tasks', undefined, signal),
@@ -70,9 +91,17 @@ export function MenuBarPanel() {
       window.removeEventListener('focus', update)
     }
   }, [])
-  const today = (tasks.data ?? []).filter(
-    (task) => task.scheduled_date === date && !task.deleted_at,
-  )
+  const currentBoard = boards.data?.find((board) => board.id === boardId)
+  const projectIds = currentBoard ? new Set(currentBoard.project_ids) : null
+  const loading = tasks.isPending || (!!boardId && boards.isPending)
+  const today = loading
+    ? []
+    : (tasks.data ?? []).filter(
+        (task) =>
+          task.scheduled_date === date &&
+          !task.deleted_at &&
+          (!projectIds || projectIds.has(task.project_id ?? '')),
+      )
   const completed = today.filter((task) => task.completed_at).length
   const percentage = today.length
     ? Math.round((completed / today.length) * 100)
@@ -84,10 +113,35 @@ export function MenuBarPanel() {
   return (
     <div className="menu-bar-panel">
       <header className="menu-bar-heading">
-        <div className="menu-bar-brand">
-          <span className="brand-mark" aria-hidden="true" />
-          <span>famo</span>
-        </div>
+        <label className="menu-bar-board-picker" title={currentBoard?.name}>
+          <LayoutGrid
+            className="menu-bar-board-icon"
+            size={16}
+            aria-hidden="true"
+          />
+          <span aria-hidden="true">{currentBoard?.name ?? '今日'}</span>
+          <ChevronDown size={13} aria-hidden="true" />
+          <select
+            aria-label="選擇 Board"
+            value={currentBoard?.id ?? ''}
+            onChange={(event) => {
+              const id = event.currentTarget.value
+              setBoardId(id)
+              try {
+                localStorage.setItem(boardStorageKey, id)
+              } catch {
+                // Keep the selection in the current panel if storage is unavailable.
+              }
+            }}
+          >
+            <option value="">今日</option>
+            {boards.data?.map((board) => (
+              <option key={board.id} value={board.id}>
+                {board.name}
+              </option>
+            ))}
+          </select>
+        </label>
         <div className="menu-bar-heading-actions">
           <time dateTime={date}>{date.replaceAll('-', '/')}</time>
           <Button
@@ -104,16 +158,22 @@ export function MenuBarPanel() {
         </div>
       </header>
       {openError && (
-        <p className="menu-bar-open-error" role="alert">
+        <p className="menu-bar-heading-error" role="alert">
           {openError}
+        </p>
+      )}
+      {boards.isLoadingError && (
+        <p className="menu-bar-heading-error" role="alert">
+          無法讀取 Board。{' '}
+          <button type="button" onClick={() => void boards.refetch()}>
+            重試
+          </button>
         </p>
       )}
       <section className="menu-bar-progress" aria-label="今日完成進度">
         <div>
           <h1>今日任務</h1>
-          <span>
-            {tasks.isPending || tasks.isError ? '—' : `${percentage}%`}
-          </span>
+          <span>{loading || tasks.isError ? '—' : `${percentage}%`}</span>
         </div>
         <progress
           aria-label="今日完成比例"
@@ -121,10 +181,10 @@ export function MenuBarPanel() {
           value={tasks.isError ? 0 : completed}
         />
         <p role="status">
-          {tasks.isPending
-            ? '正在讀取今日任務…'
-            : tasks.isError
-              ? '今日進度暫時無法更新'
+          {tasks.isError
+            ? '今日進度暫時無法更新'
+            : loading
+              ? '正在讀取今日任務…'
               : today.length
                 ? `已完成 ${completed} / ${today.length} 件${completed === today.length ? '，今天的任務都完成了！' : ''}`
                 : '今天還沒有安排任務'}
@@ -138,11 +198,17 @@ export function MenuBarPanel() {
               <RefreshCw size={14} /> 重試
             </Button>
           </div>
-        ) : !tasks.isPending && today.length === 0 ? (
+        ) : !loading && today.length === 0 ? (
           <div className="menu-bar-empty">
             <Circle size={28} aria-hidden="true" />
-            <p>留一點時間，完成重要的小事。</p>
-            <span>開啟 Famo，安排今天的第一件任務。</span>
+            {currentBoard ? (
+              <p>這個 Board 今天沒有任務。</p>
+            ) : (
+              <>
+                <p>留一點時間，完成重要的小事。</p>
+                <span>開啟 Famo，安排今天的第一件任務。</span>
+              </>
+            )}
           </div>
         ) : (
           <ul aria-label="今日任務列表">
@@ -152,6 +218,9 @@ export function MenuBarPanel() {
           </ul>
         )}
       </div>
+      <footer className="menu-bar-version">
+        famo {import.meta.env.FAMO_VERSION}
+      </footer>
     </div>
   )
 }

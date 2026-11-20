@@ -13,21 +13,50 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 8px;
   padding: 18px 20px 12px;
   color: var(--muted-foreground);
 }
-.menu-bar-brand {
+.menu-bar-board-picker {
+  position: relative;
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 6px;
+  min-width: 0;
+  min-height: 28px;
+  padding: 0 6px;
+  margin-left: -6px;
+  border-radius: 6px;
   color: var(--foreground);
-  font-size: 18px;
-  font-weight: 650;
-  letter-spacing: -0.8px;
+  font-size: 14px;
+  font-weight: 600;
 }
-.menu-bar-brand .brand-mark {
-  width: 24px;
-  height: 24px;
+.menu-bar-board-picker:hover {
+  background: var(--accent);
+}
+.menu-bar-board-picker:has(select:focus-visible) {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+.menu-bar-board-picker svg {
+  flex-shrink: 0;
+  color: var(--muted-foreground);
+}
+.menu-bar-board-picker .menu-bar-board-icon {
+  color: var(--primary);
+}
+.menu-bar-board-picker span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.menu-bar-board-picker select {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
 }
 .menu-bar-heading time {
   font-size: 11px;
@@ -36,6 +65,7 @@
 .menu-bar-heading-actions {
   display: flex;
   align-items: center;
+  flex-shrink: 0;
   gap: 8px;
 }
 .menu-bar-heading-actions > button {
@@ -144,14 +174,25 @@
 .menu-bar-empty span {
   font-size: 11px;
 }
-.menu-bar-open-error,
+.menu-bar-heading-error,
 .menu-bar-task-error {
   color: var(--danger);
   margin: 6px 0 0;
   font-size: 12px;
 }
-.menu-bar-open-error {
+.menu-bar-heading-error {
   padding: 0 20px;
+}
+.menu-bar-heading-error button {
+  text-decoration: underline;
+  cursor: pointer;
+}
+.menu-bar-version {
+  flex-shrink: 0;
+  padding: 8px 20px 12px;
+  color: var(--muted-foreground);
+  font-size: 10px;
+  text-align: right;
 }
 @theme inline {
   --color-background: var(--background);
