@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import { Button } from '@/components/ui/button'
-import { previewStyle } from '@/components/theme-preview'
+import { TodayThemePreview } from '@/components/today-theme-preview'
 import { themeColorFields, type Theme, type ThemeDraft } from '@/lib/theme'
 
 export function ThemeEditor({
@@ -153,31 +153,7 @@ export function ThemeEditor({
           </fieldset>
           <div className="palette-preview-area">
             <h3>即時預覽</h3>
-            <div
-              className="palette-preview"
-              style={{ ...previewStyle(preview), colorScheme: draft.mode }}
-            >
-              <div className="palette-preview-nav">
-                <strong>famo</strong>
-                <span>今日</span>
-                <span>任務</span>
-                <span>設定</span>
-              </div>
-              <div className="palette-preview-main">
-                <h4>{draft.name.trim() || '我的主題'}</h4>
-                <p>留一點時間，完成重要的小事。</p>
-                <div className="palette-preview-input">新增一件任務…</div>
-                <div className="palette-preview-row">
-                  <i />
-                  整理今天的想法
-                </div>
-                <div className="palette-preview-row">
-                  <i className="checked" />
-                  喝一杯水
-                </div>
-                <span className="palette-preview-button">新增任務</span>
-              </div>
-            </div>
+            <TodayThemePreview theme={preview} />
             <p className="preferences-description">
               儲存後才會套用到整個介面。
             </p>

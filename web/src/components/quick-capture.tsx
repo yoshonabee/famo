@@ -64,12 +64,12 @@ export function useQuickCapture(onCapture: () => void, scheduledDate = '') {
       )
     }
   }
-  function submit(title: string, floating = false) {
+  function submit(title: string, fromPalette?: { scheduledDate: string }) {
     const draft = {
       id: crypto.randomUUID(),
       title,
-      scheduled_date: scheduledDate,
-      floating,
+      scheduled_date: fromPalette?.scheduledDate ?? scheduledDate,
+      floating: !!fromPalette,
     }
     setDrafts((old) => [...old, draft])
     onCapture()

@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
-import { Search } from 'lucide-react'
+import { CalendarDays, ChevronDown, Search } from 'lucide-react'
+import { DatePicker } from '@/components/date-picker'
 import {
   CaptureAnnouncement,
   CaptureDraftRow,
@@ -51,6 +52,7 @@ export function TaskPalette({
   onClose,
   capture,
   captureDate,
+  onCaptureDateChange,
   search,
   onSearchChange,
 }: {
@@ -58,6 +60,7 @@ export function TaskPalette({
   onClose: () => void
   capture: ReturnType<typeof useQuickCapture>
   captureDate: string
+  onCaptureDateChange: (date: string) => void
   search: string
   onSearchChange: (value: string) => void
 }) {
@@ -77,6 +80,14 @@ export function TaskPalette({
         <DialogContent
           ref={content}
           className="task-palette"
+          showCloseButton={!isCapture}
+          onEscapeKeyDown={(event) => {
+            if (
+              event.target instanceof Element &&
+              event.target.closest('.calendar-popover')
+            )
+              event.preventDefault()
+          }}
           onOpenAutoFocus={(event) => {
             if (document.activeElement instanceof HTMLElement)
               returnFocus.current = document.activeElement
@@ -95,21 +106,46 @@ export function TaskPalette({
             {isCapture ? '快速新增任務' : '搜尋任務'}
           </DialogTitle>
           {isCapture ? (
-            <CaptureEntry onSubmit={(title) => capture.submit(title, true)} />
+            <>
+              <CaptureEntry
+                onSubmit={(title) =>
+                  capture.submit(title, { scheduledDate: captureDate })
+                }
+              />
+              <DialogDescription className="sr-only">
+                選擇任務日期，按 Enter 新增。
+              </DialogDescription>
+              <div className="task-palette-hint task-palette-date">
+                <DatePicker
+                  date={captureDate}
+                  onChange={(value) => {
+                    onCaptureDateChange(value)
+                    content.current
+                      ?.querySelector('input')
+                      ?.focus({ preventScroll: true })
+                  }}
+                  label={`任務日期 ${captureDate}`}
+                  buttonClassName="task-palette-date-button"
+                  align="start"
+                >
+                  <CalendarDays size={14} />
+                  {captureDate}
+                  <ChevronDown size={12} />
+                </DatePicker>
+              </div>
+            </>
           ) : (
-            <TaskSearch
-              value={search}
-              onChange={onSearchChange}
-              onDone={onClose}
-            />
+            <>
+              <TaskSearch
+                value={search}
+                onChange={onSearchChange}
+                onDone={onClose}
+              />
+              <DialogDescription className="task-palette-hint">
+                搜尋目前清單，按 Enter 返回
+              </DialogDescription>
+            </>
           )}
-          <DialogDescription className="task-palette-hint">
-            {isCapture
-              ? captureDate
-                ? `任務日期 ${captureDate}`
-                : '未指定日期'
-              : '搜尋目前清單，按 Enter 返回'}
-          </DialogDescription>
           {isCapture && drafts.length > 0 && (
             <ul className="task-palette-drafts" aria-label="快速新增草稿">
               {drafts.map((draft) => (

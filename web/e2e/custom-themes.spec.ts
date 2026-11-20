@@ -79,7 +79,11 @@ test('設定位於側欄底部，桌面選單事件會開啟設定且保留新�
 })
 
 test('調色盤預覽、新增、重開、編輯及刪除自訂主題', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 })
   await page.goto('/')
+  const today = await page
+    .locator('.calendar-heading time')
+    .getAttribute('datetime')
   await openSettings(page)
   await page.getByRole('button', { name: '新增主題', exact: true }).click()
   const editor = page.locator('.theme-editor')
@@ -87,10 +91,28 @@ test('調色盤預覽、新增、重開、編輯及刪除自訂主題', async ({
   await editor.getByLabel('基礎主題', { exact: true }).selectOption('midnight')
   await editor.getByLabel('頁面背景色碼').fill('#182822')
   await editor.getByLabel('強調色調色盤', { exact: true }).fill('#8ee0ba')
-  await expect(editor.locator('.palette-preview')).toHaveCSS(
-    'background-color',
-    'rgb(24, 40, 34)',
+  const preview = editor.locator('.palette-preview')
+  await expect(preview).toHaveAttribute('inert', '')
+  await expect(preview).toHaveCSS('background-color', 'rgb(24, 40, 34)')
+  await expect(preview.locator('.calendar-heading time')).toHaveAttribute(
+    'datetime',
+    today!,
   )
+  await expect(preview.locator('.nav-item.active')).toHaveText('今日')
+  await expect(preview.locator('.brand-mark')).toHaveCSS(
+    'background-color',
+    'rgb(142, 224, 186)',
+  )
+  await expect(preview.locator('.is-completed [role="checkbox"]')).toHaveCSS(
+    'background-color',
+    'rgb(142, 224, 186)',
+  )
+  const search = (await preview.locator('.search').boundingBox())!
+  const dateNavigation = (await preview
+    .locator('.date-navigation')
+    .boundingBox())!
+  expect(search.x).toBeGreaterThan(dateNavigation.x + dateNavigation.width)
+  await expect(preview.locator('.capture-entry')).toBeVisible()
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'moss')
   await page.getByRole('button', { name: '今日任務', exact: true }).click()
   await openSettings(page)
@@ -307,6 +329,12 @@ test('手機調色盤可操作，取消不套用配色且畫面不溢出', async
         () => document.documentElement.scrollWidth <= innerWidth,
       ),
     ).toBe(true)
+    const sidebar = (await editor
+      .locator('.palette-preview-sidebar')
+      .boundingBox())!
+    const main = (await editor.locator('.palette-preview-main').boundingBox())!
+    expect(sidebar.x).toEqual(main.x)
+    expect(sidebar.y).toBeLessThan(main.y)
   }
   await page.setViewportSize({ width: 390, height: 844 })
   await editor.screenshot({

@@ -1,4 +1,17 @@
-import { expect, test } from '@playwright/test'
+import { expect, test, type Locator } from '@playwright/test'
+
+async function expectCentered(dialog: Locator) {
+  await expect(dialog).toBeVisible()
+  const offset = await dialog.evaluate((element) => {
+    const box = element.getBoundingClientRect()
+    return {
+      x: box.x + box.width / 2 - innerWidth / 2,
+      y: box.y + box.height / 2 - innerHeight / 2,
+    }
+  })
+  expect(Math.abs(offset.x)).toBeLessThanOrEqual(1)
+  expect(Math.abs(offset.y)).toBeLessThanOrEqual(1)
+}
 
 test('⌘D 收合與展開側邊欄，⌘K 從其他頁面或日期返回今日', async ({ page }) => {
   await page.goto('/')
@@ -50,7 +63,10 @@ test('⌘T 浮窗沿用目前日期，儲存失敗可重試且不清除清單輸
   const dialog = page.getByRole('dialog', { name: '快速新增任務' })
   const input = dialog.getByRole('textbox', { name: '快速新增任務名稱' })
   await expect(input).toBeFocused()
-  await expect(dialog).toContainText(`任務日期 ${date}`)
+  await expectCentered(dialog)
+  await expect(
+    dialog.getByRole('button', { name: `任務日期 ${date}` }),
+  ).toBeVisible()
   await input.fill('- [ ] 浮窗新增測試')
   await input.press('Enter')
   await expect(dialog.getByRole('alert')).toContainText('暫時無法儲存')
@@ -72,6 +88,54 @@ test('⌘T 浮窗沿用目前日期，儲存失敗可重試且不清除清單輸
   await expect(page.getByLabel('編輯任務標題：浮窗新增測試')).toBeVisible()
 })
 
+test('⌘T 從任務列表開啟時預設今天，日期可改選並儲存', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 700 })
+  await page.goto('/')
+  const today = await page.locator('h1 time').getAttribute('datetime')
+  await page.getByRole('button', { name: '前一天' }).click()
+  await page.getByRole('button', { name: '任務列表' }).click()
+  await page.keyboard.press('Meta+t')
+  const dialog = page.getByRole('dialog', { name: '快速新增任務' })
+  await expectCentered(dialog)
+  await expect(dialog.getByRole('button', { name: '關閉' })).toHaveCount(0)
+  const date = dialog.getByRole('button', { name: `任務日期 ${today}` })
+  const calendar = dialog.getByRole('dialog', { name: '選擇日期' })
+  await date.click()
+  await expect(calendar.getByRole('button', { name: today! })).toBeFocused()
+  await page.keyboard.press('Escape')
+  await expect(calendar).toBeHidden()
+  await expect(date).toBeFocused()
+  await date.click()
+  await page.keyboard.press('ArrowRight')
+  const next = await calendar
+    .locator('[data-date]:focus')
+    .getAttribute('data-date')
+  expect(next).not.toBe(today)
+  await page.keyboard.press('Enter')
+  await expect(calendar).toBeHidden()
+  await expect(
+    dialog.getByRole('button', { name: `任務日期 ${next}` }),
+  ).toBeVisible()
+  const input = dialog.getByRole('textbox', { name: '快速新增任務名稱' })
+  await expect(input).toBeFocused()
+  await input.fill('浮窗選擇任務日期')
+  const saved = page.waitForResponse(
+    (response) =>
+      response.url().endsWith('/api/tasks') &&
+      response.request().method() === 'POST' &&
+      response.ok(),
+  )
+  await input.press('Enter')
+  expect(await (await saved).json()).toMatchObject({
+    title: '浮窗選擇任務日期',
+    scheduled_date: next,
+  })
+  await page.mouse.click(8, 8)
+  await expect(dialog).toBeHidden()
+  await page.keyboard.press('Meta+t')
+  await expect(date).toBeVisible()
+})
+
 test('⌘F 浮窗使用清單的搜尋條件，Enter 返回篩選後的今日清單', async ({
   page,
   request,
@@ -90,6 +154,9 @@ test('⌘F 浮窗使用清單的搜尋條件，Enter 返回篩選後的今日清
   const dialog = page.getByRole('dialog', { name: '搜尋任務' })
   const input = dialog.getByRole('textbox', { name: '搜尋任務' })
   await expect(input).toBeFocused()
+  await expectCentered(dialog)
+  await page.setViewportSize({ width: 390, height: 844 })
+  await expectCentered(dialog)
   await expect(input).toHaveValue('浮窗搜尋：')
   await input.fill('浮窗搜尋：符合')
   await input.press('Enter')

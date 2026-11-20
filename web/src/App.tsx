@@ -28,7 +28,7 @@ import { PreferencesPage } from '@/components/preferences-page'
 import { useTheme } from '@/lib/theme'
 import { isDesktop, openSettingsEvent, shortcutEvent } from '@/lib/desktop'
 import { DatePicker } from '@/components/date-picker'
-import { DateNavigation } from '@/components/date-navigation'
+import { CalendarDate, DateNavigation } from '@/components/date-navigation'
 import { CalendarPage } from '@/components/calendar-page'
 import { localDate } from '@/lib/calendar'
 import { linkLabel } from '@/lib/links'
@@ -118,9 +118,11 @@ function App() {
   const [search, setSearch] = useState('')
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [palette, setPalette] = useState<'capture' | 'search' | null>(null)
-  const captureDate =
-    view === 'date' ? date : view === 'active' ? '' : localDate()
-  const capture = useQuickCapture(() => setSearch(''), captureDate)
+  const [paletteCaptureDate, setPaletteCaptureDate] = useState('')
+  const capture = useQuickCapture(
+    () => setSearch(''),
+    view === 'date' ? date : '',
+  )
   const visibleDrafts = capture.drafts.filter((draft) =>
     view === 'date' ? draft.scheduled_date === date : true,
   )
@@ -138,6 +140,8 @@ function App() {
         setSidebarCollapsed((collapsed) => !collapsed)
         break
       case 'capture':
+        if (palette !== 'capture')
+          setPaletteCaptureDate(view === 'date' ? date : localDate())
         setPalette('capture')
         break
       case 'today':
@@ -323,18 +327,7 @@ function App() {
           {view === 'date' && (
             <header className="calendar-heading">
               <h1>
-                <time dateTime={date}>
-                  {new Date(`${date}T12:00:00`).toLocaleDateString('zh-TW', {
-                    year: 'numeric',
-                    month: 'long',
-                    day: 'numeric',
-                  })}
-                </time>
-                <span className="date-weekday">
-                  {new Date(`${date}T12:00:00`).toLocaleDateString('zh-TW', {
-                    weekday: 'long',
-                  })}
-                </span>
+                <CalendarDate date={date} />
               </h1>
               <DateNavigation date={date} onChange={setDate} />
               {searchField}
@@ -516,7 +509,8 @@ function App() {
         mode={palette}
         onClose={() => setPalette(null)}
         capture={capture}
-        captureDate={captureDate}
+        captureDate={paletteCaptureDate}
+        onCaptureDateChange={setPaletteCaptureDate}
         search={search}
         onSearchChange={setSearch}
       />
