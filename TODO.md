@@ -62,7 +62,7 @@
 - [x] 提供 Agent Skill，說明如何透過 CLI 查任務、讀取脈絡、新增待辦、回報進度和標記完成，以及遇到版本衝突時如何處理。
 - [x] 設定頁可安裝或移除桌面 CLI，並提供可複製的 Skill 安裝指令。
 - [x] 可設定預設 workspace dir 和選填的自訂 prompt。CLI 一併回傳路徑及 prompt，留空時 Agent 依 Skill 的預設方式查找脈絡。
-- [ ] Project 功能加入後可設定各 Project 的 workspace dir 和選填 prompt。未歸類的任務使用預設 workspace，已歸類的任務使用所屬 Project 的 workspace。
+- [x] Project 功能加入後可設定各 Project 的 workspace dir 和選填 prompt。未歸類的任務使用預設 workspace，已歸類的任務使用所屬 Project 的 workspace。
 
 ## 資料備份
 

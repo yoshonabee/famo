@@ -5,6 +5,8 @@ export type Project = {
   id: string
   name: string
   color: string
+  workspace_dir: string
+  workspace_prompt: string
   version: number
 }
 export type Board = {

@@ -207,9 +207,9 @@ npm run format:check
 | --- | --- |
 | `GET /health` | 健康檢查 |
 | `GET /agent/workspace` | 預設工作區路徑 `dir` 和選填指引 `prompt` |
-| `GET /projects` | 所有 Project，包含 `id`、`name`、`color` 與 `version` |
-| `POST /projects` | 以 `{"name":"工作"}` 建立 Project。可選填 `#RRGGBB` 格式的 `color`，省略則隨機指定 |
-| `POST /projects/{id}` | 以 `{"name":"新名稱","version":1,"color":"#4F87CC"}` 更新 Project。省略 `color` 時沿用原色 |
+| `GET /projects` | 所有 Project，包含 `id`、`name`、`color`、`workspace_dir`、`workspace_prompt` 與 `version` |
+| `POST /projects` | 以 `{"name":"工作"}` 建立 Project。可選填 `#RRGGBB` 格式的 `color`，省略則隨機指定。工作區欄位可選填 |
+| `POST /projects/{id}` | 帶目前的 `version` 和 `name` 更新 Project。省略 `color` 或工作區欄位時保留原值，工作區欄位傳空字串可清除 |
 | `POST /projects/{id}/delete` | 以 `{"version":1}` 刪除 Project。任務保留並改為未分類，相關 Board 會移除此 Project 的篩選 |
 | `GET /boards` | 所有 Board，包含 `id`、`name`、`project_ids` 與 `version` |
 | `POST /boards` | 以 `{"name":"工作 Board","project_ids":["project-id"]}` 建立 Board。空陣列表示顯示零個 Project |
@@ -220,7 +220,7 @@ npm run format:check
 | `GET /tasks/recently-deleted` | 最近 7 天軟刪除的任務，依刪除時間由新到舊排列 |
 | `POST /tasks/reorder` | `{"task_ids":["id2","id1"]}` 調整未完成任務的相對順序 |
 | `GET /tasks/{id}` | 完整任務 |
-| `GET /tasks/{id}/context` | Agent 脈絡，與完整任務相同 |
+| `GET /tasks/{id}/context` | 完整任務及適用的 `workspace` 物件，含 `dir` 和 `prompt` |
 | `POST /tasks/{id}/actions` | 具版本檢查的任務操作 |
 | `POST /tasks/{id}/restore` | 以 `{"version":3}` 還原最近刪除的任務，回傳完整任務及新版本 |
 
@@ -273,6 +273,8 @@ curl http://127.0.0.1:8787/tasks/TASK_ID/actions \
 ## Agent CLI 與 Skill
 
 macOS 桌面版在「設定 → 本機 Agent」可安裝、更新或移除 CLI，並複製 Skill 安裝指令。CLI 安裝到 `~/.local/bin/famo-agent`。若該資料夾未加到 `PATH`，可用完整路徑執行。在同一頁設定本機工作區的絕對路徑，並選擇性填寫指引，例如先查哪份文件或怎麼跑測試。Famo 提供路徑和指引，由本機 Agent 直接讀取工作區檔案。
+
+在側欄開啟個別 Project 的編輯視窗，展開「Agent 工作區」可設定該 Project 的目錄和選填指引。`famo-agent context` 依任務所屬 Project 回傳工作區，即使該 Project 的欄位留空。未分類的任務使用設定頁的預設工作區。`famo-agent today` 列出跨 Project 的今日任務並回傳預設工作區，處理個別任務前請先讀取該任務的脈絡。桌面版請從 App 內編輯 Project 工作區。
 
 `make build` 也會產生 `bin/famo-agent`。可在專案根目錄用 `./bin/famo-agent cli install` 安裝 CLI，或直接執行二進位檔。連線到命令列版的網頁服務時，請在子指令前加 `--url http://127.0.0.1:8787`。桌面版預設自動探索 API，隔離環境可傳 `--api-info PATH`。
 

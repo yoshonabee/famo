@@ -7,7 +7,14 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-func projectRoutes(r chi.Router, store *tasks.Store) {
+func projectRoutes(r chi.Router, store *tasks.Store, settingsEditable bool) {
+	canWrite := func(w http.ResponseWriter, in tasks.ProjectInput) bool {
+		if settingsEditable || (in.WorkspaceDir == nil && in.WorkspacePrompt == nil) {
+			return true
+		}
+		write(w, http.StatusForbidden, map[string]string{"error": "請在 Famo 內變更 Project 工作區"})
+		return false
+	}
 	r.Get("/projects", func(w http.ResponseWriter, r *http.Request) {
 		list, err := store.ListProjects(r.Context())
 		if err != nil {
@@ -18,7 +25,7 @@ func projectRoutes(r chi.Router, store *tasks.Store) {
 	})
 	r.Post("/projects", func(w http.ResponseWriter, r *http.Request) {
 		var in tasks.ProjectInput
-		if !decode(w, r, &in) {
+		if !decode(w, r, &in) || !canWrite(w, in) {
 			return
 		}
 		project, err := store.CreateProject(r.Context(), in)
@@ -33,7 +40,7 @@ func projectRoutes(r chi.Router, store *tasks.Store) {
 			tasks.ProjectInput
 			Version int `json:"version"`
 		}
-		if !decode(w, r, &in) {
+		if !decode(w, r, &in) || !canWrite(w, in.ProjectInput) {
 			return
 		}
 		project, err := store.UpdateProject(r.Context(), chi.URLParam(r, "id"), in.ProjectInput, in.Version)

@@ -6,7 +6,10 @@ import (
 	"path/filepath"
 	"reflect"
 	"slices"
+	"strings"
 	"testing"
+
+	"famo/internal/agent"
 )
 
 func TestDeleteProjectPreservesTasksAndClearsBoardSelections(t *testing.T) {
@@ -237,7 +240,7 @@ UPDATE agent_preferences SET workspace_dir='/workspace' WHERE id=1;`)
 	}
 }
 
-func TestAddColorToEarlierV7Projects(t *testing.T) {
+func TestAddColorAndWorkspaceToEarlierV7Projects(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "v7.db")
 	db, err := sql.Open("sqlite", path)
 	if err != nil {
@@ -266,9 +269,12 @@ PRAGMA user_version=7;`)
 	if err != nil || task.ProjectID != want.ID {
 		t.Fatalf("lost assignment: %+v, %v", task, err)
 	}
-	saved, err := store.UpdateProject(ctx, want.ID, ProjectInput{Name: want.Name, Color: ptr("#123456")}, want.Version)
-	if err != nil || saved.Color != "#123456" || saved.Version != want.Version+1 {
-		t.Fatalf("update color: %+v, %v", saved, err)
+	dir := t.TempDir()
+	saved, err := store.UpdateProject(ctx, want.ID, ProjectInput{
+		Name: want.Name, Color: ptr("#123456"), WorkspaceDir: ptr(dir + string(filepath.Separator) + "."), WorkspacePrompt: ptr(" Read the README. "),
+	}, want.Version)
+	if err != nil || saved.Color != "#123456" || saved.Version != want.Version+1 || saved.WorkspaceDir != dir || saved.WorkspacePrompt != "Read the README." {
+		t.Fatalf("update color and workspace: %+v, %v", saved, err)
 	}
 	board, err := store.CreateBoard(ctx, BoardInput{Name: "Existing Projects", ProjectIDs: []string{want.ID}})
 	if err != nil {
@@ -290,11 +296,50 @@ PRAGMA user_version=7;`)
 	}
 	defer reopened.Close()
 	projects, err = reopened.ListProjects(ctx)
-	if err != nil || len(projects) != 2 || projects[0].Color != defaultProjectColor || projects[1].Color != saved.Color {
-		t.Fatalf("earlier v7 writes lost colors: %+v, %v", projects, err)
+	if err != nil || len(projects) != 2 || projects[0].Color != defaultProjectColor || projects[0].WorkspaceDir != "" || projects[0].WorkspacePrompt != "" {
+		t.Fatalf("unexpected defaults after earlier v7 writes: %+v, %v", projects, err)
+	}
+	saved.Name = "Renamed by older app"
+	if projects[1] != saved {
+		t.Fatalf("earlier v7 writes lost color or workspace: %+v; want %+v", projects[1], saved)
+	}
+	current, err := reopened.GetContext(ctx, task.ID)
+	if err != nil || !reflect.DeepEqual(current.Task, task) || current.Workspace != (agent.Workspace{Dir: dir, Prompt: saved.WorkspacePrompt}) {
+		t.Fatalf("reopening lost task context: %+v, %v", current, err)
 	}
 	boards, err := reopened.ListBoards(ctx)
 	if err != nil || !reflect.DeepEqual(boards, []Board{board}) {
 		t.Fatalf("reopening after earlier v7 writes lost saved Board: %+v, %v", boards, err)
+	}
+}
+
+func TestProjectWorkspaceUpdateValidation(t *testing.T) {
+	store := openTest(t)
+	ctx := t.Context()
+	dir := t.TempDir()
+	project, err := store.CreateProject(ctx, ProjectInput{Name: "Work", WorkspaceDir: &dir, WorkspacePrompt: ptr("Keep this prompt")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, in := range []ProjectInput{
+		{Name: project.Name, WorkspaceDir: ptr("relative/path")},
+		{Name: project.Name, WorkspaceDir: ptr(filepath.Join(dir, "missing"))},
+		{Name: project.Name, WorkspacePrompt: ptr(strings.Repeat("字", 2001))},
+	} {
+		if _, err := store.UpdateProject(ctx, project.ID, in, project.Version); !errors.Is(err, ErrInvalid) {
+			t.Fatalf("accepted invalid workspace update: %v", err)
+		}
+	}
+	input := ProjectInput{Name: project.Name, WorkspacePrompt: ptr("")}
+	if _, err := store.UpdateProject(ctx, project.ID, input, project.Version+1); !errors.Is(err, ErrConflict) {
+		t.Fatalf("accepted stale workspace update: %v", err)
+	}
+	projects, err := store.ListProjects(ctx)
+	if err != nil || !slices.Equal(projects, []Project{project}) {
+		t.Fatalf("failed updates changed Project: %+v, %v", projects, err)
+	}
+	cleared, err := store.UpdateProject(ctx, project.ID, input, project.Version)
+	if err != nil || cleared.WorkspaceDir != dir || cleared.WorkspacePrompt != "" || cleared.Version != project.Version+1 {
+		t.Fatalf("clearing only prompt changed other workspace details: %+v, %v", cleared, err)
 	}
 }
