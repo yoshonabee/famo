@@ -128,6 +128,18 @@ Agent 應先讀取這個檔案，再呼叫 `url` 下的 `/health`，確認狀態
 
 首次用新版開啟舊 SQLite 資料庫時，Famo 會在交易中升級到 v6，保留任務標題、備註、日期、連結網址、完成與刪除狀態、時間、排序和版本。很早期的任務若尚無備註欄位，會將原有目標、背景和驗收條件合併成備註。原始任務、排序和選項會封存，待你主動清理。升級後請用支援 v6 的執行檔。
 
+### 備份到 Google Drive
+
+macOS 桌面版的「設定 → Google Drive 備份」可手動上傳目前資料庫。
+
+1. 在自己的 Google Cloud 專案啟用 Google Drive API，設定 OAuth 同意畫面，並把要用的帳號加入測試使用者（若同意畫面處於測試模式）。建立「桌面應用程式」OAuth 用戶端並下載 JSON。[Google 桌面應用程式 OAuth 設定](https://developers.google.com/identity/protocols/oauth2/native-app#prerequisites)
+2. 在 Famo 選擇該 JSON，並在系統瀏覽器選擇要備份到的 Google 帳號。Famo 請求 `drive.file` 權限，授權資料保存在 macOS 鑰匙圈。
+3. 按「立即備份」。每次上傳都會在「我的雲端硬碟」建立獨立的 `famo-backup-…Z.db`，檔名時間使用 UTC；完成後可點選檔名在 Drive 開啟。
+
+備份是一份包含已提交 WAL 變更的完整 SQLite 快照，可在 Famo 運行時建立。任務內容、資料庫設定與仍保留的舊任務資料都會一起上傳。主題存在 WebView 的本機儲存空間，可另行匯出。
+
+授權失效時可點選「重新授權」。上傳中斷時可先在 Drive 確認此次檔案是否已建立，再手動重試。「移除本機授權」會清除 Famo 鑰匙圈項目，既有備份可在 Drive 管理。
+
 ### 清理舊任務資料
 
 先用 `make build` 取得 `bin/famo`。桌面版的預設資料庫如下，命令列版請將路徑替換為 `data/famo.db` 或你實際使用的資料庫。

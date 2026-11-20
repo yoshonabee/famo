@@ -487,7 +487,7 @@ function App() {
             ))}
         </div>
         <div className="main-content" hidden={view !== 'preferences'}>
-          <PreferencesPage appearance={theme} />
+          <PreferencesPage appearance={theme} active={view === 'preferences'} />
         </div>
       </main>
       <Dialog

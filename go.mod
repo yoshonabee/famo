@@ -5,6 +5,7 @@ go 1.26.5
 require (
 	github.com/go-chi/chi/v5 v5.5.0
 	github.com/wailsapp/wails/v3 v3.1.0
+	golang.org/x/oauth2 v0.37.0
 	modernc.org/sqlite v1.61.1
 )
 

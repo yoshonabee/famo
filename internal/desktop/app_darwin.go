@@ -17,6 +17,7 @@ import (
 func Run(cfg Config) error {
 	var backend *Backend
 	agentTools := &AgentTools{}
+	driveBackup := &DriveBackup{dbPath: cfg.DBPath, client: googleDriveClient()}
 	assets := application.BundledAssetFileServer(web.Assets())
 	app := application.New(application.Options{
 		Name: "Famo", Description: "每天一小步。",
@@ -31,8 +32,13 @@ func Run(cfg Config) error {
 			}),
 			DisableLogging: true,
 		},
-		Mac:      application.MacOptions{ApplicationShouldTerminateAfterLastWindowClosed: false},
-		Services: []application.Service{application.NewService(&ThemeFiles{}), application.NewService(&MenuBar{}), application.NewService(agentTools)},
+		Mac: application.MacOptions{ApplicationShouldTerminateAfterLastWindowClosed: false},
+		Services: []application.Service{
+			application.NewService(&ThemeFiles{}),
+			application.NewService(&MenuBar{}),
+			application.NewService(agentTools),
+			application.NewService(driveBackup),
+		},
 		SingleInstance: &application.SingleInstanceOptions{
 			UniqueID: "io.github.yoshonabee.famo",
 			OnSecondInstanceLaunch: func(application.SecondInstanceData) {
