@@ -7,6 +7,13 @@ export type Project = {
   color: string
   version: number
 }
+export type Board = {
+  id: string
+  name: string
+  project_ids: string[]
+  version: number
+}
+export type BoardInput = Pick<Board, 'name' | 'project_ids'>
 export type Task = {
   id: string
   title: string

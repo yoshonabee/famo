@@ -200,6 +200,10 @@ PRAGMA user_version=7;`)
 	if err != nil || saved.Color != "#123456" || saved.Version != want.Version+1 {
 		t.Fatalf("update color: %+v, %v", saved, err)
 	}
+	board, err := store.CreateBoard(ctx, BoardInput{Name: "Existing Projects", ProjectIDs: []string{want.ID}})
+	if err != nil {
+		t.Fatalf("create Board on older v7 schema: %v", err)
+	}
 	// Earlier v7 binaries use explicit columns for creation and renaming.
 	execSQL(t, store.db, "INSERT INTO projects(id,name,version) VALUES('old-app','Created by older app',1)")
 	execSQL(t, store.db, "UPDATE projects SET name='Renamed by older app' WHERE id='existing'")
@@ -218,5 +222,9 @@ PRAGMA user_version=7;`)
 	projects, err = reopened.ListProjects(ctx)
 	if err != nil || len(projects) != 2 || projects[0].Color != defaultProjectColor || projects[1].Color != saved.Color {
 		t.Fatalf("earlier v7 writes lost colors: %+v, %v", projects, err)
+	}
+	boards, err := reopened.ListBoards(ctx)
+	if err != nil || !reflect.DeepEqual(boards, []Board{board}) {
+		t.Fatalf("reopening after earlier v7 writes lost saved Board: %+v, %v", boards, err)
 	}
 }

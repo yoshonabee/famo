@@ -77,6 +77,7 @@ func newHandler(store *tasks.Store, assets fs.FS, access func(http.Handler) http
 			})
 		}
 		projectRoutes(r, store)
+		boardRoutes(r, store)
 		r.Get("/tasks", func(w http.ResponseWriter, r *http.Request) {
 			list, err := store.List(r.Context())
 			if err != nil {
@@ -163,7 +164,8 @@ func newHandler(store *tasks.Store, assets fs.FS, access func(http.Handler) http
 	r.Route("/api", api)
 	r.Group(api)
 	r.NotFound(func(w http.ResponseWriter, r *http.Request) {
-		if strings.HasPrefix(r.URL.Path, "/api/") || strings.HasPrefix(r.URL.Path, "/tasks/") || strings.HasPrefix(r.URL.Path, "/projects/") {
+		if strings.HasPrefix(r.URL.Path, "/api/") || strings.HasPrefix(r.URL.Path, "/tasks/") ||
+			strings.HasPrefix(r.URL.Path, "/projects/") || strings.HasPrefix(r.URL.Path, "/boards/") {
 			write(w, 404, map[string]string{"error": "找不到 API"})
 			return
 		}

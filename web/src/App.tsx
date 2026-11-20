@@ -14,8 +14,10 @@ import {
   CalendarDays,
   CheckCheck,
   ExternalLink,
+  Folder,
   GripVertical,
   Inbox,
+  LayoutGrid,
   LoaderCircle,
   PanelLeftClose,
   PanelLeftOpen,
@@ -25,11 +27,12 @@ import {
   Settings,
   Trash2,
 } from 'lucide-react'
+import { BoardEditor } from '@/components/board-editor'
 import { PreferencesPage } from '@/components/preferences-page'
-import { ProjectBadge } from '@/components/project-appearance'
+import { ProjectBadge, ProjectColorDot } from '@/components/project-appearance'
 import { ProjectEditor } from '@/components/project-editor'
-import { ProjectNavigation } from '@/components/project-navigation'
 import { RecentlyDeletedPage } from '@/components/recently-deleted-page'
+import { SidebarCollection } from '@/components/sidebar-collection'
 import {
   TodayProjectFilter,
   useTodayProjectFilter,
@@ -65,6 +68,7 @@ import {
   orderSubset,
   request,
   type Action,
+  type Board,
   type Project,
   type Task,
 } from '@/lib/api'
@@ -128,7 +132,22 @@ function App() {
     | 'recently-deleted'
     | 'preferences'
     | 'project'
+    | 'board'
   >('date')
+  const boards = useQuery({
+    queryKey: ['boards'],
+    queryFn: ({ signal }) => request<Board[]>('/boards', undefined, signal),
+    refetchInterval: 30_000,
+  })
+  const boardList = boards.data ?? []
+  const [boardId, setBoardId] = useState<string>()
+  const [boardEditor, setBoardEditor] = useState<string | null>(null)
+  const currentBoard =
+    view === 'board' ? boardList.find(({ id }) => id === boardId) : undefined
+  const editBoard = boardList.find(({ id }) => id === boardEditor)
+  const boardProjectIds = currentBoard
+    ? new Set(currentBoard.project_ids)
+    : null
   const projects = useQuery({
     queryKey: ['projects'],
     queryFn: ({ signal }) => request<Project[]>('/projects', undefined, signal),
@@ -145,23 +164,42 @@ function App() {
   )
   const [date, setDate] = useState(localDate)
   const todayFilter = useTodayProjectFilter()
-  const isToday = view === 'date' && date === localDate()
+  const today = localDate()
+  const calendarDate = currentBoard ? today : date
+  const isToday = view === 'date' && date === today
   const projectFiltered = isToday && todayFilter.hidden.length > 0
   const [search, setSearch] = useState('')
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [palette, setPalette] = useState<'capture' | 'search' | null>(null)
   const [paletteCaptureDate, setPaletteCaptureDate] = useState('')
+  const captureProjectId =
+    currentBoard?.project_ids.length === 1
+      ? currentBoard.project_ids[0]
+      : currentProjectId
   const capture = useQuickCapture(
     () => setSearch(''),
-    view === 'date' ? date : '',
-    currentProjectId,
+    view === 'date' || currentBoard ? calendarDate : '',
+    captureProjectId,
   )
   const visibleDrafts = capture.drafts.filter((draft) => {
+    if (boardProjectIds)
+      return (
+        draft.scheduled_date === calendarDate &&
+        boardProjectIds.has(draft.project_id ?? '')
+      )
     if (view === 'date') return draft.scheduled_date === date
     if (view === 'project') return draft.project_id === currentProjectId
     return true
   })
   const [selected, setSelected] = useState<string | null>(null)
+  function goToBoard(id: string) {
+    setBoardId(id)
+    setView('board')
+    setSelected(null)
+    setPalette(null)
+    setSearch('')
+    window.scrollTo(0, 0)
+  }
   function goToProject(id: string) {
     setProjectId(id)
     setView('project')
@@ -178,14 +216,15 @@ function App() {
     window.scrollTo(0, 0)
   }
   const runShortcut = useEffectEvent((action: unknown) => {
-    if (projectEditor !== null) return
+    if (projectEditor !== null || boardEditor !== null) return
     switch (action) {
       case 'sidebar':
         setSidebarCollapsed((collapsed) => !collapsed)
         break
       case 'capture':
+        if (currentBoard && !captureProjectId) goToToday()
         if (palette !== 'capture')
-          setPaletteCaptureDate(view === 'date' ? date : localDate())
+          setPaletteCaptureDate(view === 'date' ? date : today)
         setPalette('capture')
         break
       case 'today':
@@ -300,11 +339,12 @@ function App() {
     .filter((t) => t.completed_at)
     .sort(compareCompletionTime)
   const listTitle =
-    view === 'project'
+    currentBoard?.name ??
+    (view === 'project'
       ? currentProject?.name
       : view === 'active'
         ? '任務'
-        : '已完成'
+        : '已完成')
   const listCount =
     view === 'project'
       ? matching.length
@@ -401,6 +441,35 @@ function App() {
             <span className="nav-label">已完成</span>
             <span className="nav-count">{all.length - active.length}</span>
           </button>
+        </nav>
+        <SidebarCollection
+          name="Board"
+          items={boardList}
+          icon={LayoutGrid}
+          current={currentBoard?.id}
+          collapsed={sidebarCollapsed}
+          error={boards.error?.message}
+          onSelect={goToBoard}
+          onExpand={() => setSidebarCollapsed(false)}
+          onCreate={() => setBoardEditor('new')}
+          onRetry={() => void boards.refetch()}
+        />
+        <SidebarCollection
+          name="Project"
+          items={projectList}
+          icon={Folder}
+          renderItemIcon={(project) => (
+            <ProjectColorDot color={project.color} />
+          )}
+          current={currentProjectId}
+          collapsed={sidebarCollapsed}
+          error={projects.error?.message}
+          onSelect={goToProject}
+          onExpand={() => setSidebarCollapsed(false)}
+          onCreate={() => setProjectEditor('new')}
+          onRetry={() => void projects.refetch()}
+        />
+        <div className="sidebar-footer">
           <button
             className={
               view === 'recently-deleted' ? 'nav-item active' : 'nav-item'
@@ -413,18 +482,6 @@ function App() {
             <Trash2 size={17} />
             <span className="nav-label">最近刪除</span>
           </button>
-        </nav>
-        <ProjectNavigation
-          projects={projectList}
-          current={currentProjectId}
-          collapsed={sidebarCollapsed}
-          error={projects.error?.message}
-          onSelect={goToProject}
-          onExpand={() => setSidebarCollapsed(false)}
-          onCreate={() => setProjectEditor('new')}
-          onRetry={() => void projects.refetch()}
-        />
-        <div className="sidebar-footer">
           <button
             className={view === 'preferences' ? 'nav-item active' : 'nav-item'}
             onClick={() => setView('preferences')}
@@ -455,7 +512,20 @@ function App() {
             <div className="list-toolbar">
               <div className="list-title">
                 <h1>{listTitle}</h1>
-                <span className="list-count">{listCount}</span>
+                {!currentBoard && (
+                  <span className="list-count">{listCount}</span>
+                )}
+                {currentBoard && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label="編輯 Board"
+                    title="編輯 Board"
+                    onClick={() => setBoardEditor(currentBoard.id)}
+                  >
+                    <Pencil />
+                  </Button>
+                )}
                 {currentProject && (
                   <Button
                     variant="ghost"
@@ -468,6 +538,11 @@ function App() {
                   </Button>
                 )}
               </div>
+              {currentBoard && (
+                <p className="board-date">
+                  今日 <CalendarDate date={calendarDate} />
+                </p>
+              )}
               {searchField}
             </div>
           )}
@@ -475,23 +550,20 @@ function App() {
             <TodayProjectFilter projects={projectList} filter={todayFilter} />
           )}
           <QuickCapture
-            hidden={!isActiveList && view !== 'date'}
+            hidden={!isActiveList && view !== 'date' && !captureProjectId}
             onSubmit={capture.submit}
             announcement={capture.announcement}
           />
-          {view === 'date' && (
+          {(view === 'date' || currentBoard) && (
             <CalendarPage
-              date={date}
-              key={date}
-              tasks={
-                projectFiltered
-                  ? all.filter(
-                      (task) =>
-                        !todayFilter.hidden.includes(task.project_id ?? ''),
-                    )
-                  : all
-              }
-              projectFiltered={projectFiltered}
+              date={calendarDate}
+              key={`${currentBoard?.id ?? 'date'}/${calendarDate}`}
+              tasks={all.filter((task) => {
+                const id = task.project_id ?? ''
+                if (boardProjectIds) return boardProjectIds.has(id)
+                return !projectFiltered || !todayFilter.hidden.includes(id)
+              })}
+              projectFiltered={projectFiltered || !!currentBoard}
               search={search}
               loading={!tasks.isSuccess}
               busy={busy}
@@ -626,6 +698,24 @@ function App() {
         )}
       </Dialog>
       <Dialog
+        open={boardEditor !== null}
+        onOpenChange={(open) => !open && setBoardEditor(null)}
+      >
+        {boardEditor !== null && (
+          <BoardEditor
+            key={boardEditor}
+            board={editBoard}
+            projects={projects.data}
+            projectsError={projects.error?.message}
+            onRetryProjects={() => void projects.refetch()}
+            onSaved={(saved) => {
+              if (boardEditor === 'new') goToBoard(saved.id)
+              setBoardEditor(null)
+            }}
+          />
+        )}
+      </Dialog>
+      <Dialog
         open={projectEditor !== null}
         onOpenChange={(open) => !open && setProjectEditor(null)}
       >
@@ -645,7 +735,9 @@ function App() {
         onClose={() => setPalette(null)}
         capture={capture}
         captureDate={paletteCaptureDate}
-        captureProject={currentProject}
+        captureProject={
+          captureProjectId ? projectsById.get(captureProjectId) : undefined
+        }
         onCaptureDateChange={setPaletteCaptureDate}
         search={search}
         onSearchChange={setSearch}
