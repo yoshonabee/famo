@@ -8,14 +8,21 @@ export const DialogDescription = DialogPrimitive.Description
 export function DialogContent({
   children,
   className,
+  overlayClassName,
   showCloseButton = true,
   ...props
 }: ComponentProps<typeof DialogPrimitive.Content> & {
   showCloseButton?: boolean
+  overlayClassName?: string
 }) {
   return (
     <DialogPrimitive.Portal>
-      <DialogPrimitive.Overlay className="fixed inset-0 z-40 bg-black/25 backdrop-blur-[2px]" />
+      <DialogPrimitive.Overlay
+        className={cn(
+          'fixed inset-0 z-40 bg-black/25 backdrop-blur-[2px]',
+          overlayClassName,
+        )}
+      />
       <DialogPrimitive.Content
         className={cn(
           'fixed left-1/2 top-1/2 z-50 max-h-[90dvh] w-[calc(100%-2rem)] max-w-2xl -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-xl border border-input bg-background p-4 shadow-xl sm:p-5',

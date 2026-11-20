@@ -1,5 +1,31 @@
 import { expect, test } from '@playwright/test'
 
+test('最近刪除緊接在側欄底部的設定之前', async ({ page }) => {
+  await page.goto('/')
+  const footer = page.locator('.sidebar > .sidebar-footer:last-child')
+  await expect(footer.getByRole('button')).toHaveText(['最近刪除', '設定'])
+  const recentlyDeleted = footer.getByRole('button', { name: '最近刪除' })
+  const settings = footer.getByRole('button', { name: '設定' })
+  const recentlyDeletedBox = (await recentlyDeleted.boundingBox())!
+  const settingsBox = (await settings.boundingBox())!
+  expect(recentlyDeletedBox.y + recentlyDeletedBox.height).toBeLessThanOrEqual(
+    settingsBox.y,
+  )
+
+  await page.getByRole('button', { name: '收合側邊欄' }).click()
+  await recentlyDeleted.click()
+  await expect(recentlyDeleted).toHaveAttribute('aria-current', 'page')
+  await expect(page.getByRole('heading', { name: '最近刪除' })).toBeVisible()
+
+  await page.getByRole('button', { name: '展開側邊欄' }).click()
+  await page.setViewportSize({ width: 390, height: 844 })
+  await expect(recentlyDeleted).toBeInViewport()
+  await settings.click()
+  await expect(settings).toHaveAttribute('aria-current', 'page')
+  await recentlyDeleted.click()
+  await expect(recentlyDeleted).toHaveAttribute('aria-current', 'page')
+})
+
 test('最近刪除可搜尋與還原，並保留原日期和完成狀態', async ({
   page,
   request,
@@ -59,7 +85,9 @@ test('最近刪除可搜尋與還原，並保留原日期和完成狀態', async
   expect(titleBox!.width).toBeGreaterThan(100)
   await restore.click()
   await expect(row).not.toBeVisible()
-  await expect(page.getByRole('status')).toContainText('已還原「準備專案交接」')
+  await expect(page.getByRole('main').getByRole('status')).toContainText(
+    '已還原「準備專案交接」',
+  )
   await page.getByRole('button', { name: '已完成', exact: true }).click()
   await expect(title).toHaveValue(task.title)
   const restored = await (await request.get(`/api/tasks/${task.id}`)).json()

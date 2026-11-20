@@ -21,11 +21,14 @@ test('貼上網址即可附加脈絡，多個 PR 顯示編號，多餘連結展�
     'https://github.com/example/famo/pull/124',
     'https://team.slack.com/archives/C123/p456',
   ]
+  const urlField = page.getByRole('textbox', { name: '連結網址' })
+  const linkForm = dialog.locator('form').filter({ has: urlField })
   for (const [index, url] of urls.entries()) {
     await dialog.getByRole('button', { name: '新增連結', exact: true }).click()
-    await expect(dialog.getByRole('combobox')).toHaveCount(0)
-    await dialog.getByRole('textbox', { name: '連結網址' }).fill(url)
-    await dialog.getByRole('button', { name: '加入', exact: true }).click()
+    await expect(linkForm).toBeVisible()
+    await expect(linkForm.getByRole('combobox')).toHaveCount(0)
+    await linkForm.getByRole('textbox', { name: '連結網址' }).fill(url)
+    await linkForm.getByRole('button', { name: '加入', exact: true }).click()
     await expect(dialog.locator('.detail-links a')).toHaveCount(index + 1)
   }
   await dialog.getByRole('button', { name: '關閉', exact: true }).click()

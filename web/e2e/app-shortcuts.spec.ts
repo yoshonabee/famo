@@ -21,7 +21,7 @@ test('⌘D 收合與展開側邊欄，⌘K 從其他頁面或日期返回今日'
   const expand = page.getByRole('button', { name: '展開側邊欄' })
   await expect(expand).toHaveAttribute('aria-expanded', 'false')
   await expect(page.locator('.sidebar')).toHaveCSS('width', '56px')
-  await page.getByRole('button', { name: '任務列表' }).click()
+  await page.getByRole('button', { name: '任務列表', exact: true }).click()
   await expect(
     page.getByRole('heading', { name: '任務', exact: true }),
   ).toBeVisible()

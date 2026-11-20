@@ -42,6 +42,29 @@ CREATE TRIGGER IF NOT EXISTS tasks_order_insert AFTER INSERT ON tasks BEGIN
 END;
 `
 
+const boardSchema = `
+CREATE TABLE IF NOT EXISTS boards (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL COLLATE NOCASE UNIQUE,
+    version INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS board_projects (
+    board_id TEXT NOT NULL REFERENCES boards(id),
+    project_id TEXT NOT NULL REFERENCES projects(id),
+    PRIMARY KEY (board_id,project_id)
+);
+CREATE INDEX IF NOT EXISTS board_projects_project ON board_projects(project_id);
+CREATE TRIGGER IF NOT EXISTS boards_remove_projects BEFORE DELETE ON boards BEGIN
+    DELETE FROM board_projects WHERE board_id=OLD.id;
+END;
+CREATE TRIGGER IF NOT EXISTS projects_remove_from_boards BEFORE DELETE ON projects BEGIN
+    UPDATE boards SET version=version+1 WHERE id IN (
+        SELECT board_id FROM board_projects WHERE project_id=OLD.id
+    );
+    DELETE FROM board_projects WHERE project_id=OLD.id;
+END;
+`
+
 type schemaReader interface {
 	QueryRowContext(context.Context, string, ...any) *sql.Row
 }
@@ -70,13 +93,22 @@ func migrate(db *sql.DB) error {
 		return err
 	}
 	defer tx.Rollback()
-	if err := migrateTasks(ctx, tx); err != nil {
+	if err := migrateSchema(ctx, tx); err != nil {
 		return err
 	}
 	return tx.Commit()
 }
 
-func migrateTasks(ctx context.Context, tx *sql.Tx) error {
+func migrateSchema(ctx context.Context, tx *sql.Tx) error {
+	if err := migrateTasksAndProjects(ctx, tx); err != nil {
+		return err
+	}
+	// Boards are additive and leave the v7 task and Project schema readable by older builds.
+	_, err := tx.ExecContext(ctx, boardSchema)
+	return err
+}
+
+func migrateTasksAndProjects(ctx context.Context, tx *sql.Tx) error {
 	version, err := databaseVersion(ctx, tx)
 	if err != nil {
 		return err

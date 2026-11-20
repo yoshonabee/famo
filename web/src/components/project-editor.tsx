@@ -1,6 +1,7 @@
 import { useId, useRef, useState, type FormEvent } from 'react'
 import { ProjectColorDot, projectColors } from '@/components/project-appearance'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { DeleteCollectionButton } from '@/components/delete-collection-button'
 import { Button } from '@/components/ui/button'
 import {
   DialogContent,
@@ -12,9 +13,11 @@ import { ApiError, request, type Project } from '@/lib/api'
 export function ProjectEditor({
   project,
   onSaved,
+  onDeleted,
 }: {
   project?: Project
   onSaved: (project: Project) => void
+  onDeleted: (id: string) => void
 }) {
   const client = useQueryClient()
   const [name, setName] = useState(project?.name ?? '')
@@ -161,9 +164,19 @@ export function ProjectEditor({
               : save.error.message}
           </p>
         )}
-        <Button disabled={save.isPending || !name.trim() || !validColor}>
-          {save.isPending ? '儲存中…' : '儲存'}
-        </Button>
+        <div className="collection-editor-actions">
+          {project && (
+            <DeleteCollectionButton
+              collection="projects"
+              item={project}
+              disabled={save.isPending}
+              onDeleted={onDeleted}
+            />
+          )}
+          <Button disabled={save.isPending || !name.trim() || !validColor}>
+            {save.isPending ? '儲存中…' : '儲存'}
+          </Button>
+        </div>
       </form>
     </DialogContent>
   )

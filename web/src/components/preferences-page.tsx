@@ -10,6 +10,7 @@ import {
 import { useRef, useState, type ChangeEvent } from 'react'
 import { AgentPreferences } from '@/components/agent-preferences'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import { DataCleanupPreferences } from '@/components/data-cleanup-preferences'
 import { ThemeEditor } from '@/components/theme-editor'
 import { ThemePreview } from '@/components/theme-preview'
@@ -58,8 +59,12 @@ function ThemeOption({
 
 export function PreferencesPage({
   appearance,
+  showToday,
+  onShowTodayChange,
 }: {
   appearance: ThemeController
+  showToday: boolean
+  onShowTodayChange: (show: boolean) => void
 }) {
   const {
     preference,
@@ -121,6 +126,24 @@ export function PreferencesPage({
       <header className="preferences-heading">
         <h1>設定</h1>
       </header>
+      <section
+        className="mb-6 grid gap-2"
+        aria-labelledby="sidebar-preferences-heading"
+      >
+        <h2
+          id="sidebar-preferences-heading"
+          className="text-base font-semibold"
+        >
+          側邊欄
+        </h2>
+        <label className="flex w-fit items-center gap-2 text-sm">
+          <Checkbox
+            checked={showToday}
+            onCheckedChange={(checked) => onShowTodayChange(checked === true)}
+          />
+          <span>顯示預設的「今日」分頁</span>
+        </label>
+      </section>
       <AgentPreferences />
       <div className="theme-tools">
         <Button

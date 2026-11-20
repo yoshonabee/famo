@@ -43,4 +43,5 @@ func projectRoutes(r chi.Router, store *tasks.Store) {
 		}
 		write(w, http.StatusOK, project)
 	})
+	r.Post("/projects/{id}/delete", deleteCollection(store.DeleteProject))
 }
