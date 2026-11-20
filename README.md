@@ -34,6 +34,8 @@
 
 在任務詳情的「Project」欄位可指派或變更分類，選擇「未分類」可清除歸屬。任務可同時有日期與 Project。「今日」和其他日期會一起顯示當天各 Project 的任務，原有「任務」與「已完成」仍跨 Project 檢視。
 
+在任務、已完成、Project、日期或 Board 清單，可從任務列向上或向下拖曳來選取一段任務。按住 Shift 點選可選取範圍，按住 ⌘（其他平台用 Ctrl）點選或在觸控裝置上長按，可增減個別任務。鍵盤聚焦任務列時，按空白鍵可切換選取，Shift 搭配方向鍵可延伸範圍。選取後可在下方浮動操作列全選目前清單、指派 Project 或清除選取。選擇「未分類」可批次清除歸屬。批次指派會一併檢查每件任務的版本，有衝突時會更新清單並保留仍可見的選取項目供重試。
+
 「今日」上方的「篩選 Project」可複選要顯示的分類與未分類任務。今日進度、已完成、先前未完成與未指定日期區段都會套用篩選。選擇會記在目前的瀏覽器或桌面 WebView，按「顯示全部」即可重設。
 
 ## Boards
@@ -56,7 +58,11 @@
 
 ## 外觀與偏好設定
 
-從側欄底部的「設定」，可預覽並選擇 12 款內建主題：淺色的苔綠（預設）、亞麻、海鹽、薰衣草、玫瑰、沙丘，以及深色的午夜、石墨、夜森、極光、暮紫、摩卡。「跟隨系統」會隨系統外觀即時切換苔綠與午夜。macOS 桌面版也可使用 Famo 選單中的「偏好設定⋯」或 ⌘, 開啟設定頁。
+從側欄底部開啟「設定」，可切換「外觀」、「語言」、「側邊欄」、「本機 Agent」與「本機資料」。切換分類會保留尚未儲存的主題和 Agent 工作區草稿。
+
+在「設定 → 語言」可在繁體中文（預設）與 English 之間切換。語言會立即套用到主視窗、選單列面板和 Famo 的 macOS 選單項目，並記在目前的瀏覽器或桌面版。你輸入的任務名稱、備註、Project、Board 和自訂主題名稱會保留原文。
+
+在「外觀」可預覽並選擇 12 款內建主題：淺色的苔綠（預設）、亞麻、海鹽、薰衣草、玫瑰、沙丘，以及深色的午夜、石墨、夜森、極光、暮紫、摩卡。「跟隨系統」會隨系統外觀即時切換苔綠與午夜。macOS 桌面版也可使用 Famo 選單中的「偏好設定⋯」或 ⌘, 開啟設定頁。
 
 主題立即套用到清單、月曆、任務詳情與 App 內的 Famo 圖示，不需按儲存。偏好保存在目前瀏覽器或桌面 WebView 的本機儲存空間，重新開啟後沿用，同一來源的分頁也會同步；不同瀏覽器、瀏覽器與桌面版之間各自設定。無法使用本機儲存時仍可切換主題，介面會提示無法記住選擇。
 
@@ -207,9 +213,9 @@ npm run format:check
 | --- | --- |
 | `GET /health` | 健康檢查 |
 | `GET /agent/workspace` | 預設工作區路徑 `dir` 和選填指引 `prompt` |
-| `GET /projects` | 所有 Project，包含 `id`、`name`、`color` 與 `version` |
-| `POST /projects` | 以 `{"name":"工作"}` 建立 Project。可選填 `#RRGGBB` 格式的 `color`，省略則隨機指定 |
-| `POST /projects/{id}` | 以 `{"name":"新名稱","version":1,"color":"#4F87CC"}` 更新 Project。省略 `color` 時沿用原色 |
+| `GET /projects` | 所有 Project，包含 `id`、`name`、`color`、`workspace_dir`、`workspace_prompt` 與 `version` |
+| `POST /projects` | 以 `{"name":"工作"}` 建立 Project。可選填 `#RRGGBB` 格式的 `color`，省略則隨機指定。工作區欄位可選填 |
+| `POST /projects/{id}` | 帶目前的 `version` 和 `name` 更新 Project。省略 `color` 或工作區欄位時保留原值，工作區欄位傳空字串可清除 |
 | `POST /projects/{id}/delete` | 以 `{"version":1}` 刪除 Project。任務保留並改為未分類，相關 Board 會移除此 Project 的篩選 |
 | `GET /boards` | 所有 Board，包含 `id`、`name`、`project_ids` 與 `version` |
 | `POST /boards` | 以 `{"name":"工作 Board","project_ids":["project-id"]}` 建立 Board。空陣列表示顯示零個 Project |
@@ -219,8 +225,9 @@ npm run format:check
 | `POST /tasks` | 建立任務 |
 | `GET /tasks/recently-deleted` | 最近 7 天軟刪除的任務，依刪除時間由新到舊排列 |
 | `POST /tasks/reorder` | `{"task_ids":["id2","id1"]}` 調整未完成任務的相對順序 |
+| `POST /tasks/assign-project` | 以 `{"project_id":"project-id","tasks":[{"id":"task-id","version":1}]}` 一次指派所有選取的任務，回傳更新後的任務。傳入空字串可清除歸屬。任何任務的版本不符時，整批指派都不會寫入 |
 | `GET /tasks/{id}` | 完整任務 |
-| `GET /tasks/{id}/context` | Agent 脈絡，與完整任務相同 |
+| `GET /tasks/{id}/context` | 完整任務及適用的 `workspace` 物件，含 `dir` 和 `prompt` |
 | `POST /tasks/{id}/actions` | 具版本檢查的任務操作 |
 | `POST /tasks/{id}/restore` | 以 `{"version":3}` 還原最近刪除的任務，回傳完整任務及新版本 |
 
@@ -273,6 +280,8 @@ curl http://127.0.0.1:8787/tasks/TASK_ID/actions \
 ## Agent CLI 與 Skill
 
 macOS 桌面版在「設定 → 本機 Agent」可安裝、更新或移除 CLI，並複製 Skill 安裝指令。CLI 安裝到 `~/.local/bin/famo-agent`。若該資料夾未加到 `PATH`，可用完整路徑執行。在同一頁設定本機工作區的絕對路徑，並選擇性填寫指引，例如先查哪份文件或怎麼跑測試。Famo 提供路徑和指引，由本機 Agent 直接讀取工作區檔案。
+
+在側欄開啟個別 Project 的編輯視窗，展開「Agent 工作區」可設定該 Project 的目錄和選填指引。`famo-agent context` 依任務所屬 Project 回傳工作區，即使該 Project 的欄位留空。未分類的任務使用設定頁的預設工作區。`famo-agent today` 列出跨 Project 的今日任務並回傳預設工作區，處理個別任務前請先讀取該任務的脈絡。桌面版請從 App 內編輯 Project 工作區。
 
 `make build` 也會產生 `bin/famo-agent`。可在專案根目錄用 `./bin/famo-agent cli install` 安裝 CLI，或直接執行二進位檔。連線到命令列版的網頁服務時，請在子指令前加 `--url http://127.0.0.1:8787`。桌面版預設自動探索 API，隔離環境可傳 `--api-info PATH`。
 

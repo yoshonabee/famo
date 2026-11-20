@@ -76,7 +76,7 @@ func newHandler(store *tasks.Store, assets fs.FS, access func(http.Handler) http
 				write(w, 200, saved)
 			})
 		}
-		projectRoutes(r, store)
+		projectRoutes(r, store, settingsEditable)
 		boardRoutes(r, store)
 		r.Get("/tasks", func(w http.ResponseWriter, r *http.Request) {
 			list, err := store.List(r.Context())
@@ -124,6 +124,25 @@ func newHandler(store *tasks.Store, assets fs.FS, access func(http.Handler) http
 			}
 			write(w, 200, list)
 		})
+		r.Post("/tasks/assign-project", func(w http.ResponseWriter, r *http.Request) {
+			var in struct {
+				ProjectID *string             `json:"project_id"`
+				Tasks     []tasks.TaskVersion `json:"tasks"`
+			}
+			if !decode(w, r, &in) {
+				return
+			}
+			if in.ProjectID == nil {
+				fail(w, tasks.ErrInvalid)
+				return
+			}
+			list, err := store.AssignProject(r.Context(), *in.ProjectID, in.Tasks)
+			if err != nil {
+				fail(w, err)
+				return
+			}
+			write(w, http.StatusOK, list)
+		})
 		get := func(w http.ResponseWriter, r *http.Request) {
 			t, err := store.Get(r.Context(), chi.URLParam(r, "id"))
 			if err != nil {
@@ -133,7 +152,14 @@ func newHandler(store *tasks.Store, assets fs.FS, access func(http.Handler) http
 			write(w, 200, t)
 		}
 		r.Get("/tasks/{id}", get)
-		r.Get("/tasks/{id}/context", get)
+		r.Get("/tasks/{id}/context", func(w http.ResponseWriter, r *http.Request) {
+			current, err := store.GetContext(r.Context(), chi.URLParam(r, "id"))
+			if err != nil {
+				fail(w, err)
+				return
+			}
+			write(w, 200, current)
+		})
 		r.Post("/tasks/{id}/restore", func(w http.ResponseWriter, r *http.Request) {
 			var in struct {
 				Version int `json:"version"`

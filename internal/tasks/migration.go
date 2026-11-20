@@ -114,7 +114,7 @@ func migrateTasksAndProjects(ctx context.Context, tx *sql.Tx) error {
 		return err
 	}
 	if version == schemaVersion {
-		return ensureProjectColor(ctx, tx)
+		return ensureProjectColumns(ctx, tx)
 	}
 	if version >= activeTaskSchemaVersion {
 		return migrateProjects(ctx, tx)
@@ -161,22 +161,32 @@ CREATE TABLE projects (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL COLLATE NOCASE UNIQUE,
     color TEXT NOT NULL DEFAULT '`+defaultProjectColor+`',
+    workspace_dir TEXT NOT NULL DEFAULT '',
+    workspace_prompt TEXT NOT NULL DEFAULT '',
     version INTEGER NOT NULL
 );
 `+fmt.Sprintf("PRAGMA user_version=%d;", schemaVersion))
 	return err
 }
 
-// Earlier v7 builds already support Projects and can still read and update them
-// when the color column is present. Add it without changing the schema version.
-func ensureProjectColor(ctx context.Context, tx *sql.Tx) error {
-	var exists bool
-	err := tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM pragma_table_info('projects') WHERE name='color')`).Scan(&exists)
-	if err != nil || exists {
-		return err
+// Earlier v7 builds use explicit Project columns, so additive columns keep their writes compatible.
+func ensureProjectColumns(ctx context.Context, tx *sql.Tx) error {
+	for _, column := range []struct{ name, defaultValue string }{
+		{"color", defaultProjectColor},
+		{"workspace_dir", ""},
+		{"workspace_prompt", ""},
+	} {
+		var exists bool
+		if err := tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM pragma_table_info('projects') WHERE name=?)`, column.name).Scan(&exists); err != nil {
+			return err
+		}
+		if !exists {
+			if _, err := tx.ExecContext(ctx, "ALTER TABLE projects ADD COLUMN "+column.name+" TEXT NOT NULL DEFAULT '"+column.defaultValue+"'"); err != nil {
+				return err
+			}
+		}
 	}
-	_, err = tx.ExecContext(ctx, "ALTER TABLE projects ADD COLUMN color TEXT NOT NULL DEFAULT '"+defaultProjectColor+"'")
-	return err
+	return nil
 }
 
 func copyLegacyTasks(ctx context.Context, tx *sql.Tx) error {

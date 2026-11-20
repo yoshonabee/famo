@@ -105,3 +105,38 @@ func TestLocalAccessGuards(t *testing.T) {
 		}
 	}
 }
+
+func TestDesktopProjectWorkspaceEditing(t *testing.T) {
+	store, err := tasks.Open(filepath.Join(t.TempDir(), "test.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	call := func(handler http.Handler, method, path, body string, want int) *httptest.ResponseRecorder {
+		t.Helper()
+		r := httptest.NewRequest(method, path, strings.NewReader(body))
+		r.Host = "127.0.0.1:8787"
+		r.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, r)
+		if w.Code != want {
+			t.Fatalf("%s %s returned %d, want %d: %s", method, path, w.Code, want, w.Body)
+		}
+		return w
+	}
+	external := NewDesktopAPI(store, nil)
+	embedded := NewEmbedded(store, nil)
+	const create = `{"name":"Work","workspace_prompt":"Read the README"}`
+	call(external, http.MethodPost, "/api/projects", create, http.StatusForbidden)
+	response := call(embedded, http.MethodPost, "/api/projects", create, http.StatusCreated)
+	var project tasks.Project
+	if err := json.Unmarshal(response.Body.Bytes(), &project); err != nil || project.WorkspacePrompt != "Read the README" {
+		t.Fatalf("create Project workspace: %+v, %v", project, err)
+	}
+	path := "/api/projects/" + project.ID
+	call(external, http.MethodPost, path, `{"name":"Work","version":1,"workspace_prompt":""}`, http.StatusForbidden)
+	response = call(external, http.MethodPost, path, `{"name":"Renamed work","version":1}`, http.StatusOK)
+	if err := json.Unmarshal(response.Body.Bytes(), &project); err != nil || project.WorkspacePrompt != "Read the README" || project.Version != 2 {
+		t.Fatalf("rename Project preserved workspace: %+v, %v", project, err)
+	}
+}

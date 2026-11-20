@@ -1,15 +1,21 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import {
+  createTranslator,
+  LocalizedError,
+  useLanguage,
+  type Translator,
+} from './i18n'
 
 export const themeColorFields = [
-  { key: 'canvas', label: '頁面背景' },
-  { key: 'background', label: '內容背景' },
-  { key: 'sidebar', label: '側欄背景' },
-  { key: 'foreground', label: '主要文字' },
-  { key: 'primary', label: '強調色' },
-  { key: 'primary-foreground', label: '強調色文字' },
-  { key: 'muted-foreground', label: '次要文字' },
-  { key: 'border', label: '邊框' },
-  { key: 'accent', label: '選取背景' },
+  { key: 'canvas', label: 'canvasColor' },
+  { key: 'background', label: 'backgroundColor' },
+  { key: 'sidebar', label: 'sidebarColor' },
+  { key: 'foreground', label: 'foregroundColor' },
+  { key: 'primary', label: 'primaryColor' },
+  { key: 'primary-foreground', label: 'primaryForegroundColor' },
+  { key: 'muted-foreground', label: 'mutedForegroundColor' },
+  { key: 'border', label: 'borderColor' },
+  { key: 'accent', label: 'selectionColor' },
 ] as const
 
 export type ThemeColors = Record<
@@ -25,11 +31,11 @@ export type Theme = {
 }
 export type ThemeDraft = Omit<Theme, 'id'>
 
-export const themes = [
+const builtinThemes = [
   {
     id: 'moss',
-    name: '苔綠',
-    description: '熟悉的綠意，平靜專注',
+    nameLabel: 'themeMoss',
+    descriptionLabel: 'themeMossDescription',
     mode: 'light',
     colors: {
       canvas: '#f8f9f6',
@@ -45,8 +51,8 @@ export const themes = [
   },
   {
     id: 'linen',
-    name: '亞麻',
-    description: '暖白紙張與柔和棕色',
+    nameLabel: 'themeLinen',
+    descriptionLabel: 'themeLinenDescription',
     mode: 'light',
     colors: {
       canvas: '#faf7f2',
@@ -62,8 +68,8 @@ export const themes = [
   },
   {
     id: 'ocean',
-    name: '海鹽',
-    description: '清透藍色，像海邊的早晨',
+    nameLabel: 'themeOcean',
+    descriptionLabel: 'themeOceanDescription',
     mode: 'light',
     colors: {
       canvas: '#f3f8fc',
@@ -79,8 +85,8 @@ export const themes = [
   },
   {
     id: 'lavender',
-    name: '薰衣草',
-    description: '帶一點想像的淡紫色',
+    nameLabel: 'themeLavender',
+    descriptionLabel: 'themeLavenderDescription',
     mode: 'light',
     colors: {
       canvas: '#f8f5fc',
@@ -96,8 +102,8 @@ export const themes = [
   },
   {
     id: 'rose',
-    name: '玫瑰',
-    description: '溫柔粉色，留一點日常浪漫',
+    nameLabel: 'themeRose',
+    descriptionLabel: 'themeRoseDescription',
     mode: 'light',
     colors: {
       canvas: '#fcf5f6',
@@ -113,8 +119,8 @@ export const themes = [
   },
   {
     id: 'sand',
-    name: '沙丘',
-    description: '日光下的沙色與陶土',
+    nameLabel: 'themeDune',
+    descriptionLabel: 'themeDuneDescription',
     mode: 'light',
     colors: {
       canvas: '#fcf8ef',
@@ -130,8 +136,8 @@ export const themes = [
   },
   {
     id: 'midnight',
-    name: '午夜',
-    description: '沉靜深藍，適合夜晚工作',
+    nameLabel: 'themeMidnight',
+    descriptionLabel: 'themeMidnightDescription',
     mode: 'dark',
     colors: {
       canvas: '#171e2b',
@@ -147,8 +153,8 @@ export const themes = [
   },
   {
     id: 'charcoal',
-    name: '石墨',
-    description: '俐落灰階，讓內容成為主角',
+    nameLabel: 'themeGraphite',
+    descriptionLabel: 'themeGraphiteDescription',
     mode: 'dark',
     colors: {
       canvas: '#202124',
@@ -164,8 +170,8 @@ export const themes = [
   },
   {
     id: 'forest',
-    name: '夜森',
-    description: '深林綠與柔亮的薄荷色',
+    nameLabel: 'themeForest',
+    descriptionLabel: 'themeForestDescription',
     mode: 'dark',
     colors: {
       canvas: '#17241e',
@@ -181,8 +187,8 @@ export const themes = [
   },
   {
     id: 'nord',
-    name: '極光',
-    description: '冷灰底色，點綴冰川青綠',
+    nameLabel: 'themeAurora',
+    descriptionLabel: 'themeAuroraDescription',
     mode: 'dark',
     colors: {
       canvas: '#2e3440',
@@ -198,8 +204,8 @@ export const themes = [
   },
   {
     id: 'plum',
-    name: '暮紫',
-    description: '夜幕裡的紫色與微光',
+    nameLabel: 'themePlum',
+    descriptionLabel: 'themePlumDescription',
     mode: 'dark',
     colors: {
       canvas: '#282231',
@@ -215,8 +221,8 @@ export const themes = [
   },
   {
     id: 'mocha',
-    name: '摩卡',
-    description: '咖啡般溫暖的深棕色',
+    nameLabel: 'themeMocha',
+    descriptionLabel: 'themeMochaDescription',
     mode: 'dark',
     colors: {
       canvas: '#2a231f',
@@ -230,7 +236,27 @@ export const themes = [
       accent: '#4b392b',
     },
   },
-] as const satisfies readonly Theme[]
+] as const
+
+const defaultThemeText = createTranslator('zh-TW')
+
+export const themes: Theme[] = builtinThemes.map(
+  ({ nameLabel, descriptionLabel, ...theme }) => ({
+    ...theme,
+    name: defaultThemeText(nameLabel),
+    description: defaultThemeText(descriptionLabel),
+  }),
+)
+
+export function themeName(theme: Theme, t: Translator) {
+  const builtin = builtinThemes.find(({ id }) => theme.id === id)
+  return builtin ? t(builtin.nameLabel) : theme.name
+}
+
+export function themeDescription(theme: Theme, t: Translator) {
+  const builtin = builtinThemes.find(({ id }) => theme.id === id)
+  return builtin ? t(builtin.descriptionLabel) : theme.description
+}
 
 export type ThemePreference = string
 const storageKey = 'famo.theme'
@@ -252,18 +278,19 @@ function parseDefinition(value: unknown): ThemeDraft {
     !value.name.trim() ||
     value.name.trim().length > 40
   )
-    throw new Error('主題名稱需為 1–40 個字。')
+    throw new LocalizedError((t) => t('invalidThemeName'))
   if (typeof value.description !== 'string' || value.description.length > 160)
-    throw new Error('主題說明不可超過 160 個字。')
+    throw new LocalizedError((t) => t('invalidThemeDescription'))
   if (value.mode !== 'light' && value.mode !== 'dark')
-    throw new Error('主題外觀需為淺色或深色。')
+    throw new LocalizedError((t) => t('invalidThemeMode'))
   const source = value.colors
-  if (!isRecord(source)) throw new Error('主題缺少配色。')
+  if (!isRecord(source))
+    throw new LocalizedError((t) => t('missingThemeColors'))
   const colors = {} as ThemeColors
   for (const { key, label } of themeColorFields) {
     const color = source[key]
     if (typeof color !== 'string' || !/^#[0-9a-f]{6}$/i.test(color))
-      throw new Error(`${label}需使用 #RRGGBB 色碼。`)
+      throw new LocalizedError((t) => t('invalidThemeColor', t(label)))
     colors[key] = color.toLowerCase()
   }
   return {
@@ -276,12 +303,12 @@ function parseDefinition(value: unknown): ThemeDraft {
 
 export function parseThemeFile(contents: string): ThemeDraft[] {
   if (new Blob([contents]).size > maxThemeFileSize)
-    throw new Error('主題檔案不可超過 1 MB。')
+    throw new LocalizedError((t) => t('themeFileTooLarge'))
   let value: unknown
   try {
     value = JSON.parse(contents)
   } catch {
-    throw new Error('請選擇有效的 JSON 主題檔案。')
+    throw new LocalizedError((t) => t('invalidThemeJson'))
   }
   if (
     !isRecord(value) ||
@@ -291,7 +318,7 @@ export function parseThemeFile(contents: string): ThemeDraft[] {
     !value.themes.length ||
     value.themes.length > maxCustomThemes
   )
-    throw new Error('不支援的主題檔案格式或版本，一次最多匯入 100 款主題。')
+    throw new LocalizedError((t) => t('invalidThemeFile'))
   return value.themes.map(parseDefinition)
 }
 
@@ -382,13 +409,16 @@ export function initializeTheme() {
 }
 
 export function useTheme() {
+  const { t } = useLanguage()
   const [appearance, setAppearance] = useState(readAppearance)
   const appearanceRef = useRef(appearance)
   appearanceRef.current = appearance
   const [systemDark, setSystemDark] = useState(
     () => matchMedia(darkModeQuery).matches,
   )
-  const [storageError, setStorageError] = useState('')
+  const [storageError, setStorageError] = useState<
+    '' | 'themeStorageFailed' | 'themePreferenceStorageFailed'
+  >('')
   const theme = resolveTheme(appearance, systemDark)
 
   useLayoutEffect(() => applyTheme(theme), [theme])
@@ -416,9 +446,7 @@ export function useTheme() {
       setStorageError('')
     } catch {
       setStorageError(
-        requireStorage
-          ? '無法儲存主題，請確認本機儲存空間可用後再試。'
-          : '主題已套用，但無法儲存偏好。重新開啟後請再次選擇。',
+        requireStorage ? 'themeStorageFailed' : 'themePreferenceStorageFailed',
       )
       if (requireStorage) return false
     }
@@ -449,11 +477,11 @@ export function useTheme() {
           item.name.toLocaleLowerCase() === definition.name.toLocaleLowerCase(),
       )
     )
-      throw new Error('這個主題名稱已被使用，請換個名稱。')
+      throw new LocalizedError((t) => t('duplicateThemeName'))
     if (!id && appearance.customThemes.length >= maxCustomThemes)
-      throw new Error('最多可儲存 100 款自訂主題。')
+      throw new LocalizedError((t) => t('customThemeLimit'))
     if (id && !appearance.customThemes.some((item) => item.id === id))
-      throw new Error('這款主題已被移除，請新增為另一款主題。')
+      throw new LocalizedError((t) => t('themeGone'))
     const saved: Theme = {
       ...definition,
       id: id ?? `custom-${crypto.randomUUID()}`,
@@ -467,7 +495,7 @@ export function useTheme() {
   function importThemes(definitions: ThemeDraft[]) {
     const appearance = appearanceRef.current
     if (appearance.customThemes.length + definitions.length > maxCustomThemes)
-      throw new Error('最多可儲存 100 款自訂主題，請先移除不需要的主題。')
+      throw new LocalizedError((t) => t('themeImportLimit'))
     const names = new Set(
       [...themes, ...appearance.customThemes].map((item) =>
         item.name.toLocaleLowerCase(),
@@ -512,7 +540,7 @@ export function useTheme() {
     saveTheme,
     importThemes,
     removeTheme,
-    storageError,
+    storageError: storageError ? t(storageError) : '',
   }
 }
 

@@ -1,6 +1,7 @@
 import { useId, useLayoutEffect, useRef, useState } from 'react'
 import { Check, ChevronDown } from 'lucide-react'
 import type { Board } from '@/lib/api'
+import { useLanguage } from '@/lib/i18n'
 
 export function MenuBarBoardPicker({
   boards,
@@ -13,14 +14,15 @@ export function MenuBarBoardPicker({
   showToday: boolean
   onChange: (id: string) => void
 }) {
+  const { t } = useLanguage()
   const [open, setOpen] = useState(false)
   const root = useRef<HTMLDivElement>(null)
   const trigger = useRef<HTMLButtonElement>(null)
   const menu = useRef<HTMLDivElement>(null)
   const menuId = useId()
   const selectedId = board?.id ?? ''
-  const name = board?.name ?? '今日'
-  const choices = showToday ? [{ id: '', name: '今日' }, ...boards] : boards
+  const name = board?.name ?? t('today')
+  const choices = showToday ? [{ id: '', name: t('today') }, ...boards] : boards
 
   useLayoutEffect(() => {
     if (!open) return
@@ -51,7 +53,7 @@ export function MenuBarBoardPicker({
         className="menu-bar-board-trigger"
         ref={trigger}
         title={name}
-        aria-label={`選擇 Board：${name}`}
+        aria-label={t('chooseBoard', name)}
         aria-haspopup="menu"
         aria-expanded={open}
         aria-controls={open ? menuId : undefined}

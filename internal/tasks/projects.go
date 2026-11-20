@@ -16,15 +16,19 @@ import (
 )
 
 type Project struct {
-	ID      string `json:"id"`
-	Name    string `json:"name"`
-	Color   string `json:"color"`
-	Version int    `json:"version"`
+	ID              string `json:"id"`
+	Name            string `json:"name"`
+	Color           string `json:"color"`
+	WorkspaceDir    string `json:"workspace_dir"`
+	WorkspacePrompt string `json:"workspace_prompt"`
+	Version         int    `json:"version"`
 }
 
 type ProjectInput struct {
-	Name  string  `json:"name"`
-	Color *string `json:"color"`
+	Name            string  `json:"name"`
+	Color           *string `json:"color"`
+	WorkspaceDir    *string `json:"workspace_dir"`
+	WorkspacePrompt *string `json:"workspace_prompt"`
 }
 
 const defaultProjectColor = "#64748B"
@@ -37,7 +41,7 @@ var projectColors = [...]string{
 }
 
 func (s *Store) ListProjects(ctx context.Context) ([]Project, error) {
-	rows, err := s.db.QueryContext(ctx, "SELECT id,name,color,version FROM projects ORDER BY name,id")
+	rows, err := s.db.QueryContext(ctx, "SELECT id,name,color,workspace_dir,workspace_prompt,version FROM projects ORDER BY name,id")
 	if err != nil {
 		return nil, err
 	}
@@ -45,7 +49,7 @@ func (s *Store) ListProjects(ctx context.Context) ([]Project, error) {
 	out := []Project{}
 	for rows.Next() {
 		var p Project
-		if err := rows.Scan(&p.ID, &p.Name, &p.Color, &p.Version); err != nil {
+		if err := rows.Scan(&p.ID, &p.Name, &p.Color, &p.WorkspaceDir, &p.WorkspacePrompt, &p.Version); err != nil {
 			return nil, err
 		}
 		out = append(out, p)
@@ -64,6 +68,20 @@ func validateProjectInput(in ProjectInput) (ProjectInput, error) {
 			return ProjectInput{}, fmt.Errorf("%w：Project 顏色須為 #RRGGBB 色碼", ErrInvalid)
 		}
 		in.Color = &color
+	}
+	if in.WorkspaceDir != nil {
+		dir, err := normalizeWorkspaceDir(*in.WorkspaceDir)
+		if err != nil {
+			return ProjectInput{}, err
+		}
+		in.WorkspaceDir = &dir
+	}
+	if in.WorkspacePrompt != nil {
+		prompt, err := normalizeWorkspacePrompt(*in.WorkspacePrompt)
+		if err != nil {
+			return ProjectInput{}, err
+		}
+		in.WorkspacePrompt = &prompt
 	}
 	return in, nil
 }
@@ -87,7 +105,14 @@ func (s *Store) CreateProject(ctx context.Context, in ProjectInput) (Project, er
 	} else {
 		p.Color = *in.Color
 	}
-	if _, err := s.db.ExecContext(ctx, "INSERT INTO projects(id,name,color,version) VALUES(?,?,?,?)", p.ID, p.Name, p.Color, p.Version); err != nil {
+	if in.WorkspaceDir != nil {
+		p.WorkspaceDir = *in.WorkspaceDir
+	}
+	if in.WorkspacePrompt != nil {
+		p.WorkspacePrompt = *in.WorkspacePrompt
+	}
+	if _, err := s.db.ExecContext(ctx, `INSERT INTO projects(id,name,color,workspace_dir,workspace_prompt,version) VALUES(?,?,?,?,?,?)`,
+		p.ID, p.Name, p.Color, p.WorkspaceDir, p.WorkspacePrompt, p.Version); err != nil {
 		return Project{}, projectWriteError(err)
 	}
 	return p, nil
@@ -99,8 +124,10 @@ func (s *Store) UpdateProject(ctx context.Context, id string, in ProjectInput, v
 		return Project{}, err
 	}
 	p := Project{ID: id, Name: in.Name}
-	err = s.db.QueryRowContext(ctx, `UPDATE projects SET name=?,color=COALESCE(?,color),version=version+1
-		WHERE id=? AND version=? RETURNING color,version`, in.Name, in.Color, id, version).Scan(&p.Color, &p.Version)
+	err = s.db.QueryRowContext(ctx, `UPDATE projects SET name=?,color=COALESCE(?,color),
+		workspace_dir=COALESCE(?,workspace_dir),workspace_prompt=COALESCE(?,workspace_prompt),version=version+1
+		WHERE id=? AND version=? RETURNING color,workspace_dir,workspace_prompt,version`,
+		in.Name, in.Color, in.WorkspaceDir, in.WorkspacePrompt, id, version).Scan(&p.Color, &p.WorkspaceDir, &p.WorkspacePrompt, &p.Version)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Project{}, projectVersionError(ctx, s.db, id)
 	}
@@ -150,12 +177,12 @@ func projectVersionError(ctx context.Context, db schemaReader, id string) error 
 	return fmt.Errorf("%w：Project 已被更新", ErrConflict)
 }
 
-func (s *Store) validateProject(ctx context.Context, id string) error {
+func validateProject(ctx context.Context, db schemaReader, id string) error {
 	if id == "" {
 		return nil
 	}
 	var exists bool
-	if err := s.db.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM projects WHERE id=?)", id).Scan(&exists); err != nil {
+	if err := db.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM projects WHERE id=?)", id).Scan(&exists); err != nil {
 		return err
 	}
 	if !exists {

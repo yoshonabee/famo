@@ -4,6 +4,8 @@ import { LoaderCircle, RotateCcw, Trash2 } from 'lucide-react'
 import { TaskSearch } from '@/components/task-palette'
 import { Button } from '@/components/ui/button'
 import { ApiError, dateTime, request, type Task } from '@/lib/api'
+import { useLanguage } from '@/lib/i18n'
+import { formatTaskDate } from '@/lib/calendar'
 
 const queryKey = ['tasks', 'recently-deleted']
 
@@ -14,6 +16,7 @@ export function RecentlyDeletedPage({
   search: string
   onSearchChange: (search: string) => void
 }) {
+  const { t, locale, errorText } = useLanguage()
   const client = useQueryClient()
   const heading = useRef<HTMLHeadingElement>(null)
   const [restoredTitle, setRestoredTitle] = useState('')
@@ -55,7 +58,7 @@ export function RecentlyDeletedPage({
       <header className="list-toolbar">
         <div className="list-title">
           <h1 ref={heading} tabIndex={-1}>
-            最近刪除
+            {t('recentlyDeleted')}
           </h1>
           {tasks.isSuccess && (
             <span className="list-count">{filtered.length}</span>
@@ -64,57 +67,60 @@ export function RecentlyDeletedPage({
         <TaskSearch value={search} onChange={onSearchChange} />
       </header>
       <p className="muted recently-deleted-hint">
-        刪除後保留 7 天，可在期限內還原。
+        {t('recentlyDeletedDescription')}
       </p>
       <div className="sr-only" role="status">
-        {restoredTitle && `已還原「${restoredTitle}」`}
+        {restoredTitle && t('taskRestored', restoredTitle)}
       </div>
       {restore.isError && (
         <p className="inline-edit-error" role="alert">
-          無法還原任務：{restore.error.message}
+          {t('restoreError', errorText(restore.error))}
         </p>
       )}
       {tasks.isPending && (
         <div className="state">
           <LoaderCircle className="animate-spin" />
-          讀取中…
+          {t('loading')}
         </div>
       )}
       {tasks.isError && (
         <div className="state" role="alert">
-          無法讀取最近刪除：{tasks.error.message}
+          {t('loadRecentlyDeletedError', errorText(tasks.error))}
           <Button variant="outline" onClick={() => void tasks.refetch()}>
-            重新讀取
+            {t('reload')}
           </Button>
         </div>
       )}
       {tasks.isSuccess &&
         (filtered.length ? (
-          <ul className="task-list" aria-label="最近刪除的任務">
+          <ul className="task-list" aria-label={t('deletedTaskList')}>
             {filtered.map((task) => (
               <li className="task-row recently-deleted-row" key={task.id}>
                 <div className="todo-line">
                   <div className="recently-deleted-task">
                     <span>{task.title}</span>
                     <div className="recently-deleted-meta">
-                      已刪除{' '}
+                      {t('deletedAt')}{' '}
                       <time dateTime={task.deleted_at ?? undefined}>
-                        {dateTime(task.deleted_at)}
+                        {dateTime(task.deleted_at, locale)}
                       </time>
                       {task.scheduled_date &&
-                        ` · 任務日期 ${task.scheduled_date}`}
-                      {task.completed_at && ' · 已完成'}
+                        t(
+                          'deletedTaskDate',
+                          formatTaskDate(task.scheduled_date, locale),
+                        )}
+                      {task.completed_at && t('deletedTaskCompleted')}
                     </div>
                   </div>
                   <Button
                     variant="ghost"
                     size="sm"
                     disabled={restore.isPending}
-                    aria-label={`還原任務：${task.title}`}
+                    aria-label={t('restoreNamedTask', task.title)}
                     onClick={() => restore.mutate(task)}
                   >
                     <RotateCcw aria-hidden="true" />
-                    還原
+                    {t('restore')}
                   </Button>
                 </div>
               </li>
@@ -123,7 +129,7 @@ export function RecentlyDeletedPage({
         ) : (
           <div className="state">
             <Trash2 aria-hidden="true" />
-            {search ? '沒有符合的任務' : '最近沒有刪除的任務'}
+            {search ? t('noMatches') : t('noDeletedTasks')}
           </div>
         ))}
     </>

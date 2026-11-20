@@ -25,7 +25,7 @@
 - [x] 可建立、命名 Project，並設定或變更任務所屬的 Project。
 - [x] 可依 Project 檢視任務，同時保留跨 Project 的全部任務檢視。
 - [x] Project 與日期可搭配使用，讓不同 Project 的任務都能安排到特定日期，並在「今日」頁面一起查看。
-- [ ] 可多選任務，批次指派到同一個 Project。
+- [x] 可多選任務，批次指派到同一個 Project。
 
 ## Board 功能
 
@@ -54,7 +54,7 @@
 
 ## 設定頁
 
-- [ ] 重構設定頁面的 UI。
+- [x] 重構設定頁面的 UI。
 
 ## 本機 AI Agent 整合
 
@@ -62,7 +62,7 @@
 - [x] 提供 Agent Skill，說明如何透過 CLI 查任務、讀取脈絡、新增待辦、回報進度和標記完成，以及遇到版本衝突時如何處理。
 - [x] 設定頁可安裝或移除桌面 CLI，並提供可複製的 Skill 安裝指令。
 - [x] 可設定預設 workspace dir 和選填的自訂 prompt。CLI 一併回傳路徑及 prompt，留空時 Agent 依 Skill 的預設方式查找脈絡。
-- [ ] Project 功能加入後可設定各 Project 的 workspace dir 和選填 prompt。未歸類的任務使用預設 workspace，已歸類的任務使用所屬 Project 的 workspace。
+- [x] Project 功能加入後可設定各 Project 的 workspace dir 和選填 prompt。未歸類的任務使用預設 workspace，已歸類的任務使用所屬 Project 的 workspace。
 
 ## 資料備份
 
@@ -70,7 +70,7 @@
 
 ## 國際化
 
-- [ ] 支援介面國際化（i18n），可切換顯示語言。
+- [x] 支援介面國際化（i18n），可切換顯示語言。
 
 ## 舊任務功能與資料清理
 

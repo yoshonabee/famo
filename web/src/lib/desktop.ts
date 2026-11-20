@@ -1,6 +1,7 @@
 const tasksChangedEvent = 'famo:tasks-changed'
 let taskChannel: BroadcastChannel | undefined
 let menuBarBoardUpdate = Promise.resolve()
+let desktopLanguageUpdate = Promise.resolve()
 
 // Load Wails only inside the macOS app; the browser build keeps using HTTP.
 export async function initializeDesktop(onTasksChanged: () => void) {
@@ -116,6 +117,18 @@ export type AgentToolsState = {
 }
 
 export const isDesktop = () => window.location.protocol === 'wails:'
+
+export function setDesktopLanguage(locale: 'zh-TW' | 'en') {
+  if (!isDesktop()) return
+  desktopLanguageUpdate = desktopLanguageUpdate
+    .then(async () => {
+      const { Call } = await import('@wailsio/runtime')
+      await Call.ByName('famo/internal/desktop.DisplayLanguage.Set', locale)
+    })
+    .catch((error: unknown) => {
+      console.error('Could not set desktop language', error)
+    })
+}
 
 export async function agentTool<T>(
   method:

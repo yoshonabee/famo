@@ -13,16 +13,16 @@ import (
 
 // ThemeFiles saves exports through a native dialog; the frontend never supplies
 // a destination path and the Agent HTTP API does not expose file operations.
-type ThemeFiles struct{}
+type ThemeFiles struct{ language *DisplayLanguage }
 
-func (*ThemeFiles) Export(contents, filename string) (bool, error) {
+func (f *ThemeFiles) Export(contents, filename string) (bool, error) {
 	if len(contents) > 1<<20 || !json.Valid([]byte(contents)) {
-		return false, fmt.Errorf("無效的主題檔案")
+		return false, fmt.Errorf("%s", f.language.text("無效的主題檔案", "Invalid theme file"))
 	}
 	app := application.Get()
 	dialog := app.Dialog.SaveFile().
 		SetFilename(filepath.Base(filename)).
-		AddFilter("Famo 主題", "*.json").
+		AddFilter(f.language.text("Famo 主題", "Famo Theme"), "*.json").
 		CanCreateDirectories(true)
 	if window, ok := app.Window.GetByName("famo"); ok {
 		dialog.AttachToWindow(window)
@@ -32,7 +32,7 @@ func (*ThemeFiles) Export(contents, filename string) (bool, error) {
 		return false, err
 	}
 	if err := writeThemeExport(path, contents); err != nil {
-		return false, fmt.Errorf("無法匯出主題：%w", err)
+		return false, fmt.Errorf("%s: %w", f.language.text("無法匯出主題", "Could not export theme"), err)
 	}
 	return true, nil
 }

@@ -15,6 +15,8 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import type { Project } from '@/lib/api'
+import { useLanguage } from '@/lib/i18n'
+import { formatTaskDate } from '@/lib/calendar'
 
 export function TaskSearch({
   value,
@@ -25,12 +27,13 @@ export function TaskSearch({
   onChange: (value: string) => void
   onDone?: () => void
 }) {
+  const { t } = useLanguage()
   return (
     <label className="search">
       <Search size={16} aria-hidden="true" />
       <input
-        aria-label="搜尋任務"
-        placeholder="搜尋"
+        aria-label={t('searchTasks')}
+        placeholder={t('search')}
         value={value}
         onChange={(event) => onChange(event.target.value)}
         onKeyDown={(event) => {
@@ -68,6 +71,7 @@ export function TaskPalette({
   search: string
   onSearchChange: (value: string) => void
 }) {
+  const { t, locale } = useLanguage()
   const content = useRef<HTMLDivElement>(null)
   const returnFocus = useRef<HTMLElement | null>(null)
   const drafts = capture.drafts.filter((draft) => draft.floating)
@@ -107,7 +111,7 @@ export function TaskPalette({
           }}
         >
           <DialogTitle className="sr-only">
-            {isCapture ? '快速新增任務' : '搜尋任務'}
+            {isCapture ? t('quickCapture') : t('searchTasks')}
           </DialogTitle>
           {isCapture ? (
             <>
@@ -117,7 +121,7 @@ export function TaskPalette({
                 }
               />
               <DialogDescription className="sr-only">
-                選擇任務日期，按 Enter 新增。
+                {t('captureHelp')}
               </DialogDescription>
               <div className="task-palette-hint task-palette-date">
                 <DatePicker
@@ -128,12 +132,15 @@ export function TaskPalette({
                       ?.querySelector('input')
                       ?.focus({ preventScroll: true })
                   }}
-                  label={`任務日期 ${captureDate}`}
+                  label={t(
+                    'captureTaskDate',
+                    formatTaskDate(captureDate, locale),
+                  )}
                   buttonClassName="task-palette-date-button"
                   align="start"
                 >
                   <CalendarDays size={14} />
-                  {captureDate}
+                  {formatTaskDate(captureDate, locale)}
                   <ChevronDown size={12} />
                 </DatePicker>
                 {captureProject && <ProjectBadge project={captureProject} />}
@@ -147,12 +154,12 @@ export function TaskPalette({
                 onDone={onClose}
               />
               <DialogDescription className="task-palette-hint">
-                搜尋目前清單，按 Enter 返回
+                {t('searchHelp')}
               </DialogDescription>
             </>
           )}
           {isCapture && drafts.length > 0 && (
-            <ul className="task-palette-drafts" aria-label="快速新增草稿">
+            <ul className="task-palette-drafts" aria-label={t('captureDrafts')}>
               {drafts.map((draft) => (
                 <CaptureDraftRow
                   key={draft.id}

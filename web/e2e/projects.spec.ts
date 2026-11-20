@@ -1,4 +1,7 @@
 import { expect, test } from '@playwright/test'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { setTaskDate } from './date-picker'
 
 test('Project 新增、改名、指派和日期檢視', async ({ page }) => {
@@ -85,7 +88,7 @@ test('Project 新增、改名、指派和日期檢視', async ({ page }) => {
   await expect(editWebsite).toHaveCSS('opacity', '1')
   await editWebsite.click()
   const rename = page.getByRole('dialog', { name: '編輯 Project' })
-  await rename.getByRole('textbox').fill('網站維護')
+  await rename.getByRole('textbox', { name: 'Project 名稱' }).fill('網站維護')
   await rename.getByRole('radio', { name: '自訂' }).check()
   await rename.getByRole('textbox', { name: 'Project 色碼' }).fill('#123456')
   await rename.getByRole('button', { name: '儲存' }).click()
@@ -110,6 +113,63 @@ test('Project 新增、改名、指派和日期檢視', async ({ page }) => {
   await expect(open('整理家裡文件')).toHaveCount(0)
   await page.getByRole('button', { name: '已完成', exact: true }).click()
   await expect(open('整理家裡文件')).toBeVisible()
+})
+
+test('Project 工作區可儲存、編輯及清除，任務脈絡會套用設定', async ({
+  page,
+  request,
+}) => {
+  const dir = await mkdtemp(join(tmpdir(), 'famo-project-workspace-'))
+  try {
+    await page.goto('/')
+    const nav = page.getByRole('region', { name: 'Project 導覽' })
+    await nav.getByRole('button', { name: '新增 Project' }).click()
+    const create = page.getByRole('dialog', { name: '新增 Project' })
+    await create.getByLabel('Project 名稱').fill('工作區測試')
+    await create.getByText('Agent 工作區', { exact: true }).click()
+    await create.getByLabel('工作區路徑').fill('relative/path')
+    await create.getByRole('button', { name: '儲存' }).click()
+    await expect(create.getByRole('alert')).toContainText('完整路徑')
+    await create.getByLabel('工作區路徑').fill(dir)
+    await create.getByLabel('工作區指引（選填）').fill('先看 Project README。')
+    await create.getByRole('button', { name: '儲存' }).click()
+    await expect(create).toBeHidden()
+
+    const projects = await (await request.get('/api/projects')).json()
+    const project = projects.find(
+      (item: { name: string }) => item.name === '工作區測試',
+    )
+    const response = await request.post('/api/tasks', {
+      data: { title: '檢查此 Project 的工作區', project_id: project.id },
+    })
+    await expect(response).toBeOK()
+    const task = await response.json()
+    const contextPath = `/api/tasks/${task.id}/context`
+    expect((await (await request.get(contextPath)).json()).workspace).toEqual({
+      dir,
+      prompt: '先看 Project README。',
+    })
+
+    await page.reload()
+    await nav.getByRole('button', { name: '工作區測試', exact: true }).hover()
+    await nav.getByRole('button', { name: '編輯 Project：工作區測試' }).click()
+    const edit = page.getByRole('dialog', { name: '編輯 Project' })
+    await edit.getByText('Agent 工作區', { exact: true }).click()
+    await expect(edit.getByLabel('工作區路徑')).toHaveValue(dir)
+    await expect(edit.getByLabel('工作區指引（選填）')).toHaveValue(
+      '先看 Project README。',
+    )
+    await edit.getByLabel('工作區路徑').clear()
+    await edit.getByLabel('工作區指引（選填）').clear()
+    await edit.getByRole('button', { name: '儲存' }).click()
+    await expect(edit).toBeHidden()
+    expect((await (await request.get(contextPath)).json()).workspace).toEqual({
+      dir: '',
+      prompt: '',
+    })
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
 })
 
 test('從側欄刪除 Project 會保留任務並移除 Board 的關聯', async ({

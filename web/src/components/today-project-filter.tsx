@@ -4,6 +4,7 @@ import { ProjectColorDot } from '@/components/project-appearance'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import type { Project } from '@/lib/api'
+import { useLanguage } from '@/lib/i18n'
 
 const storageKey = 'famo.today-hidden-projects'
 
@@ -40,7 +41,8 @@ export function TodayProjectFilter({
   projects: Project[]
   filter: ReturnType<typeof useTodayProjectFilter>
 }) {
-  const options = [...projects, { id: '', name: '未分類', color: '' }]
+  const { t } = useLanguage()
+  const options = [...projects, { id: '', name: t('unassigned'), color: '' }]
   const selected = options.filter(
     ({ id }) => !filter.hidden.includes(id),
   ).length
@@ -49,17 +51,17 @@ export function TodayProjectFilter({
     <details className="today-project-filter">
       <summary className="today-project-filter-toggle">
         <ListFilter size={16} aria-hidden="true" />
-        <span>篩選 Project</span>
+        <span>{t('filterProjects')}</span>
         <span className="today-project-filter-count">
           {selected === options.length
-            ? '全部'
+            ? t('all')
             : `${selected} / ${options.length}`}
         </span>
         <ChevronDown size={14} aria-hidden="true" />
       </summary>
       <div className="today-project-filter-panel">
         <fieldset>
-          <legend className="sr-only">今日顯示的 Project</legend>
+          <legend className="sr-only">{t('projectsShownToday')}</legend>
           {options.map(({ id, name, color }) => (
             <label key={id} className="today-project-option">
               <Checkbox
@@ -80,11 +82,11 @@ export function TodayProjectFilter({
         </fieldset>
         {filter.hidden.length > 0 && (
           <Button variant="ghost" size="sm" onClick={() => filter.change([])}>
-            顯示全部
+            {t('showAll')}
           </Button>
         )}
         {filter.hidden.includes('') && (
-          <p className="muted">快速新增的任務會儲存為未分類，並依篩選隱藏。</p>
+          <p className="muted">{t('projectFilterCaptureHint')}</p>
         )}
       </div>
     </details>

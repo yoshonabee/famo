@@ -49,7 +49,7 @@ import {
 import { DatePicker } from '@/components/date-picker'
 import { CalendarDate, DateNavigation } from '@/components/date-navigation'
 import { CalendarPage } from '@/components/calendar-page'
-import { localDate } from '@/lib/calendar'
+import { formatTaskDate, localDate } from '@/lib/calendar'
 import { linkLabel } from '@/lib/links'
 import {
   orderSidebarItems,
@@ -66,6 +66,7 @@ import {
   useQuickCapture,
 } from '@/components/quick-capture'
 import { TaskPalette, TaskSearch } from '@/components/task-palette'
+import { TaskProjectAssignment } from '@/components/task-project-assignment'
 import {
   Dialog,
   DialogContent,
@@ -83,6 +84,8 @@ import {
   type Project,
   type Task,
 } from '@/lib/api'
+import { useLanguage } from '@/lib/i18n'
+import { useTaskSelection } from '@/lib/task-selection'
 
 type Act = (
   t: Task,
@@ -100,6 +103,7 @@ const defaultNavigation = ['date', 'active', 'completed']
 const initialBoardId = new URLSearchParams(window.location.search).get('board')
 
 function Links({ task, onOpen }: { task: Task; onOpen: () => void }) {
+  const { t } = useLanguage()
   if (!task.links.length) return null
   return (
     <div className="link-list">
@@ -119,7 +123,11 @@ function Links({ task, onOpen }: { task: Task; onOpen: () => void }) {
         <button
           className="more-links"
           onClick={onOpen}
-          aria-label={`查看其餘 ${task.links.length - 2} 個連結：${task.title}`}
+          aria-label={t(
+            task.links.length === 3 ? 'viewOneMoreLink' : 'viewMoreLinks',
+            task.links.length - 2,
+            task.title,
+          )}
         >
           +{task.links.length - 2}
         </button>
@@ -128,6 +136,7 @@ function Links({ task, onOpen }: { task: Task; onOpen: () => void }) {
   )
 }
 function App() {
+  const { t, errorText } = useLanguage()
   const client = useQueryClient()
   const theme = useTheme()
   const [dragging, setDragging] = useState(false)
@@ -340,7 +349,10 @@ function App() {
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [])
-  const [message, setMessage] = useState('')
+  const [message, setMessage] = useState<{
+    error: string
+    reorder?: boolean
+  } | null>(null)
   const reorder = useMutation({
     mutationFn: (ids: string[]) =>
       request<Task[]>('/tasks/reorder', { task_ids: ids }),
@@ -356,7 +368,7 @@ function App() {
       client.setQueryData<Task[]>(['tasks'], (current) =>
         orderSubset(current ?? [], previous ?? []),
       )
-      setMessage(`順序未儲存：${error.message}`)
+      setMessage({ error: error.message, reorder: true })
     },
     onSettled: () => {
       setOrdering(false)
@@ -386,21 +398,46 @@ function App() {
     },
     onError: (e, { failed }) => {
       if (failed) failed(e.message)
-      else setMessage(e.message)
+      else setMessage({ error: e.message })
       if (e instanceof ApiError && e.status === 409)
         void client.invalidateQueries({ queryKey: ['tasks'] })
     },
   })
   const act: Act = (t, action, done, failed) =>
     mutation.mutate({ t, action, failed }, { onSuccess: done })
+  const assignment = useMutation({
+    onMutate: () => setMessage(null),
+    mutationFn: ({ projectId, items }: { projectId: string; items: Task[] }) =>
+      request<Task[]>('/tasks/assign-project', {
+        project_id: projectId,
+        tasks: items.map(({ id, version }) => ({ id, version })),
+      }),
+    onSuccess: async (updated) => {
+      await client.cancelQueries({ queryKey: ['tasks'] })
+      const updatedById = new Map(updated.map((task) => [task.id, task]))
+      client.setQueryData<Task[]>(['tasks'], (old) =>
+        old?.map((task) => {
+          const assigned = updatedById.get(task.id)
+          return assigned && assigned.version > task.version ? assigned : task
+        }),
+      )
+      selection.clear()
+    },
+    onError: (error) => {
+      setMessage({ error: error.message })
+      void client.invalidateQueries({ queryKey: ['projects'] })
+    },
+    onSettled: () => client.invalidateQueries({ queryKey: ['tasks'] }),
+  })
   const all = tasks.data ?? []
   const active = all.filter((t) => !t.completed_at)
+  const searchTerm = search.toLowerCase()
+  const matchesSearch = (task: Task) =>
+    `${task.title} ${task.description}`.toLowerCase().includes(searchTerm)
   const matching = all.filter(
     (t) =>
       (view !== 'project' || t.project_id === currentProjectId) &&
-      `${t.title} ${t.description}`
-        .toLowerCase()
-        .includes(search.toLowerCase()),
+      matchesSearch(t),
   )
   const filtered = matching.filter((t) => !t.completed_at)
   const completed = matching
@@ -410,15 +447,44 @@ function App() {
     view === 'project'
       ? currentProject?.name
       : view === 'active'
-        ? '任務'
-        : '已完成'
+        ? t('tasks')
+        : t('completed')
   const listCount =
     view === 'project'
       ? matching.length
       : view === 'completed'
         ? completed.length
         : filtered.length
-  const busy = mutation.isPending || reorder.isPending
+  const busy = mutation.isPending || reorder.isPending || assignment.isPending
+  const calendarTasks = isCalendarView
+    ? all.filter((task) => {
+        const id = task.project_id ?? ''
+        if (boardProjectIds) return boardProjectIds.has(id)
+        return !projectFiltered || !todayFilter.hidden.includes(id)
+      })
+    : []
+  const selectableTasks = isCalendarView
+    ? calendarTasks.filter(
+        (task) => task.scheduled_date === date && matchesSearch(task),
+      )
+    : view === 'active'
+      ? filtered
+      : view === 'completed'
+        ? completed
+        : view === 'project'
+          ? matching
+          : []
+  const selectionScope = JSON.stringify([
+    view,
+    currentBoard?.id,
+    currentProjectId,
+    isCalendarView ? date : null,
+    search,
+    projectFiltered ? todayFilter.hidden : null,
+  ])
+  const selection = useTaskSelection(selectionScope, busy || dragging)
+  const selectedIds = new Set(selection.ids)
+  const chosenTasks = selectableTasks.filter((task) => selectedIds.has(task.id))
   function renderTask(
     task: Task,
     index: number,
@@ -438,6 +504,7 @@ function App() {
         hideCompletion={hideCompletion}
         sortableDisabled={sortableDisabled || visibleDrafts.length > 0}
         busy={busy}
+        selectedForBatch={!hideCompletion && selectedIds.has(task.id)}
         onSetDate={(date) => act(task, { op: 'update', scheduled_date: date })}
         onOpen={() => setSelected(task.id)}
         onComplete={() =>
@@ -452,16 +519,18 @@ function App() {
   const detail = all.find((t) => t.id === selected)
   const searchField = <TaskSearch value={search} onChange={setSearch} />
   const SidebarIcon = sidebarCollapsed ? PanelLeftOpen : PanelLeftClose
-  const sidebarAction = sidebarCollapsed ? '展開側邊欄' : '收合側邊欄'
+  const sidebarAction = sidebarCollapsed
+    ? t('expandSidebar')
+    : t('collapseSidebar')
   const navItems = new Map<string, PrimaryNavItem>([
     [
       'date',
       {
         id: 'date',
-        label: '今日',
+        label: t('today'),
         icon: CalendarDays,
         current: view === 'date',
-        ariaLabel: '今日任務',
+        ariaLabel: t('todayTasks'),
         shortcut: 'Meta+K Control+K',
         onSelect: () => goToToday(),
       },
@@ -470,10 +539,10 @@ function App() {
       'active',
       {
         id: 'active',
-        label: '任務',
+        label: t('tasks'),
         icon: Inbox,
         current: view === 'active',
-        ariaLabel: '任務列表',
+        ariaLabel: t('taskList'),
         count: active.length,
         onSelect: () => setView('active'),
       },
@@ -482,7 +551,7 @@ function App() {
       'completed',
       {
         id: 'completed',
-        label: '已完成',
+        label: t('completed'),
         icon: CheckCheck,
         current: view === 'completed',
         count: all.length - active.length,
@@ -520,6 +589,7 @@ function App() {
   return (
     <div
       className={sidebarCollapsed ? 'app-shell sidebar-collapsed' : 'app-shell'}
+      data-has-batch-selection={chosenTasks.length > 0 || undefined}
     >
       <div className="window-titlebar" aria-hidden="true" />
       <aside className="sidebar">
@@ -544,7 +614,7 @@ function App() {
         <PrimaryNavigation
           items={visibleNavItems}
           collapsed={sidebarCollapsed}
-          error={boards.error?.message}
+          error={errorText(boards.error)}
           onReorder={reorderNavigation}
           onCreate={() => setBoardEditor('new')}
           onRetry={() => void boards.refetch()}
@@ -553,7 +623,7 @@ function App() {
           projects={projectList}
           current={currentProjectId}
           collapsed={sidebarCollapsed}
-          error={projects.error?.message}
+          error={errorText(projects.error)}
           onSelect={goToProject}
           onExpand={() => setSidebarCollapsed(false)}
           onCreate={() => setProjectEditor('new')}
@@ -567,28 +637,30 @@ function App() {
             }
             onClick={() => setView('recently-deleted')}
             aria-current={view === 'recently-deleted' ? 'page' : undefined}
-            aria-label="最近刪除"
-            title="最近刪除"
+            aria-label={t('recentlyDeleted')}
+            title={t('recentlyDeleted')}
           >
             <Trash2 size={17} />
-            <span className="nav-label">最近刪除</span>
+            <span className="nav-label">{t('recentlyDeleted')}</span>
           </button>
           <button
             className={view === 'preferences' ? 'nav-item active' : 'nav-item'}
             onClick={() => setView('preferences')}
             aria-current={view === 'preferences' ? 'page' : undefined}
-            aria-label="設定"
-            title="設定"
+            aria-label={t('settings')}
+            title={t('settings')}
           >
             <Settings size={17} />
-            <span className="nav-label">設定</span>
+            <span className="nav-label">{t('settings')}</span>
           </button>
         </div>
       </aside>
       <main>
         <div
           className="main-content"
+          data-has-batch-selection={chosenTasks.length > 0 || undefined}
           hidden={view === 'preferences' || view === 'recently-deleted'}
+          {...selection.handlers}
         >
           {isCalendarView ? (
             <header className="calendar-heading">
@@ -628,11 +700,7 @@ function App() {
             <CalendarPage
               date={date}
               key={`${currentBoard?.id ?? 'date'}/${date}`}
-              tasks={all.filter((task) => {
-                const id = task.project_id ?? ''
-                if (boardProjectIds) return boardProjectIds.has(id)
-                return !projectFiltered || !todayFilter.hidden.includes(id)
-              })}
+              tasks={calendarTasks}
               projectFiltered={projectFiltered || !!currentBoard}
               search={search}
               loading={!tasks.isSuccess}
@@ -658,14 +726,14 @@ function App() {
           {tasks.isPending && (
             <div className="state">
               <LoaderCircle className="animate-spin" />
-              讀取中…
+              {t('loading')}
             </div>
           )}
           {tasks.isError && (
             <div role="alert" className="state">
-              無法讀取任務：{tasks.error.message}
+              {t('loadTasksError', errorText(tasks.error))}
               <Button variant="outline" onClick={() => void tasks.refetch()}>
-                重新讀取
+                {t('reload')}
               </Button>
             </div>
           )}
@@ -691,7 +759,9 @@ function App() {
                 <ul
                   className="task-list"
                   aria-label={
-                    view === 'project' ? 'Project 未完成任務' : '主要任務列表'
+                    view === 'project'
+                      ? t('projectOpenTasks')
+                      : t('mainTaskList')
                   }
                 >
                   {filtered.map((t, index) => renderTask(t, index, busy))}
@@ -708,7 +778,7 @@ function App() {
                 !visibleDrafts.length &&
                 (view === 'active' || !completed.length) && (
                   <div className="empty-list">
-                    {search ? '沒有符合的任務' : '尚無任務'}
+                    {search ? t('noMatches') : t('noTasks')}
                   </div>
                 )}
             </>
@@ -718,16 +788,18 @@ function App() {
             completed.length > 0 && (
               <section
                 className={view === 'project' ? 'daily-completed' : undefined}
-                aria-label={view === 'project' ? 'Project 已完成' : undefined}
+                aria-label={
+                  view === 'project' ? t('projectCompleted') : undefined
+                }
               >
-                {view === 'project' && <h2>已完成</h2>}
+                {view === 'project' && <h2>{t('completed')}</h2>}
                 <DragDropProvider>
                   <ul
                     className="task-list"
                     aria-label={
                       view === 'project'
-                        ? 'Project 已完成任務'
-                        : '已完成任務列表'
+                        ? t('projectCompletedTasks')
+                        : t('completedTaskList')
                     }
                   >
                     {completed.map((t, index) => renderTask(t, index, true))}
@@ -738,8 +810,23 @@ function App() {
           {tasks.isSuccess && view === 'completed' && !completed.length && (
             <div className="state">
               <CheckCheck />
-              {search ? '沒有符合的任務。' : '尚無已完成任務'}
+              {search ? t('noMatchingTasks') : t('noCompletedTasks')}
             </div>
+          )}
+          {chosenTasks.length > 0 && (
+            <TaskProjectAssignment
+              projects={projectList}
+              selectedCount={chosenTasks.length}
+              allSelected={chosenTasks.length === selectableTasks.length}
+              busy={busy}
+              onSelectAll={() =>
+                selection.selectAll(selectableTasks.map((task) => task.id))
+              }
+              onClear={selection.clear}
+              onAssign={(projectId) =>
+                assignment.mutate({ projectId, items: chosenTasks })
+              }
+            />
           )}
         </div>
         {view === 'recently-deleted' && (
@@ -782,7 +869,7 @@ function App() {
             key={boardEditor === 'new' ? 'new' : boardEditor.id}
             board={boardEditor === 'new' ? undefined : boardEditor}
             projects={projects.data}
-            projectsError={projects.error?.message}
+            projectsError={errorText(projects.error)}
             onRetryProjects={() => void projects.refetch()}
             onSaved={(saved) => {
               if (boardEditor === 'new') goToBoard(saved.id)
@@ -836,8 +923,15 @@ function App() {
       />
       {message && (
         <div className="toast" role="alert">
-          <span>{message}</span>
-          <button aria-label="關閉提示" onClick={() => setMessage('')}>
+          <span>
+            {message.reorder
+              ? t('reorderFailed', errorText(message.error))
+              : errorText(message.error)}
+          </span>
+          <button
+            aria-label={t('dismissNotice')}
+            onClick={() => setMessage(null)}
+          >
             ×
           </button>
         </div>
@@ -846,7 +940,7 @@ function App() {
   )
 }
 function TaskRow({
-  task: t,
+  task,
   project,
   busy,
   onOpen,
@@ -855,6 +949,7 @@ function TaskRow({
   index,
   sortableDisabled = false,
   hideCompletion = false,
+  selectedForBatch,
 }: {
   task: Task
   project?: Project
@@ -865,18 +960,31 @@ function TaskRow({
   index: number
   sortableDisabled?: boolean
   hideCompletion?: boolean
+  selectedForBatch: boolean
 }) {
-  const completed = !!t.completed_at
-  const title = t.title
+  const { t, locale } = useLanguage()
+  const completed = !!task.completed_at
+  const title = task.title
   const { ref, handleRef, isDragging } = useSortable({
-    id: t.id,
+    id: task.id,
     index,
     disabled: completed || sortableDisabled,
   })
   return (
     <li
       ref={ref}
-      data-task-id={t.id}
+      data-task-id={task.id}
+      data-selectable-task={hideCompletion ? undefined : task.id}
+      data-batch-selected={selectedForBatch || undefined}
+      tabIndex={hideCompletion ? undefined : 0}
+      aria-label={
+        hideCompletion
+          ? undefined
+          : t(selectedForBatch ? 'selectedTask' : 'selectTask', title)
+      }
+      aria-keyshortcuts={
+        hideCompletion ? undefined : 'Space Shift+ArrowUp Shift+ArrowDown'
+      }
       className={`task-row ${completed ? 'is-completed' : ''} ${isDragging ? 'dragging' : ''}`}
     >
       <div className="todo-line">
@@ -884,8 +992,8 @@ function TaskRow({
           ref={handleRef}
           className="drag-handle"
           disabled={completed || sortableDisabled}
-          aria-label={`拖曳排序：${title}`}
-          title="拖曳調整順序"
+          aria-label={t('dragTask', title)}
+          title={t('dragToReorder')}
         >
           <GripVertical size={16} />
         </button>
@@ -893,19 +1001,24 @@ function TaskRow({
           <Checkbox
             checked={completed}
             disabled={busy}
-            aria-label={`${completed ? '恢復' : '完成'}任務：${title}`}
+            aria-label={t(
+              completed ? 'reopenNamedTask' : 'completeNamedTask',
+              title,
+            )}
             onCheckedChange={onComplete}
           />
         )}
-        <TodoTitle task={t} title={title} onDeleted={() => {}} />
-        <Links task={t} onOpen={onOpen} />
+        <TodoTitle task={task} title={title} onDeleted={() => {}} />
+        <Links task={task} onOpen={onOpen} />
         {project && <ProjectBadge project={project} />}
         <DatePicker
-          date={t.scheduled_date}
+          date={task.scheduled_date}
           onChange={onSetDate}
-          label={`設定日期：${title}`}
+          label={t('setTaskDate', title)}
           title={
-            t.scheduled_date ? `任務日期：${t.scheduled_date}` : '設定日期'
+            task.scheduled_date
+              ? t('taskDateValue', formatTaskDate(task.scheduled_date, locale))
+              : t('setDate')
           }
           buttonClassName="row-action-button"
           clearable
@@ -916,8 +1029,8 @@ function TaskRow({
         <button
           className="row-action-button row-detail-button"
           onClick={onOpen}
-          aria-label={`任務詳情：${title}`}
-          title="備註與連結"
+          aria-label={t('taskDetails', title)}
+          title={t('notesAndLinks')}
         >
           <PanelRightOpen size={15} />
         </button>
@@ -926,7 +1039,7 @@ function TaskRow({
   )
 }
 function Detail({
-  task: t,
+  task,
   projects,
   act,
   busy,
@@ -936,12 +1049,13 @@ function Detail({
   act: Act
   busy: boolean
 }) {
+  const { t, locale, errorText } = useLanguage()
   const dialogRef = useRef<HTMLDivElement>(null)
   const [adding, setAdding] = useState(false)
   const [linkError, setLinkError] = useState('')
   const [removeError, setRemoveError] = useState('')
   const [projectError, setProjectError] = useState('')
-  const completed = !!t.completed_at
+  const completed = !!task.completed_at
   const CompletionIcon = completed ? SolidCheckCircle : OutlineCheckCircle
   function addLink(e: FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -949,7 +1063,7 @@ function Detail({
     const f = new FormData(form)
     setLinkError('')
     act(
-      t,
+      task,
       {
         op: 'add_link',
         links: [{ url: String(f.get('url')).trim() }],
@@ -963,7 +1077,12 @@ function Detail({
   }
   function removeLink(index: number) {
     setRemoveError('')
-    act(t, { op: 'remove_link', link_index: index }, undefined, setRemoveError)
+    act(
+      task,
+      { op: 'remove_link', link_index: index },
+      undefined,
+      setRemoveError,
+    )
   }
 
   return (
@@ -988,41 +1107,41 @@ function Detail({
           className="detail-completion size-5 rounded-full border-0 bg-transparent text-muted-foreground/75 data-[state=checked]:bg-transparent data-[state=checked]:text-primary"
           checked={completed}
           disabled={busy}
-          aria-label={completed ? '恢復為未完成' : '完成任務'}
-          title={completed ? '恢復為未完成' : '完成任務'}
+          aria-label={completed ? t('markIncomplete') : t('completeTask')}
+          title={completed ? t('markIncomplete') : t('completeTask')}
           onCheckedChange={() =>
-            act(t, { op: completed ? 'reopen_task' : 'complete_task' })
+            act(task, { op: completed ? 'reopen_task' : 'complete_task' })
           }
         >
           <CompletionIcon width={20} height={20} />
         </Checkbox>
-        <DialogTitle className="dialog-title" aria-label={t.title}>
-          <InlineContent task={t} field="title" busy={busy} />
+        <DialogTitle className="dialog-title" aria-label={task.title}>
+          <InlineContent task={task} field="title" busy={busy} />
         </DialogTitle>
         <DialogDescription className="sr-only">
-          日期、Project、備註與相關連結
+          {t('taskDetailsDescription')}
         </DialogDescription>
       </div>
       <div className="detail-meta">
-        <TaskDate task={t} busy={busy} />
+        <TaskDate task={task} busy={busy} />
         {projects && projects.length > 0 && (
           <div className="task-project-field">
             <label>
               <span className="task-date-label">Project</span>
               <select
-                value={t.project_id ?? ''}
+                value={task.project_id ?? ''}
                 disabled={busy}
                 onChange={(event) => {
                   setProjectError('')
                   act(
-                    t,
+                    task,
                     { op: 'update', project_id: event.target.value },
                     undefined,
                     setProjectError,
                   )
                 }}
               >
-                <option value="">未分類</option>
+                <option value="">{t('unassigned')}</option>
                 {projects.map((project) => (
                   <option key={project.id} value={project.id}>
                     {project.name}
@@ -1032,20 +1151,22 @@ function Detail({
             </label>
             {projectError && (
               <p className="inline-edit-error" role="alert">
-                {projectError}
+                {errorText(projectError)}
               </p>
             )}
           </div>
         )}
-        {completed && <span>已完成 · {dateTime(t.completed_at)}</span>}
+        {completed && (
+          <span>{t('completedAt', dateTime(task.completed_at, locale))}</span>
+        )}
       </div>
       <div className="detail-block">
-        <h3>備註</h3>
-        <InlineContent task={t} field="description" busy={busy} />
+        <h3>{t('notes')}</h3>
+        <InlineContent task={task} field="description" busy={busy} />
       </div>
       <div className="detail-block">
         <div className="block-heading">
-          <h3>相關連結</h3>
+          <h3>{t('relatedLinks')}</h3>
           <Button
             variant="ghost"
             size="sm"
@@ -1054,12 +1175,12 @@ function Detail({
             onClick={() => setAdding(!adding)}
           >
             <Plus />
-            新增連結
+            {t('addLink')}
           </Button>
         </div>
-        {t.links.length ? (
+        {task.links.length ? (
           <div className="detail-links">
-            {t.links.map((l, i) => (
+            {task.links.map((l, i) => (
               <div className="detail-link" key={`${l.url}-${i}`}>
                 <a href={l.url} target="_blank" rel="noreferrer" title={l.url}>
                   <span>{linkLabel(l.url)}</span>
@@ -1069,8 +1190,8 @@ function Detail({
                 <button
                   type="button"
                   className="row-action-button remove-link-button"
-                  aria-label={`刪除連結：${l.url}`}
-                  title="刪除連結"
+                  aria-label={t('deleteNamedLink', l.url)}
+                  title={t('deleteLink')}
                   disabled={busy}
                   onClick={() => removeLink(i)}
                 >
@@ -1080,36 +1201,36 @@ function Detail({
             ))}
           </div>
         ) : (
-          <p className="muted">尚無連結</p>
+          <p className="muted">{t('noLinks')}</p>
         )}
         {removeError && (
           <p className="inline-edit-error" role="alert">
-            {removeError}
+            {errorText(removeError)}
           </p>
         )}
         {adding && (
           <form onSubmit={addLink}>
             <div className="link-form">
               <label className="field">
-                <span>連結網址</span>
+                <span>{t('linkUrl')}</span>
                 <input
                   name="url"
-                  aria-label="連結網址"
+                  aria-label={t('linkUrl')}
                   type="url"
                   pattern="https?://.*"
-                  placeholder="貼上 https://…"
+                  placeholder={t('pasteUrl')}
                   required
                   autoFocus
                   readOnly={busy}
                 />
               </label>
               <Button disabled={busy} size="sm">
-                加入
+                {t('add')}
               </Button>
             </div>
             {linkError && (
               <p className="inline-edit-error" role="alert">
-                {linkError}。網址已保留，請確認最新內容後重試。
+                {t('linkDraftError', errorText(linkError))}
               </p>
             )}
           </form>

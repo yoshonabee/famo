@@ -16,6 +16,7 @@ import {
   type BoardInput,
   type Project,
 } from '@/lib/api'
+import { useLanguage } from '@/lib/i18n'
 
 export function BoardEditor({
   board,
@@ -32,6 +33,7 @@ export function BoardEditor({
   onSaved: (board: Board) => void
   onDeleted: (id: string) => void
 }) {
+  const { t, errorText } = useLanguage()
   const client = useQueryClient()
   const [name, setName] = useState(board?.name ?? '')
   const [version] = useState(board?.version)
@@ -88,14 +90,14 @@ export function BoardEditor({
       }}
     >
       <DialogTitle className="dialog-title mb-3 pr-7">
-        {board ? '編輯 Board' : '新增 Board'}
+        {board ? t('editBoard') : t('addBoard')}
       </DialogTitle>
       <DialogDescription className="sr-only">
-        設定 Board 名稱和顯示的 Project 後儲存。
+        {t('boardEditorDescription')}
       </DialogDescription>
       <form className="grid gap-3" onSubmit={submit}>
         <label className="field">
-          <span>Board 名稱</span>
+          <span>{t('boardName')}</span>
           <input
             value={name}
             onChange={(event) => setName(event.target.value)}
@@ -104,7 +106,7 @@ export function BoardEditor({
           />
         </label>
         <fieldset className="min-w-0" disabled={save.isPending}>
-          <legend className="mb-2 text-sm">顯示的 Project</legend>
+          <legend className="mb-2 text-sm">{t('displayedProjects')}</legend>
           {projects === undefined ? (
             projectsError ? (
               <div className="grid justify-items-start gap-2">
@@ -117,12 +119,12 @@ export function BoardEditor({
                   size="sm"
                   onClick={onRetryProjects}
                 >
-                  重試
+                  {t('retry')}
                 </Button>
               </div>
             ) : (
               <p className="muted" role="status">
-                載入 Project 中…
+                {t('loadingProjects')}
               </p>
             )
           ) : projects.length ? (
@@ -146,17 +148,15 @@ export function BoardEditor({
               ))}
             </div>
           ) : (
-            <p className="muted">新增 Project 後，即可加入 Board。</p>
+            <p className="muted">{t('addProjectToBoard')}</p>
           )}
         </fieldset>
         {!!projects?.length && selected.length === 0 && (
-          <p className="muted">未選擇 Project 時，Board 會是空的。</p>
+          <p className="muted">{t('emptyBoardFilter')}</p>
         )}
         {save.isError && (
           <p className="inline-edit-error" role="alert">
-            {conflict
-              ? 'Board 已更新。請重新開啟編輯視窗以取得最新設定。'
-              : save.error.message}
+            {conflict ? t('boardConflict') : errorText(save.error)}
           </p>
         )}
         <div className="collection-editor-actions">
@@ -171,7 +171,7 @@ export function BoardEditor({
           <Button
             disabled={save.isPending || conflict || !name.trim() || !projects}
           >
-            {save.isPending ? '儲存中…' : '儲存'}
+            {save.isPending ? t('saving') : t('save')}
           </Button>
         </div>
       </form>
