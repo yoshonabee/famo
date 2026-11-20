@@ -57,7 +57,7 @@ func ApplyCleanup(ctx context.Context, path, backupPath string) (CleanupReport, 
 	if err != nil {
 		return report, err
 	}
-	if err := backupCleanupDB(ctx, path, backup); err != nil {
+	if err := BackupDatabase(ctx, path, backup); err != nil {
 		return report, fmt.Errorf("建立備份：%w", err)
 	}
 	report.Backup = backup
@@ -150,7 +150,9 @@ func openCleanupDB(path string, writable bool) (*sql.DB, error) {
 	return db, nil
 }
 
-func backupCleanupDB(ctx context.Context, source, destination string) error {
+// BackupDatabase writes a consistent SQLite snapshot, including committed WAL
+// changes, to a new private file while leaving the live database open.
+func BackupDatabase(ctx context.Context, source, destination string) error {
 	db, err := openCleanupDB(source, false)
 	if err != nil {
 		return err

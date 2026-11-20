@@ -106,6 +106,15 @@ export async function agentTool<T>(
   )) as T
 }
 
+export async function driveBackupCall<T>(
+  method: 'Connected' | 'Connect' | 'Disconnect' | 'Backup',
+  signal?: AbortSignal,
+): Promise<T> {
+  const { Call } = await import('@wailsio/runtime')
+  const result = Call.ByName(`famo/internal/desktop.DriveBackup.${method}`)
+  return (await (signal ? result.cancelOn(signal) : result)) as T
+}
+
 export async function copyText(text: string) {
   if (isDesktop()) {
     const { Clipboard } = await import('@wailsio/runtime')

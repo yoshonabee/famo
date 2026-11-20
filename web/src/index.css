@@ -1699,22 +1699,30 @@ input.todo-title {
   font-size: 14px;
   line-height: 1.7;
 }
-.agent-preferences {
+.agent-preferences,
+.backup-preferences {
   display: grid;
   gap: 14px;
   padding-bottom: 24px;
   margin-bottom: 24px;
   border-bottom: 1px solid var(--border);
 }
-.agent-preferences h2 {
+.agent-preferences h2,
+.backup-preferences h2 {
   font-size: 17px;
   font-weight: 600;
 }
-.agent-preferences > .preferences-description {
+.agent-preferences > .preferences-description,
+.backup-preferences > .preferences-description {
   margin-top: 0;
 }
+.backup-preferences a {
+  text-decoration: underline;
+  overflow-wrap: anywhere;
+}
 .agent-inline,
-.agent-api {
+.agent-api,
+.backup-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 8px 12px;

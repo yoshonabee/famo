@@ -9,10 +9,11 @@ import {
 } from 'lucide-react'
 import { useRef, useState, type ChangeEvent } from 'react'
 import { AgentPreferences } from '@/components/agent-preferences'
+import { DriveBackupPreferences } from '@/components/drive-backup-preferences'
 import { Button } from '@/components/ui/button'
 import { ThemeEditor } from '@/components/theme-editor'
 import { ThemePreview } from '@/components/theme-preview'
-import { exportThemeFile } from '@/lib/desktop'
+import { exportThemeFile, isDesktop } from '@/lib/desktop'
 import {
   maxThemeFileSize,
   parseThemeFile,
@@ -57,8 +58,10 @@ function ThemeOption({
 
 export function PreferencesPage({
   appearance,
+  active,
 }: {
   appearance: ThemeController
+  active: boolean
 }) {
   const {
     preference,
@@ -121,6 +124,7 @@ export function PreferencesPage({
         <h1>設定</h1>
       </header>
       <AgentPreferences />
+      {isDesktop() && <DriveBackupPreferences active={active} />}
       <div className="theme-tools">
         <Button
           variant="outline"
