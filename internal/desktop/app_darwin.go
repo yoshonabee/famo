@@ -71,8 +71,25 @@ func Run(cfg Config) error {
 	appMenu.AddRole(application.UnHide)
 	appMenu.AddSeparator()
 	appMenu.AddRole(application.Quit)
-	menu.AddSubmenu("File").AddRole(application.CloseWindow)
+	addShortcut := func(menu *application.Menu, title, key, action string) {
+		menu.Add(title).SetAccelerator("CmdOrCtrl+" + key).OnClick(func(*application.Context) {
+			if window, ok := app.Window.GetByName("famo"); ok {
+				(&MenuBar{}).OpenFamo()
+				window.EmitEvent("famo:shortcut", action)
+			}
+		})
+	}
+	fileMenu := menu.AddSubmenu("File")
+	addShortcut(fileMenu, "新增任務…", "t", "capture")
+	fileMenu.AddSeparator()
+	fileMenu.AddRole(application.CloseWindow)
 	menu.AddRole(application.EditMenu)
+	editMenu := menu.FindByRole(application.EditMenu).GetSubmenu()
+	editMenu.AddSeparator()
+	addShortcut(editMenu, "搜尋任務…", "f", "search")
+	viewMenu := menu.AddSubmenu("View")
+	addShortcut(viewMenu, "展開或收合側邊欄", "d", "sidebar")
+	addShortcut(viewMenu, "返回今日", "k", "today")
 	menu.AddRole(application.WindowMenu)
 	app.Menu.Set(menu)
 	mainWindow := app.Window.NewWithOptions(application.WebviewWindowOptions{

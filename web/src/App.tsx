@@ -1,4 +1,10 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react'
+import {
+  useEffect,
+  useEffectEvent,
+  useRef,
+  useState,
+  type FormEvent,
+} from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { DragDropProvider } from '@dnd-kit/react'
 import { isSortable, useSortable } from '@dnd-kit/react/sortable'
@@ -11,15 +17,16 @@ import {
   GripVertical,
   Inbox,
   LoaderCircle,
+  PanelLeftClose,
+  PanelLeftOpen,
   Plus,
   PanelRightOpen,
-  Search,
   Settings,
   Trash2,
 } from 'lucide-react'
 import { PreferencesPage } from '@/components/preferences-page'
 import { useTheme } from '@/lib/theme'
-import { openSettingsEvent } from '@/lib/desktop'
+import { isDesktop, openSettingsEvent, shortcutEvent } from '@/lib/desktop'
 import { DatePicker } from '@/components/date-picker'
 import { DateNavigation } from '@/components/date-navigation'
 import { CalendarPage } from '@/components/calendar-page'
@@ -35,6 +42,7 @@ import {
   QuickCapture,
   useQuickCapture,
 } from '@/components/quick-capture'
+import { TaskPalette, TaskSearch } from '@/components/task-palette'
 import {
   Dialog,
   DialogContent,
@@ -57,6 +65,13 @@ type Act = (
   done?: (updated: Task) => void,
   failed?: (message: string) => void,
 ) => void
+const shortcuts = new Map([
+  ['d', 'sidebar'],
+  ['t', 'capture'],
+  ['k', 'today'],
+  ['f', 'search'],
+])
+
 function Links({ task, onOpen }: { task: Task; onOpen: () => void }) {
   if (!task.links.length) return null
   return (
@@ -101,22 +116,74 @@ function App() {
   >('date')
   const [date, setDate] = useState(localDate)
   const [search, setSearch] = useState('')
-  const capture = useQuickCapture(
-    () => setSearch(''),
-    view === 'date' ? date : '',
-  )
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [palette, setPalette] = useState<'capture' | 'search' | null>(null)
+  const captureDate =
+    view === 'date' ? date : view === 'active' ? '' : localDate()
+  const capture = useQuickCapture(() => setSearch(''), captureDate)
   const visibleDrafts = capture.drafts.filter((draft) =>
     view === 'date' ? draft.scheduled_date === date : true,
   )
   const [selected, setSelected] = useState<string | null>(null)
+  function goToToday() {
+    setDate(localDate())
+    setView('date')
+    setSelected(null)
+    setPalette(null)
+    window.scrollTo(0, 0)
+  }
+  const runShortcut = useEffectEvent((action: unknown) => {
+    switch (action) {
+      case 'sidebar':
+        setSidebarCollapsed((collapsed) => !collapsed)
+        break
+      case 'capture':
+        setPalette('capture')
+        break
+      case 'today':
+        goToToday()
+        break
+      case 'search':
+        if (view === 'preferences') goToToday()
+        setPalette('search')
+        break
+    }
+  })
   useEffect(() => {
     const openSettings = () => {
       setSelected(null)
+      setPalette(null)
       setView('preferences')
       window.scrollTo(0, 0)
     }
     window.addEventListener(openSettingsEvent, openSettings)
     return () => window.removeEventListener(openSettingsEvent, openSettings)
+  }, [])
+  useEffect(() => {
+    function onShortcut(event: Event) {
+      runShortcut((event as CustomEvent<unknown>).detail)
+    }
+    function onKeyDown(event: KeyboardEvent) {
+      if (
+        event.defaultPrevented ||
+        event.isComposing ||
+        event.keyCode === 229 ||
+        event.metaKey === event.ctrlKey ||
+        event.altKey ||
+        event.shiftKey
+      )
+        return
+      const action = shortcuts.get(event.key.toLowerCase())
+      if (!action) return
+      event.preventDefault()
+      if (!event.repeat) runShortcut(action)
+    }
+    if (isDesktop()) {
+      window.addEventListener(shortcutEvent, onShortcut)
+      return () => window.removeEventListener(shortcutEvent, onShortcut)
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
   }, [])
   const [message, setMessage] = useState('')
   const reorder = useMutation({
@@ -180,45 +247,62 @@ function App() {
   )
   if (view === 'completed') filtered.sort(compareCompletionTime)
   const detail = all.find((t) => t.id === selected)
+  const searchField = <TaskSearch value={search} onChange={setSearch} />
+  const SidebarIcon = sidebarCollapsed ? PanelLeftOpen : PanelLeftClose
+  const sidebarAction = sidebarCollapsed ? '展開側邊欄' : '收合側邊欄'
   return (
-    <div className="app-shell">
+    <div
+      className={sidebarCollapsed ? 'app-shell sidebar-collapsed' : 'app-shell'}
+    >
       <aside className="sidebar">
-        <a className="brand" href="/">
-          <img
-            className="brand-mark"
-            src="/famo-mark.svg"
-            alt=""
-            width={28}
-            height={28}
-          />
-          famo
-        </a>
+        <div className="sidebar-heading">
+          <a className="brand" href="/" aria-label="Famo">
+            <span className="brand-mark" aria-hidden="true" />
+            <span className="brand-name">famo</span>
+          </a>
+          <Button
+            className="sidebar-toggle"
+            variant="ghost"
+            size="icon"
+            aria-label={sidebarAction}
+            aria-expanded={!sidebarCollapsed}
+            aria-keyshortcuts="Meta+D Control+D"
+            title={`${sidebarAction} (⌘D)`}
+            onClick={() => setSidebarCollapsed((collapsed) => !collapsed)}
+          >
+            <SidebarIcon />
+          </Button>
+        </div>
         <nav aria-label="主要導覽">
           <button
             className={view === 'date' ? 'nav-item active' : 'nav-item'}
-            onClick={() => {
-              setDate(localDate())
-              setView('date')
-            }}
+            onClick={goToToday}
             aria-label="今日任務"
+            aria-keyshortcuts="Meta+K Control+K"
+            title="今日 (⌘K)"
           >
             <CalendarDays size={17} />
-            今日
+            <span className="nav-label">今日</span>
           </button>
           <button
             className={view === 'active' ? 'nav-item active' : 'nav-item'}
             onClick={() => setView('active')}
             aria-label="任務列表"
+            title="任務"
           >
             <Inbox size={17} />
-            任務<span>{active.length}</span>
+            <span className="nav-label">任務</span>
+            <span className="nav-count">{active.length}</span>
           </button>
           <button
             className={view === 'completed' ? 'nav-item active' : 'nav-item'}
             onClick={() => setView('completed')}
+            aria-label="已完成"
+            title="已完成"
           >
             <CheckCheck size={17} />
-            已完成<span>{all.length - active.length}</span>
+            <span className="nav-label">已完成</span>
+            <span className="nav-count">{all.length - active.length}</span>
           </button>
         </nav>
         <div className="sidebar-footer">
@@ -226,9 +310,11 @@ function App() {
             className={view === 'preferences' ? 'nav-item active' : 'nav-item'}
             onClick={() => setView('preferences')}
             aria-current={view === 'preferences' ? 'page' : undefined}
+            aria-label="設定"
+            title="設定"
           >
             <Settings size={17} />
-            設定
+            <span className="nav-label">設定</span>
           </button>
         </div>
       </aside>
@@ -251,25 +337,18 @@ function App() {
                 </span>
               </h1>
               <DateNavigation date={date} onChange={setDate} />
+              {searchField}
             </header>
           )}
-          <div className="list-toolbar">
-            {view !== 'date' && (
+          {view !== 'date' && (
+            <div className="list-toolbar">
               <div className="list-title">
                 <h1>{view === 'active' ? '任務' : '已完成'}</h1>
                 <span className="list-count">{filtered.length}</span>
               </div>
-            )}
-            <label className="search">
-              <Search size={16} aria-hidden="true" />
-              <input
-                aria-label="搜尋任務"
-                placeholder="搜尋"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-              />
-            </label>
-          </div>
+              {searchField}
+            </div>
+          )}
           <QuickCapture
             hidden={view !== 'active' && view !== 'date'}
             onSubmit={capture.submit}
@@ -433,6 +512,14 @@ function App() {
           />
         )}
       </Dialog>
+      <TaskPalette
+        mode={palette}
+        onClose={() => setPalette(null)}
+        capture={capture}
+        captureDate={captureDate}
+        search={search}
+        onSearchChange={setSearch}
+      />
       {message && (
         <div className="toast" role="alert">
           <span>{message}</span>

@@ -25,6 +25,10 @@
   font-weight: 650;
   letter-spacing: -0.8px;
 }
+.menu-bar-brand .brand-mark {
+  width: 24px;
+  height: 24px;
+}
 .menu-bar-heading time {
   font-size: 11px;
   white-space: nowrap;
@@ -224,8 +228,12 @@ select {
   outline: none;
 }
 .app-shell {
+  --sidebar-width: 168px;
   display: flex;
   min-height: 100dvh;
+}
+.app-shell.sidebar-collapsed {
+  --sidebar-width: 56px;
 }
 
 .task-list {
@@ -1039,7 +1047,7 @@ button:disabled {
 
 /* Compact application layout. */
 .sidebar {
-  width: 168px;
+  width: var(--sidebar-width);
   padding: 20px 12px;
   flex-shrink: 0;
   border-right: 1px solid var(--border);
@@ -1048,6 +1056,11 @@ button:disabled {
   flex-direction: column;
   position: fixed;
   inset: 0 auto 0 0;
+}
+.sidebar-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
 .brand {
   display: flex;
@@ -1064,6 +1077,34 @@ button:disabled {
   width: 28px;
   height: 28px;
   flex-shrink: 0;
+  background: var(--primary);
+  mask: url('/famo-mark.svg') center / contain no-repeat;
+}
+.sidebar-toggle {
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  color: var(--muted-foreground);
+}
+.sidebar-toggle:focus-visible,
+.nav-item:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+.sidebar-collapsed .brand {
+  padding-inline: 0;
+}
+.sidebar-collapsed .brand-name,
+.sidebar-collapsed .nav-label,
+.sidebar-collapsed .nav-count {
+  display: none;
+}
+.sidebar-collapsed .sidebar-heading {
+  flex-direction: column;
+  gap: 8px;
+}
+.sidebar-collapsed .nav-item {
+  justify-content: center;
 }
 .sidebar nav {
   display: grid;
@@ -1090,14 +1131,14 @@ button:disabled {
   background: var(--accent);
   font-weight: 600;
 }
-.nav-item span {
+.nav-item .nav-count {
   margin-left: auto;
   font-size: 12px;
   color: var(--muted-foreground);
 }
 main {
-  width: calc(100% - 168px);
-  margin-left: 168px;
+  width: calc(100% - var(--sidebar-width));
+  margin-left: var(--sidebar-width);
 }
 .main-content {
   padding: 22px 24px;
@@ -1152,6 +1193,47 @@ h1 {
   border-radius: 4px;
   background: transparent;
   font-size: 14px;
+}
+.task-palette {
+  top: clamp(24px, 18dvh, 160px);
+  translate: -50% 0;
+  max-width: 36rem;
+  max-height: 76dvh;
+  padding: 0;
+  border-radius: 14px;
+  box-shadow: 0 18px 60px var(--shadow);
+}
+.task-palette > button:last-child:focus-visible {
+  outline: 2px solid var(--primary);
+}
+.task-palette .capture-entry,
+.task-palette .search {
+  width: 100%;
+  min-height: 60px;
+  gap: 12px;
+  padding: 8px 48px 8px 16px;
+  border: 0;
+  border-radius: 0;
+}
+.task-palette .search:focus-within {
+  outline: none;
+}
+.task-palette .capture-entry input,
+.task-palette .search input {
+  flex: 1;
+  width: 100%;
+  padding: 6px 0;
+  color: var(--foreground);
+  font-size: 19px;
+}
+.task-palette-hint {
+  border-top: 1px solid var(--border);
+  padding: 8px 16px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+.task-palette-drafts {
+  padding: 0 12px;
 }
 .toolbar-actions {
   margin-left: auto;
@@ -1251,10 +1333,12 @@ input.todo-title {
     flex-wrap: wrap;
     align-items: center;
   }
+  .sidebar-heading {
+    width: 100%;
+  }
   .brand {
     font-size: 21px;
     padding: 0 4px;
-    width: 100%;
   }
   .sidebar nav {
     display: flex;
@@ -1274,8 +1358,12 @@ input.todo-title {
     margin: 0;
     padding: 0;
   }
-  .nav-item span {
+  .nav-item .nav-count {
     display: none;
+  }
+  .sidebar-collapsed .sidebar-heading {
+    flex-direction: row;
+    width: auto;
   }
   main {
     width: 100%;
@@ -1406,6 +1494,9 @@ input.todo-title {
 .calendar-heading h1 {
   font-size: 22px;
 }
+.calendar-heading .search {
+  margin-inline-start: auto;
+}
 .today-picker-button {
   display: inline-flex;
   align-items: stretch;
@@ -1498,12 +1589,29 @@ input.todo-title {
   padding-top: 6px;
   margin-top: 8px;
 }
-@media (max-width: 700px) {
+@media (max-width: 800px) {
   .calendar-heading h1 {
     font-size: 20px;
   }
   .calendar-heading {
-    align-items: flex-start;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(104px, 36%);
+    gap: 8px;
+  }
+  .calendar-heading .search {
+    grid-column: 2;
+    grid-row: 1;
+    width: 100%;
+    max-width: 172px;
+    order: 0;
+  }
+  .calendar-heading .search input {
+    width: 100%;
+  }
+  .calendar-heading .date-navigation {
+    grid-row: 2;
+    grid-column: 1 / -1;
+    justify-self: start;
   }
 }
 

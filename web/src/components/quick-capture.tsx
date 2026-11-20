@@ -9,6 +9,7 @@ type Draft = {
   id: string
   title: string
   scheduled_date: string
+  floating?: boolean
   error?: string
 }
 
@@ -63,11 +64,12 @@ export function useQuickCapture(onCapture: () => void, scheduledDate = '') {
       )
     }
   }
-  function submit(title: string) {
+  function submit(title: string, floating = false) {
     const draft = {
       id: crypto.randomUUID(),
       title,
       scheduled_date: scheduledDate,
+      floating,
     }
     setDrafts((old) => [...old, draft])
     onCapture()
@@ -121,6 +123,35 @@ export function QuickCapture({
   onSubmit: (title: string) => void
   announcement: string
 }) {
+  return (
+    <section
+      className="quick-capture"
+      aria-label="快速新增任務"
+      hidden={hidden}
+    >
+      <CaptureEntry onSubmit={onSubmit} />
+      <CaptureAnnouncement announcement={announcement} />
+    </section>
+  )
+}
+
+export function CaptureAnnouncement({
+  announcement,
+}: {
+  announcement: string
+}) {
+  return (
+    <p className="sr-only" role="status">
+      {announcement}
+    </p>
+  )
+}
+
+export function CaptureEntry({
+  onSubmit,
+}: {
+  onSubmit: (title: string) => void
+}) {
   const input = useRef<HTMLInputElement>(null)
   const composing = useRef(false)
   const [draft, setDraft] = useState('')
@@ -133,53 +164,44 @@ export function QuickCapture({
     input.current?.focus({ preventScroll: true })
   }
   return (
-    <section
-      className="quick-capture"
-      aria-label="快速新增任務"
-      hidden={hidden}
-    >
-      <div className="capture-entry">
-        <Square className="capture-marker" size={17} aria-hidden="true" />
-        <input
-          ref={input}
-          aria-label="快速新增任務名稱"
-          value={draft}
-          maxLength={200}
-          placeholder="新增任務…"
-          onChange={(e) => setDraft(e.target.value)}
-          onCompositionStart={() => {
-            composing.current = true
-          }}
-          onCompositionEnd={() => {
-            composing.current = false
-          }}
-          onKeyDown={(e) => {
-            if (
-              e.key !== 'Enter' ||
-              composing.current ||
-              e.nativeEvent.isComposing ||
-              e.keyCode === 229
-            )
-              return
-            e.preventDefault()
-            submit()
-          }}
-        />
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          aria-label="新增這一列"
-          title="Enter 新增"
-          disabled={!taskTitle(draft)}
-          onClick={submit}
-        >
-          <CornerDownLeft />
-        </Button>
-      </div>
-      <p className="sr-only" role="status">
-        {announcement}
-      </p>
-    </section>
+    <div className="capture-entry">
+      <Square className="capture-marker" size={17} aria-hidden="true" />
+      <input
+        ref={input}
+        aria-label="快速新增任務名稱"
+        value={draft}
+        maxLength={200}
+        placeholder="新增任務…"
+        onChange={(e) => setDraft(e.target.value)}
+        onCompositionStart={() => {
+          composing.current = true
+        }}
+        onCompositionEnd={() => {
+          composing.current = false
+        }}
+        onKeyDown={(e) => {
+          if (
+            e.key !== 'Enter' ||
+            composing.current ||
+            e.nativeEvent.isComposing ||
+            e.keyCode === 229
+          )
+            return
+          e.preventDefault()
+          submit()
+        }}
+      />
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        aria-label="新增這一列"
+        title="Enter 新增"
+        disabled={!taskTitle(draft)}
+        onClick={submit}
+      >
+        <CornerDownLeft />
+      </Button>
+    </div>
   )
 }

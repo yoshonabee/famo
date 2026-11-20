@@ -52,12 +52,16 @@ test('備註直接編輯、Agent 更新與版本衝突', async ({ page, request 
   await expect(
     dialog.getByRole('button', { name: '編輯備註', exact: true }),
   ).toHaveText('任務目標\n背景與完成條件')
-  await dialog.getByRole('button', { name: '編輯備註', exact: true }).click()
-  await description.fill('修改描述\n保留換行')
-  await description.press('Control+Enter')
-  await expect(
-    dialog.getByRole('button', { name: '編輯備註', exact: true }),
-  ).toHaveText('修改描述\n保留換行')
+  for (const [shortcut, value] of [
+    ['Control+Enter', '修改描述'],
+    ['Meta+Enter', '修改描述\n保留換行'],
+  ]) {
+    const edit = dialog.getByRole('button', { name: '編輯備註', exact: true })
+    await edit.click()
+    await description.fill(value)
+    await description.press(shortcut)
+    await expect(edit).toHaveText(value)
+  }
   await expect(
     dialog.getByRole('heading', { name: '等待與提醒', exact: true }),
   ).toHaveCount(0)
