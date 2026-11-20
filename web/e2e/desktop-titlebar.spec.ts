@@ -14,6 +14,10 @@ test('桌面標題列隨側欄和主題調整，保留上方控制項的操作�
     }))
   const sidebarWidth = () =>
     titlebar.evaluate((element) => getComputedStyle(element, '::before').width)
+  const sidebarStrip = () =>
+    titlebar.evaluate(
+      (element) => getComputedStyle(element, '::before').content,
+    )
 
   await expect(titlebar).toHaveCSS('height', '0px')
   await page.addStyleTag({
@@ -23,9 +27,12 @@ test('桌面標題列隨側欄和主題調整，保留上方控制項的操作�
   await expect(sidebar).toHaveCSS('padding-top', '50px')
   await expect(main).toHaveCSS('padding-top', '30px')
   expect(await sidebarWidth()).toBe('168px')
+  expect(await sidebarStrip()).not.toBe('none')
 
   await page.getByRole('button', { name: '收合側邊欄' }).click()
-  expect(await sidebarWidth()).toBe('56px')
+  expect(await sidebarStrip()).toBe('none')
+  await expect(sidebar).toHaveCSS('width', '56px')
+  await expect(sidebar).toHaveCSS('border-right-width', '1px')
   const light = await themeColours()
   await page.getByRole('button', { name: '設定', exact: true }).click()
   await page.getByRole('radio', { name: '午夜', exact: true }).check()

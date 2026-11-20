@@ -255,6 +255,10 @@ select {
   background: var(--sidebar);
   pointer-events: none;
 }
+/* Keep the collapsed divider below the native window controls. */
+.sidebar-collapsed .window-titlebar::before {
+  content: none;
+}
 
 .task-list {
   display: flex;
