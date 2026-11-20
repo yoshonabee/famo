@@ -50,6 +50,10 @@ test('設定提供 12 款主題，切換立即生效並在重開後保留', asyn
     'background-color',
     'rgb(234, 242, 248)',
   )
+  await expect(page.locator('.brand-mark')).toHaveCSS(
+    'background-color',
+    'rgb(49, 109, 155)',
+  )
   await page.evaluate(() => window.scrollTo(0, 0))
   await page.screenshot({
     path: '/private/tmp/famo-themes-light.png',
@@ -67,6 +71,9 @@ test('設定提供 12 款主題，切換立即生效並在重開後保留', asyn
     'content',
     '#171e2b',
   )
+  const iconColor = await page.locator('.brand-mark').evaluate((icon) => {
+    return getComputedStyle(icon).backgroundColor
+  })
   await page.evaluate(() => window.scrollTo(0, 0))
   await page.screenshot({
     path: '/private/tmp/famo-themes-dark.png',
@@ -74,6 +81,11 @@ test('設定提供 12 款主題，切換立即生效並在重開後保留', asyn
   })
   expect((await request.get('/api/settings')).status()).toBe(404)
   expect(await (await request.get('/api/tasks')).json()).toEqual(tasks)
+  await page.goto('/menu-bar.html')
+  await expect(page.locator('.menu-bar-brand .brand-mark')).toHaveCSS(
+    'background-color',
+    iconColor,
+  )
 })
 
 test('深色主題套用到任務、表單、月曆及詳情，切換頁面保留新增草稿', async ({

@@ -15,6 +15,9 @@ export async function initializeDesktop(onTasksChanged: () => void) {
   Events.On(openSettingsEvent, () => {
     window.dispatchEvent(new Event(openSettingsEvent))
   })
+  Events.On(shortcutEvent, ({ data }) => {
+    window.dispatchEvent(new CustomEvent(shortcutEvent, { detail: data }))
+  })
   document.addEventListener(
     'click',
     (event) => {
@@ -32,6 +35,7 @@ export async function initializeDesktop(onTasksChanged: () => void) {
   )
 }
 export const openSettingsEvent = 'famo:open-settings'
+export const shortcutEvent = 'famo:shortcut'
 
 // Publish only after a successful write. Each WebView owns a separate query
 // cache, so invalidating the sender alone leaves other open windows stale.

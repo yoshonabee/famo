@@ -85,7 +85,7 @@ export function MenuBarPanel() {
     <div className="menu-bar-panel">
       <header className="menu-bar-heading">
         <div className="menu-bar-brand">
-          <img src="/famo-mark.svg" alt="" width="24" height="24" />
+          <span className="brand-mark" aria-hidden="true" />
           <span>famo</span>
         </div>
         <div className="menu-bar-heading-actions">

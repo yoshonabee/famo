@@ -471,6 +471,8 @@ test('日期標題與今日分段選單：月曆選日、鍵盤、關閉及手�
   const headingBox = (await heading.boundingBox())!
   expect(previous.x).toBeGreaterThan(headingBox.x + headingBox.width)
   const searchBox = (await page.getByLabel('搜尋任務').boundingBox())!
+  expect(searchBox.x).toBeGreaterThan(next.x + next.width)
+  expect(Math.abs(searchBox.y - todayButton.y)).toBeLessThan(8)
 
   await expect(page.getByLabel('選擇日期', { exact: true })).toHaveCount(0)
   const trigger = page.getByRole('button', {

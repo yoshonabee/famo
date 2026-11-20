@@ -2,12 +2,12 @@ import type { CSSProperties } from 'react'
 import type { ThemeDraft } from '@/lib/theme'
 
 export function previewStyle(theme: ThemeDraft): CSSProperties {
-  return Object.fromEntries(
-    Object.entries(theme.colors).map(([key, value]) => [
-      `--preview-${key}`,
-      value,
-    ]),
-  ) as CSSProperties
+  return {
+    ...Object.fromEntries(
+      Object.entries(theme.colors).map(([key, value]) => [`--${key}`, value]),
+    ),
+    colorScheme: theme.mode,
+  }
 }
 
 export function ThemePreview({ theme }: { theme: ThemeDraft }) {
