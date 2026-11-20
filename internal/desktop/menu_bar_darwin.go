@@ -25,10 +25,14 @@ type MenuBar struct {
 
 func (m *MenuBar) SelectBoard(id string) {
 	if m.boardID.Swap(id) != id {
-		select {
-		case m.refresh <- struct{}{}:
-		default:
-		}
+		m.refreshProgress()
+	}
+}
+
+func (m *MenuBar) refreshProgress() {
+	select {
+	case m.refresh <- struct{}{}:
+	default:
 	}
 }
 
@@ -57,7 +61,7 @@ func showFamo() application.Window {
 	return nil
 }
 
-func setupMenuBar(app *application.App, backend *Backend, menuBar *MenuBar) {
+func setupMenuBar(app *application.App, backend *Backend, menuBar *MenuBar, language *DisplayLanguage) {
 	panel := app.Window.NewWithOptions(application.WebviewWindowOptions{
 		Name: "menu-bar", Title: "Famo 今日任務", URL: "/menu-bar.html",
 		Width: 360, Height: 480, Frameless: true, AlwaysOnTop: true,
@@ -79,15 +83,17 @@ func setupMenuBar(app *application.App, backend *Backend, menuBar *MenuBar) {
 		event.Cancel()
 		panel.Hide()
 	})
+	language.trackLabel(func(title string) { panel.SetTitle(title) }, "Famo 今日任務", "Famo Today")
+	language.labels = append(language.labels, menuBar.refreshProgress)
 	tray := app.SystemTray.New()
 	tray.SetTemplateIcon(menuBarIcon)
 	tray.SetLabel("…")
 	tray.SetTooltip("Famo · 今日任務")
 	tray.AttachWindow(panel).WindowOffset(6)
 	menu := app.NewMenu()
-	menu.Add("Open Famo").OnClick(func(*application.Context) { menuBar.OpenFamo(menuBar.selectedBoardID()) })
+	language.addItem(menu, "開啟 Famo", "Open Famo").OnClick(func(*application.Context) { menuBar.OpenFamo(menuBar.selectedBoardID()) })
 	menu.AddSeparator()
-	menu.Add("Quit Famo").OnClick(func(*application.Context) { app.Quit() })
+	language.addItem(menu, "結束 Famo", "Quit Famo").OnClick(func(*application.Context) { app.Quit() })
 	tray.SetMenu(menu)
 
 	// Keep updating even when both WebViews are hidden. This also picks up Agent
@@ -114,7 +120,7 @@ func setupMenuBar(app *application.App, backend *Backend, menuBar *MenuBar) {
 				}
 				if err != nil {
 					tray.SetLabel("—")
-					tray.SetTooltip("Famo · 無法讀取今日進度")
+					tray.SetTooltip(language.text("Famo · 無法讀取今日進度", "Famo · Could not load today's progress"))
 				} else {
 					label := progress.Label()
 					tooltip := "Famo · "
@@ -122,7 +128,7 @@ func setupMenuBar(app *application.App, backend *Backend, menuBar *MenuBar) {
 						tooltip += progress.BoardName + " · "
 					}
 					tray.SetLabel(label)
-					tray.SetTooltip(tooltip + "今日已完成 " + label)
+					tray.SetTooltip(tooltip + language.text("今日已完成 ", "Completed today: ") + label)
 				}
 				select {
 				case <-ctx.Done():
