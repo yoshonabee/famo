@@ -6,7 +6,7 @@
 
 ## 每日操作
 
-- 開啟後直接顯示瀏覽器當地的「今日」。導覽保留今日、跨日期的任務列表與完成紀錄。
+- 預設開啟瀏覽器當地的「今日」。側欄的主要導覽包含今日、任務列表、完成紀錄和各個 Board，可拖曳列左側把手調整順序。使用鍵盤時，聚焦把手後用空白鍵開始排序、方向鍵移動，再按空白鍵放下。
 - 新增統一使用清單上方的一行輸入，支援 `- [ ] 任務`，Enter 後接著輸入下一件事。中文選字不誤送出，儲存失敗的列保留內容並可重試。
 - 今日／日期頁新增時，任務使用正在查看的日期；跨日期的任務列表新增時，任務不指定日期。
 - 點列表文字直接修改標題，Enter 或離開欄位儲存，Escape 取消。清空後再按一次 Backspace 才刪除該列；刪除採軟刪除。
@@ -21,7 +21,7 @@
 | --- | --- |
 | ⌘D | 收合或展開側邊欄 |
 | ⌘T | 開啟快速新增浮窗，按 Enter 送出後可接著輸入下一件 |
-| ⌘K | 返回本機今日 |
+| ⌘K | 返回本機今日。隱藏預設「今日」後，會回到目前或排序最前的 Board 的今日日期 |
 | ⌘F | 開啟搜尋浮窗，即時篩選目前清單，按 Enter 返回清單 |
 
 浮窗會在視窗中央開啟，按 Escape 或點擊浮窗外可關閉。快速新增浮窗預設使用目前日期頁的日期，從其他頁面開啟時預設今天，點擊浮窗中的日期即可改選。從設定頁啟動搜尋會先返回今日。
@@ -30,7 +30,7 @@
 
 ## Projects
 
-從側欄的「Projects」按 + 建立分類，點選名稱即可查看該 Project 的待辦及已完成任務。在 Project 標題旁可編輯名稱和顏色。新建時預設從 9 款顏色隨機挑選，可改選色票、使用調色盤或輸入 `#RRGGBB` 色碼。在 Project 頁面的清單或快速新增浮窗建立的任務會直接歸入目前的 Project。
+從側欄的「Projects」按 + 建立分類，點選名稱即可查看該 Project 的待辦及已完成任務。點選側欄中 Project 右側的編輯按鈕，可修改名稱和顏色，或確認後永久刪除該 Project。任務會保留並改為未分類，包含最近刪除中仍可還原的任務。相關 Board 會移除這個 Project 的篩選。新建時預設從 9 款顏色隨機挑選，可改選色票、使用調色盤或輸入 `#RRGGBB` 色碼。在 Project 頁面的清單或快速新增浮窗建立的任務會直接歸入目前的 Project。
 
 在任務詳情的「Project」欄位可指派或變更分類，選擇「未分類」可清除歸屬。任務可同時有日期與 Project。「今日」和其他日期會一起顯示當天各 Project 的任務，原有「任務」與「已完成」仍跨 Project 檢視。
 
@@ -38,9 +38,11 @@
 
 ## Boards
 
-在側欄的「Boards」按 +，輸入名稱並選取要顯示的 Projects。點選側欄上的 Board 即可查看這些 Projects 的今日任務、完成進度、先前未完成和未指定日期任務。在 Board 標題旁可修改名稱與篩選。Board 設定儲存在本機 SQLite，每次打開時會直接套用已儲存的選擇。零個 Project 的 Board 會顯示空清單。
+在側欄的主要導覽按「新增 Board」，輸入名稱並選取要顯示的 Projects。Board 與「今日」共用日期導覽，可用前後一天、日期選單和「今日」按鈕選擇要查看的日期。切換 Board 時會保留目前選取的日期。當日任務、完成進度、先前未完成和今日的未指定日期區段都會套用此 Board 的 Project 篩選。點選側欄中 Board 右側的編輯按鈕，可修改名稱與篩選，或確認後永久刪除 Board。刪除後任務和 Projects 會保留。Board 設定儲存在本機 SQLite。零個 Project 的 Board 會顯示空清單。
 
-只選取一個 Project 的 Board 可直接快速新增今日任務，任務會歸入該 Project。要替多 Project 的 Board 新增任務，可從對應的 Project 開啟快速新增浮窗。
+只選取一個 Project 的 Board 可直接在選取的日期快速新增任務，任務會歸入該 Project。要替多 Project 的 Board 新增任務，可從對應的 Project 開啟快速新增浮窗。
+
+在「設定」的「側邊欄」可關掉「顯示預設的『今日』分頁」。隱藏後，開啟 Famo 時會進入排序最前的 Board，沒有 Board 時會進入任務列表。主要導覽的順序與分頁顯示偏好會記在目前的瀏覽器或桌面 WebView。
 
 ## macOS 選單列
 
@@ -204,9 +206,11 @@ npm run format:check
 | `GET /projects` | 所有 Project，包含 `id`、`name`、`color` 與 `version` |
 | `POST /projects` | 以 `{"name":"工作"}` 建立 Project。可選填 `#RRGGBB` 格式的 `color`，省略則隨機指定 |
 | `POST /projects/{id}` | 以 `{"name":"新名稱","version":1,"color":"#4F87CC"}` 更新 Project。省略 `color` 時沿用原色 |
+| `POST /projects/{id}/delete` | 以 `{"version":1}` 刪除 Project。任務保留並改為未分類，相關 Board 會移除此 Project 的篩選 |
 | `GET /boards` | 所有 Board，包含 `id`、`name`、`project_ids` 與 `version` |
 | `POST /boards` | 以 `{"name":"工作 Board","project_ids":["project-id"]}` 建立 Board。空陣列表示顯示零個 Project |
 | `POST /boards/{id}` | 以 `{"name":"新名稱","project_ids":["project-id"],"version":1}` 更新 Board 名稱及整組 Project 篩選 |
+| `POST /boards/{id}/delete` | 以 `{"version":1}` 刪除 Board，保留其 Projects 與任務 |
 | `GET /tasks` | 全部未刪除任務，含已完成任務 |
 | `POST /tasks` | 建立任務 |
 | `GET /tasks/recently-deleted` | 最近 7 天軟刪除的任務，依刪除時間由新到舊排列 |

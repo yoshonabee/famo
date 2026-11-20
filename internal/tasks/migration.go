@@ -54,6 +54,9 @@ CREATE TABLE IF NOT EXISTS board_projects (
     PRIMARY KEY (board_id,project_id)
 );
 CREATE INDEX IF NOT EXISTS board_projects_project ON board_projects(project_id);
+CREATE TRIGGER IF NOT EXISTS boards_remove_projects BEFORE DELETE ON boards BEGIN
+    DELETE FROM board_projects WHERE board_id=OLD.id;
+END;
 CREATE TRIGGER IF NOT EXISTS projects_remove_from_boards BEFORE DELETE ON projects BEGIN
     UPDATE boards SET version=version+1 WHERE id IN (
         SELECT board_id FROM board_projects WHERE project_id=OLD.id

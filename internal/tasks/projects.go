@@ -8,6 +8,7 @@ import (
 	"math/rand/v2"
 	"regexp"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"modernc.org/sqlite"
@@ -101,19 +102,52 @@ func (s *Store) UpdateProject(ctx context.Context, id string, in ProjectInput, v
 	err = s.db.QueryRowContext(ctx, `UPDATE projects SET name=?,color=COALESCE(?,color),version=version+1
 		WHERE id=? AND version=? RETURNING color,version`, in.Name, in.Color, id, version).Scan(&p.Color, &p.Version)
 	if errors.Is(err, sql.ErrNoRows) {
-		var exists bool
-		if err := s.db.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM projects WHERE id=?)", id).Scan(&exists); err != nil {
-			return Project{}, err
-		}
-		if !exists {
-			return Project{}, fmt.Errorf("%w：找不到 Project", ErrNotFound)
-		}
-		return Project{}, fmt.Errorf("%w：Project 已被更新", ErrConflict)
+		return Project{}, projectVersionError(ctx, s.db, id)
 	}
 	if err != nil {
 		return Project{}, projectWriteError(err)
 	}
 	return p, nil
+}
+
+func (s *Store) DeleteProject(ctx context.Context, id string, version int) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	err = tx.QueryRowContext(ctx, "DELETE FROM projects WHERE id=? AND version=? RETURNING id", id, version).Scan(&id)
+	if errors.Is(err, sql.ErrNoRows) {
+		return projectVersionError(ctx, tx, id)
+	}
+	if err != nil {
+		return err
+	}
+	// Include recently deleted tasks so restoring one cannot resurrect a removed Project assignment.
+	if _, err := tx.ExecContext(ctx, `
+		UPDATE tasks
+		SET version=version+1,
+		    document=json_set(json_remove(document,'$.project_id'),
+		        '$.version',version+1,'$.updated_at',?)
+		WHERE json_extract(document,'$.project_id')=?`,
+		time.Now().UTC().Format(time.RFC3339Nano), id); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+func projectVersionError(ctx context.Context, db schemaReader, id string) error {
+	var exists bool
+	if err := db.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM projects WHERE id=?)", id).Scan(&exists); err != nil {
+		return err
+	}
+	if !exists {
+		return fmt.Errorf("%w：找不到 Project", ErrNotFound)
+	}
+	return fmt.Errorf("%w：Project 已被更新", ErrConflict)
 }
 
 func (s *Store) validateProject(ctx context.Context, id string) error {

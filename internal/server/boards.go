@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"net/http"
 
 	"famo/internal/tasks"
@@ -43,4 +44,21 @@ func boardRoutes(r chi.Router, store *tasks.Store) {
 		}
 		write(w, http.StatusOK, board)
 	})
+	r.Post("/boards/{id}/delete", deleteCollection(store.DeleteBoard))
+}
+
+func deleteCollection(remove func(context.Context, string, int) error) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var in struct {
+			Version int `json:"version"`
+		}
+		if !decode(w, r, &in) {
+			return
+		}
+		if err := remove(r.Context(), chi.URLParam(r, "id"), in.Version); err != nil {
+			fail(w, err)
+			return
+		}
+		write(w, http.StatusOK, struct{}{})
+	}
 }

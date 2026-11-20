@@ -1,5 +1,6 @@
 import { useRef, useState, type FormEvent } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { DeleteCollectionButton } from '@/components/delete-collection-button'
 import { ProjectColorDot } from '@/components/project-appearance'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -22,12 +23,14 @@ export function BoardEditor({
   projectsError,
   onRetryProjects,
   onSaved,
+  onDeleted,
 }: {
   board?: Board
   projects?: Project[]
   projectsError?: string
   onRetryProjects: () => void
   onSaved: (board: Board) => void
+  onDeleted: (id: string) => void
 }) {
   const client = useQueryClient()
   const [name, setName] = useState(board?.name ?? '')
@@ -156,12 +159,21 @@ export function BoardEditor({
               : save.error.message}
           </p>
         )}
-        <Button
-          className="justify-self-end"
-          disabled={save.isPending || conflict || !name.trim() || !projects}
-        >
-          {save.isPending ? '儲存中…' : '儲存'}
-        </Button>
+        <div className="collection-editor-actions">
+          {board && (
+            <DeleteCollectionButton
+              collection="boards"
+              item={board}
+              disabled={save.isPending || conflict}
+              onDeleted={onDeleted}
+            />
+          )}
+          <Button
+            disabled={save.isPending || conflict || !name.trim() || !projects}
+          >
+            {save.isPending ? '儲存中…' : '儲存'}
+          </Button>
+        </div>
       </form>
     </DialogContent>
   )

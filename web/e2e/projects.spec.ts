@@ -77,7 +77,7 @@ test('Project 新增、改名、指派和日期檢視', async ({ page }) => {
       .getByRole('textbox', { name: '編輯任務標題：整理家裡文件' }),
   ).toBeVisible()
 
-  await page.getByRole('button', { name: '編輯 Project' }).click()
+  await nav.getByRole('button', { name: '編輯 Project：網站改版' }).click()
   const rename = page.getByRole('dialog', { name: '編輯 Project' })
   await rename.getByRole('textbox').fill('網站維護')
   await rename.getByRole('radio', { name: '自訂' }).check()
@@ -104,4 +104,54 @@ test('Project 新增、改名、指派和日期檢視', async ({ page }) => {
   await expect(open('整理家裡文件')).toHaveCount(0)
   await page.getByRole('button', { name: '已完成', exact: true }).click()
   await expect(open('整理家裡文件')).toBeVisible()
+})
+
+test('從側欄刪除 Project 會保留任務並移除 Board 的關聯', async ({
+  page,
+  request,
+}) => {
+  const { id: projectId } = await (
+    await request.post('/api/projects', {
+      data: { name: '即將刪除的 Project' },
+    })
+  ).json()
+  const { id: taskId } = await (
+    await request.post('/api/tasks', {
+      data: { title: '刪除 Project 仍需保留的任務', project_id: projectId },
+    })
+  ).json()
+  const { id: boardId } = await (
+    await request.post('/api/boards', {
+      data: { name: '刪除 Project 後保留的 Board', project_ids: [projectId] },
+    })
+  ).json()
+  await page.goto('/')
+  const sidebar = page.getByRole('region', { name: 'Project 導覽' })
+  const project = sidebar.getByRole('button', {
+    name: '即將刪除的 Project',
+    exact: true,
+  })
+  await project.click()
+  await expect(
+    page.getByRole('main').getByRole('button', { name: /編輯 Project/ }),
+  ).toHaveCount(0)
+  await sidebar
+    .getByRole('button', { name: '編輯 Project：即將刪除的 Project' })
+    .click()
+  await page
+    .getByRole('dialog', { name: '編輯 Project' })
+    .getByRole('button', { name: '刪除', exact: true })
+    .click()
+  const warn = page.getByRole('alertdialog', { name: '刪除 Project' })
+  await expect(warn).toContainText('無法復原')
+  await expect(warn).toContainText('所有任務都會保留')
+  await warn.getByRole('button', { name: '永久刪除' }).click()
+  await expect(project).toHaveCount(0)
+  const task = await (await request.get(`/api/tasks/${taskId}`)).json()
+  expect(task.title).toBe('刪除 Project 仍需保留的任務')
+  expect(task.project_id).toBeUndefined()
+  const boards = await (await request.get('/api/boards')).json()
+  expect(boards).toContainEqual(
+    expect.objectContaining({ id: boardId, project_ids: [] }),
+  )
 })

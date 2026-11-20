@@ -14,14 +14,12 @@ import {
   CalendarDays,
   CheckCheck,
   ExternalLink,
-  Folder,
   GripVertical,
   Inbox,
   LayoutGrid,
   LoaderCircle,
   PanelLeftClose,
   PanelLeftOpen,
-  Pencil,
   Plus,
   PanelRightOpen,
   Settings,
@@ -29,10 +27,14 @@ import {
 } from 'lucide-react'
 import { BoardEditor } from '@/components/board-editor'
 import { PreferencesPage } from '@/components/preferences-page'
-import { ProjectBadge, ProjectColorDot } from '@/components/project-appearance'
+import {
+  PrimaryNavigation,
+  type PrimaryNavItem,
+} from '@/components/primary-navigation'
+import { ProjectBadge } from '@/components/project-appearance'
 import { ProjectEditor } from '@/components/project-editor'
 import { RecentlyDeletedPage } from '@/components/recently-deleted-page'
-import { SidebarCollection } from '@/components/sidebar-collection'
+import { ProjectNavigation } from '@/components/sidebar-collection'
 import {
   TodayProjectFilter,
   useTodayProjectFilter,
@@ -44,6 +46,10 @@ import { CalendarDate, DateNavigation } from '@/components/date-navigation'
 import { CalendarPage } from '@/components/calendar-page'
 import { localDate } from '@/lib/calendar'
 import { linkLabel } from '@/lib/links'
+import {
+  orderSidebarItems,
+  useSidebarPreferences,
+} from '@/lib/sidebar-preferences'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { TaskDate } from '@/components/task-date'
@@ -85,6 +91,7 @@ const shortcuts = new Map([
   ['k', 'today'],
   ['f', 'search'],
 ])
+const defaultNavigation = ['date', 'active', 'completed']
 
 function Links({ task, onOpen }: { task: Task; onOpen: () => void }) {
   if (!task.links.length) return null
@@ -125,7 +132,7 @@ function App() {
     enabled: !dragging && !ordering,
     refetchInterval: 30_000,
   })
-  const [view, setView] = useState<
+  const [requestedView, setView] = useState<
     | 'active'
     | 'date'
     | 'completed'
@@ -140,14 +147,17 @@ function App() {
     refetchInterval: 30_000,
   })
   const boardList = boards.data ?? []
+  const sidebar = useSidebarPreferences()
+  const { showToday, order } = sidebar.preferences
+  const boardsByNavId = new Map(
+    boardList.map((board) => [`board:${board.id}`, board]),
+  )
+  const orderedNavIds = orderSidebarItems(
+    [...defaultNavigation, ...boardsByNavId.keys()],
+    order,
+  )
   const [boardId, setBoardId] = useState<string>()
-  const [boardEditor, setBoardEditor] = useState<string | null>(null)
-  const currentBoard =
-    view === 'board' ? boardList.find(({ id }) => id === boardId) : undefined
-  const editBoard = boardList.find(({ id }) => id === boardEditor)
-  const boardProjectIds = currentBoard
-    ? new Set(currentBoard.project_ids)
-    : null
+  const [boardEditor, setBoardEditor] = useState<Board | 'new' | null>(null)
   const projects = useQuery({
     queryKey: ['projects'],
     queryFn: ({ signal }) => request<Project[]>('/projects', undefined, signal),
@@ -155,17 +165,38 @@ function App() {
   })
   const projectList = projects.data ?? []
   const [projectId, setProjectId] = useState<string>()
-  const [projectEditor, setProjectEditor] = useState<string | null>(null)
-  const currentProjectId = view === 'project' ? projectId : undefined
-  const currentProject = projectList.find(({ id }) => id === currentProjectId)
-  const editProject = projectList.find(({ id }) => id === projectEditor)
+  const [projectEditor, setProjectEditor] = useState<Project | 'new' | null>(
+    null,
+  )
   const projectsById = new Map(
     projectList.map((project) => [project.id, project]),
   )
+  const editProject =
+    projectEditor && projectEditor !== 'new'
+      ? (projectsById.get(projectEditor.id) ?? projectEditor)
+      : undefined
+  let view = requestedView
+  let currentBoard =
+    view === 'board' ? boardsByNavId.get(`board:${boardId}`) : undefined
+  if (
+    (view === 'board' && !currentBoard) ||
+    (view === 'project' && !projectsById.has(projectId ?? ''))
+  )
+    view = 'date'
+  if (view === 'date' && !showToday) {
+    const firstBoardId = orderedNavIds.find((id) => boardsByNavId.has(id))
+    currentBoard = boardsByNavId.get(firstBoardId ?? '')
+    view = currentBoard ? 'board' : 'active'
+  }
+  const currentProjectId = view === 'project' ? projectId : undefined
+  const currentProject = projectsById.get(currentProjectId ?? '')
+  const boardProjectIds = currentBoard
+    ? new Set(currentBoard.project_ids)
+    : null
+  const isCalendarView = view === 'date' || view === 'board'
   const [date, setDate] = useState(localDate)
   const todayFilter = useTodayProjectFilter()
   const today = localDate()
-  const calendarDate = currentBoard ? today : date
   const isToday = view === 'date' && date === today
   const projectFiltered = isToday && todayFilter.hidden.length > 0
   const [search, setSearch] = useState('')
@@ -178,13 +209,13 @@ function App() {
       : currentProjectId
   const capture = useQuickCapture(
     () => setSearch(''),
-    view === 'date' || currentBoard ? calendarDate : '',
+    isCalendarView ? date : '',
     captureProjectId,
   )
   const visibleDrafts = capture.drafts.filter((draft) => {
     if (boardProjectIds)
       return (
-        draft.scheduled_date === calendarDate &&
+        draft.scheduled_date === date &&
         boardProjectIds.has(draft.project_id ?? '')
       )
     if (view === 'date') return draft.scheduled_date === date
@@ -210,7 +241,10 @@ function App() {
   }
   function goToToday() {
     setDate(localDate())
-    setView('date')
+    if (!showToday && currentBoard) {
+      setBoardId(currentBoard.id)
+      setView('board')
+    } else setView('date')
     setSelected(null)
     setPalette(null)
     window.scrollTo(0, 0)
@@ -222,9 +256,10 @@ function App() {
         setSidebarCollapsed((collapsed) => !collapsed)
         break
       case 'capture':
-        if (currentBoard && !captureProjectId) goToToday()
+        if (currentBoard && !captureProjectId)
+          setView(showToday ? 'date' : 'active')
         if (palette !== 'capture')
-          setPaletteCaptureDate(view === 'date' ? date : today)
+          setPaletteCaptureDate(isCalendarView ? date : today)
         setPalette('capture')
         break
       case 'today':
@@ -339,12 +374,11 @@ function App() {
     .filter((t) => t.completed_at)
     .sort(compareCompletionTime)
   const listTitle =
-    currentBoard?.name ??
-    (view === 'project'
+    view === 'project'
       ? currentProject?.name
       : view === 'active'
         ? '任務'
-        : '已完成')
+        : '已完成'
   const listCount =
     view === 'project'
       ? matching.length
@@ -386,6 +420,70 @@ function App() {
   const searchField = <TaskSearch value={search} onChange={setSearch} />
   const SidebarIcon = sidebarCollapsed ? PanelLeftOpen : PanelLeftClose
   const sidebarAction = sidebarCollapsed ? '展開側邊欄' : '收合側邊欄'
+  const navItems = new Map<string, PrimaryNavItem>([
+    [
+      'date',
+      {
+        id: 'date',
+        label: '今日',
+        icon: CalendarDays,
+        current: view === 'date',
+        ariaLabel: '今日任務',
+        shortcut: 'Meta+K Control+K',
+        onSelect: goToToday,
+      },
+    ],
+    [
+      'active',
+      {
+        id: 'active',
+        label: '任務',
+        icon: Inbox,
+        current: view === 'active',
+        ariaLabel: '任務列表',
+        count: active.length,
+        onSelect: () => setView('active'),
+      },
+    ],
+    [
+      'completed',
+      {
+        id: 'completed',
+        label: '已完成',
+        icon: CheckCheck,
+        current: view === 'completed',
+        count: all.length - active.length,
+        onSelect: () => setView('completed'),
+      },
+    ],
+  ])
+  for (const [id, board] of boardsByNavId) {
+    navItems.set(id, {
+      id,
+      label: board.name,
+      icon: LayoutGrid,
+      current: currentBoard?.id === board.id,
+      onSelect: () => goToBoard(board.id),
+      onEdit: () => setBoardEditor(board),
+    })
+  }
+  const visibleNavIds = showToday
+    ? orderedNavIds
+    : orderedNavIds.filter((id) => id !== 'date')
+  const visibleNavItems = visibleNavIds.map((id) => navItems.get(id)!)
+  function reorderNavigation(ids: string[]) {
+    if (currentBoard && requestedView === 'date') {
+      setBoardId(currentBoard.id)
+      setView('board')
+    }
+    let index = 0
+    sidebar.save({
+      showToday,
+      order: orderedNavIds.map((id) =>
+        !showToday && id === 'date' ? id : ids[index++],
+      ),
+    })
+  }
   return (
     <div
       className={sidebarCollapsed ? 'app-shell sidebar-collapsed' : 'app-shell'}
@@ -410,63 +508,23 @@ function App() {
             <SidebarIcon />
           </Button>
         </div>
-        <nav aria-label="主要導覽">
-          <button
-            className={view === 'date' ? 'nav-item active' : 'nav-item'}
-            onClick={goToToday}
-            aria-label="今日任務"
-            aria-keyshortcuts="Meta+K Control+K"
-            title="今日 (⌘K)"
-          >
-            <CalendarDays size={17} />
-            <span className="nav-label">今日</span>
-          </button>
-          <button
-            className={view === 'active' ? 'nav-item active' : 'nav-item'}
-            onClick={() => setView('active')}
-            aria-label="任務列表"
-            title="任務"
-          >
-            <Inbox size={17} />
-            <span className="nav-label">任務</span>
-            <span className="nav-count">{active.length}</span>
-          </button>
-          <button
-            className={view === 'completed' ? 'nav-item active' : 'nav-item'}
-            onClick={() => setView('completed')}
-            aria-label="已完成"
-            title="已完成"
-          >
-            <CheckCheck size={17} />
-            <span className="nav-label">已完成</span>
-            <span className="nav-count">{all.length - active.length}</span>
-          </button>
-        </nav>
-        <SidebarCollection
-          name="Board"
-          items={boardList}
-          icon={LayoutGrid}
-          current={currentBoard?.id}
+        <PrimaryNavigation
+          items={visibleNavItems}
           collapsed={sidebarCollapsed}
           error={boards.error?.message}
-          onSelect={goToBoard}
-          onExpand={() => setSidebarCollapsed(false)}
+          onReorder={reorderNavigation}
           onCreate={() => setBoardEditor('new')}
           onRetry={() => void boards.refetch()}
         />
-        <SidebarCollection
-          name="Project"
-          items={projectList}
-          icon={Folder}
-          renderItemIcon={(project) => (
-            <ProjectColorDot color={project.color} />
-          )}
+        <ProjectNavigation
+          projects={projectList}
           current={currentProjectId}
           collapsed={sidebarCollapsed}
           error={projects.error?.message}
           onSelect={goToProject}
           onExpand={() => setSidebarCollapsed(false)}
           onCreate={() => setProjectEditor('new')}
+          onEdit={(id) => setProjectEditor(projectsById.get(id) ?? null)}
           onRetry={() => void projects.refetch()}
         />
         <div className="sidebar-footer">
@@ -499,50 +557,29 @@ function App() {
           className="main-content"
           hidden={view === 'preferences' || view === 'recently-deleted'}
         >
-          {view === 'date' && (
+          {isCalendarView ? (
             <header className="calendar-heading">
-              <h1>
-                <CalendarDate date={date} />
-              </h1>
+              {currentBoard ? (
+                <div className="board-heading">
+                  <h1>{currentBoard.name}</h1>
+                  <p className="board-date">
+                    <CalendarDate date={date} />
+                  </p>
+                </div>
+              ) : (
+                <h1>
+                  <CalendarDate date={date} />
+                </h1>
+              )}
               <DateNavigation date={date} onChange={setDate} />
               {searchField}
             </header>
-          )}
-          {view !== 'date' && (
+          ) : (
             <div className="list-toolbar">
               <div className="list-title">
                 <h1>{listTitle}</h1>
-                {!currentBoard && (
-                  <span className="list-count">{listCount}</span>
-                )}
-                {currentBoard && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    aria-label="編輯 Board"
-                    title="編輯 Board"
-                    onClick={() => setBoardEditor(currentBoard.id)}
-                  >
-                    <Pencil />
-                  </Button>
-                )}
-                {currentProject && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    aria-label="編輯 Project"
-                    title="編輯 Project"
-                    onClick={() => setProjectEditor(currentProject.id)}
-                  >
-                    <Pencil />
-                  </Button>
-                )}
+                <span className="list-count">{listCount}</span>
               </div>
-              {currentBoard && (
-                <p className="board-date">
-                  今日 <CalendarDate date={calendarDate} />
-                </p>
-              )}
               {searchField}
             </div>
           )}
@@ -554,10 +591,10 @@ function App() {
             onSubmit={capture.submit}
             announcement={capture.announcement}
           />
-          {(view === 'date' || currentBoard) && (
+          {isCalendarView && (
             <CalendarPage
-              date={calendarDate}
-              key={`${currentBoard?.id ?? 'date'}/${calendarDate}`}
+              date={date}
+              key={`${currentBoard?.id ?? 'date'}/${date}`}
               tasks={all.filter((task) => {
                 const id = task.project_id ?? ''
                 if (boardProjectIds) return boardProjectIds.has(id)
@@ -678,7 +715,13 @@ function App() {
           </div>
         )}
         <div className="main-content" hidden={view !== 'preferences'}>
-          <PreferencesPage appearance={theme} />
+          <PreferencesPage
+            appearance={theme}
+            showToday={showToday}
+            onShowTodayChange={(showToday) =>
+              sidebar.save({ showToday, order })
+            }
+          />
         </div>
       </main>
       <Dialog
@@ -703,13 +746,21 @@ function App() {
       >
         {boardEditor !== null && (
           <BoardEditor
-            key={boardEditor}
-            board={editBoard}
+            key={boardEditor === 'new' ? 'new' : boardEditor.id}
+            board={boardEditor === 'new' ? undefined : boardEditor}
             projects={projects.data}
             projectsError={projects.error?.message}
             onRetryProjects={() => void projects.refetch()}
             onSaved={(saved) => {
               if (boardEditor === 'new') goToBoard(saved.id)
+              setBoardEditor(null)
+            }}
+            onDeleted={(id) => {
+              if (currentBoard?.id === id) {
+                setView('date')
+                setDate(localDate())
+                setSearch('')
+              }
               setBoardEditor(null)
             }}
           />
@@ -721,10 +772,18 @@ function App() {
       >
         {projectEditor !== null && (
           <ProjectEditor
-            key={projectEditor}
+            key={projectEditor === 'new' ? 'new' : projectEditor.id}
             project={editProject}
             onSaved={(saved) => {
               if (projectEditor === 'new') goToProject(saved.id)
+              setProjectEditor(null)
+            }}
+            onDeleted={(id) => {
+              if (currentProjectId === id) {
+                setView('date')
+                setDate(localDate())
+                setSearch('')
+              }
               setProjectEditor(null)
             }}
           />

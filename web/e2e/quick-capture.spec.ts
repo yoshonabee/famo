@@ -91,7 +91,7 @@ test('Enter 連續新增，不等待上一列儲存，名稱以外皆可留白',
   await dialog.getByRole('button', { name: '關閉', exact: true }).click()
   await checkbox.click()
   await expect(row).not.toBeVisible()
-  await page.getByRole('button', { name: '已完成' }).click()
+  await page.getByRole('button', { name: '已完成', exact: true }).click()
   await expect(capture).toBeHidden()
   await page.getByRole('button', { name: '今日任務', exact: true }).click()
   await expect(input).toHaveValue('第三件先保留草稿')

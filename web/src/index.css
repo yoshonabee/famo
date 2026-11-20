@@ -1127,10 +1127,80 @@ button:disabled {
 .sidebar-collapsed .nav-item {
   justify-content: center;
 }
-.sidebar nav {
+.sidebar-main-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-height: 0;
+  min-width: 0;
+  margin-top: 22px;
+}
+.sidebar-nav-list {
   display: grid;
   gap: 2px;
-  margin-top: 22px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+.sidebar-nav-row {
+  display: flex;
+  min-width: 0;
+  border-radius: 6px;
+}
+.sidebar-nav-row.is-current {
+  background: var(--accent);
+}
+.sidebar-nav-row .nav-item {
+  flex: 1;
+  min-width: 0;
+}
+.sidebar-nav-row .nav-item:focus-visible,
+.sidebar-row-action:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: -2px;
+}
+.sidebar-nav-row .nav-item > svg {
+  flex-shrink: 0;
+}
+.sidebar-nav-row .nav-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sidebar-row-action {
+  display: grid;
+  place-items: center;
+  flex: 0 0 24px;
+  border-radius: 6px;
+  color: var(--muted-foreground);
+}
+.sidebar-row-action:hover {
+  color: var(--primary);
+  background: var(--accent);
+}
+.sidebar-sort-handle {
+  flex-basis: 18px;
+  cursor: grab;
+  touch-action: none;
+  opacity: 0;
+}
+.sidebar-nav-row:hover .sidebar-sort-handle,
+.sidebar-nav-row:focus-within .sidebar-sort-handle {
+  opacity: 1;
+}
+.sidebar-sort-handle:active {
+  cursor: grabbing;
+}
+.sidebar-nav-dragging {
+  background: var(--accent);
+}
+.sidebar .sidebar-add-board {
+  flex-shrink: 0;
+  font-size: 13px;
+}
+@media (pointer: coarse) {
+  .sidebar-sort-handle {
+    opacity: 1;
+  }
 }
 .sidebar-footer {
   margin-top: auto;
@@ -1193,18 +1263,6 @@ button:disabled {
   overflow-y: auto;
   scrollbar-width: thin;
 }
-.sidebar-collection-list .nav-item:focus-visible {
-  outline-offset: -2px;
-}
-.sidebar-collection-list .nav-item > svg {
-  flex-shrink: 0;
-}
-.sidebar-collection-list .nav-label {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
 .project-color-dot {
   display: inline-block;
   width: 10px;
@@ -1229,8 +1287,13 @@ button:disabled {
   display: grid;
   gap: 12px;
 }
-.project-form button {
-  justify-self: end;
+.collection-editor-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.collection-editor-actions > :first-child:not(:only-child) {
+  margin-right: auto;
 }
 .project-color-options legend {
   margin-bottom: 8px;
@@ -1350,8 +1413,9 @@ button:disabled {
 .list-title h1 {
   overflow-wrap: anywhere;
 }
-.list-title > button {
-  flex-shrink: 0;
+.board-heading {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 .board-date {
   color: var(--muted-foreground);
@@ -1637,13 +1701,27 @@ input.todo-title {
     font-size: 21px;
     padding: 0 4px;
   }
-  .sidebar nav {
-    display: flex;
-    justify-content: space-between;
-    flex-wrap: wrap;
-    gap: 2px;
-    flex: 1;
+  .sidebar-main-nav {
+    flex: 0 0 100%;
+    flex-direction: row;
+    align-items: center;
     margin: 0;
+  }
+  .sidebar-nav-list {
+    display: flex;
+    flex: 1;
+    min-width: 0;
+    overflow-x: auto;
+    padding-block: 2px;
+  }
+  .sidebar-nav-row {
+    flex-shrink: 0;
+  }
+  .sidebar-nav-row .nav-item {
+    max-width: 185px;
+  }
+  .sidebar-add-board .nav-label {
+    display: none;
   }
   .collection-expand {
     margin: 0;

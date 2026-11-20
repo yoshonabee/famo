@@ -171,7 +171,7 @@ test('詳細頁日期自動儲存與清除，失敗保留選擇並可重試，�
     data: { op: 'complete_task', version: task.version },
   })
   await page.goto('/')
-  await page.getByRole('button', { name: '已完成', exact: false }).click()
+  await page.getByRole('button', { name: '已完成', exact: true }).click()
   await page
     .getByRole('button', { name: '任務詳情：undated-auto-save', exact: true })
     .click()

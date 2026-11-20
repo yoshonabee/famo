@@ -85,7 +85,9 @@ test('最近刪除可搜尋與還原，並保留原日期和完成狀態', async
   expect(titleBox!.width).toBeGreaterThan(100)
   await restore.click()
   await expect(row).not.toBeVisible()
-  await expect(page.getByRole('status')).toContainText('已還原「準備專案交接」')
+  await expect(page.getByRole('main').getByRole('status')).toContainText(
+    '已還原「準備專案交接」',
+  )
   await page.getByRole('button', { name: '已完成', exact: true }).click()
   await expect(title).toHaveValue(task.title)
   const restored = await (await request.get(`/api/tasks/${task.id}`)).json()

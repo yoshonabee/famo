@@ -69,4 +69,19 @@ func TestBoardRoutes(t *testing.T) {
 	if err := json.Unmarshal(body, &list); err != nil || !reflect.DeepEqual(list, []tasks.Board{want}) {
 		t.Fatalf("invalid Board list: %s, %v", body, err)
 	}
+
+	body = call(http.MethodPost, path, fmt.Sprintf(`{"name":"Remove me","project_ids":[%q]}`, project.ID), http.StatusCreated)
+	var removed tasks.Board
+	if err := json.Unmarshal(body, &removed); err != nil {
+		t.Fatal(err)
+	}
+	deletion := path + "/" + removed.ID + "/delete"
+	call(http.MethodPost, deletion, `{"version":2}`, http.StatusConflict)
+	call(http.MethodPost, deletion, `{"version":1}`, http.StatusOK)
+	call(http.MethodPost, deletion, `{"version":1}`, http.StatusNotFound)
+	projects, err := store.ListProjects(t.Context())
+	if err != nil || !reflect.DeepEqual(projects, []tasks.Project{project}) {
+		t.Fatalf("deleting Board changed Projects: %+v, %v", projects, err)
+	}
+	call(http.MethodPost, "/api/projects/"+project.ID+"/delete", `{"version":1}`, http.StatusOK)
 }

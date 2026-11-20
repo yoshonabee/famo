@@ -114,14 +114,7 @@ func (s *Store) UpdateBoard(ctx context.Context, id string, in BoardInput, versi
 	err = tx.QueryRowContext(ctx, `UPDATE boards SET name=?,version=version+1
 		WHERE id=? AND version=? RETURNING version`, board.Name, id, version).Scan(&board.Version)
 	if errors.Is(err, sql.ErrNoRows) {
-		var exists bool
-		if err := tx.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM boards WHERE id=?)", id).Scan(&exists); err != nil {
-			return Board{}, err
-		}
-		if !exists {
-			return Board{}, fmt.Errorf("%w：找不到 Board", ErrNotFound)
-		}
-		return Board{}, fmt.Errorf("%w：Board 已被更新", ErrConflict)
+		return Board{}, boardVersionError(ctx, tx, id)
 	}
 	if err != nil {
 		return Board{}, boardWriteError(err)
@@ -136,6 +129,25 @@ func (s *Store) UpdateBoard(ctx context.Context, id string, in BoardInput, versi
 		return Board{}, err
 	}
 	return board, nil
+}
+
+func (s *Store) DeleteBoard(ctx context.Context, id string, version int) error {
+	err := s.db.QueryRowContext(ctx, "DELETE FROM boards WHERE id=? AND version=? RETURNING id", id, version).Scan(&id)
+	if errors.Is(err, sql.ErrNoRows) {
+		return boardVersionError(ctx, s.db, id)
+	}
+	return err
+}
+
+func boardVersionError(ctx context.Context, db schemaReader, id string) error {
+	var exists bool
+	if err := db.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM boards WHERE id=?)", id).Scan(&exists); err != nil {
+		return err
+	}
+	if !exists {
+		return fmt.Errorf("%w：找不到 Board", ErrNotFound)
+	}
+	return fmt.Errorf("%w：Board 已被更新", ErrConflict)
 }
 
 func insertBoardProjects(ctx context.Context, tx *sql.Tx, board Board) error {

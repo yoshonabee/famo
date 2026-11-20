@@ -9,6 +9,76 @@ import (
 	"testing"
 )
 
+func TestDeleteProjectPreservesTasksAndClearsBoardSelections(t *testing.T) {
+	store := openTest(t)
+	ctx := t.Context()
+	project, err := store.CreateProject(ctx, ProjectInput{Name: "Work"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	board, err := store.CreateBoard(ctx, BoardInput{Name: "Work", ProjectIDs: []string{project.ID}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	assigned := make([]Task, 0, 3)
+	for i, action := range []string{"", "complete_task", "delete_item"} {
+		task, err := store.Create(ctx, CreateInput{
+			Title: "Keep this task", ProjectID: project.ID, ScheduledDate: "2026-11-20",
+			Description: "Keep this context", Links: []Link{{URL: "https://example.com/context"}},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if i > 0 {
+			task, err = store.Act(ctx, task.ID, Action{Op: action, Version: task.Version})
+			if err != nil {
+				t.Fatal(err)
+			}
+		}
+		assigned = append(assigned, task)
+	}
+
+	if err := store.DeleteProject(ctx, project.ID, project.Version+1); !errors.Is(err, ErrConflict) {
+		t.Fatalf("stale deletion: %v", err)
+	}
+	before, err := store.Get(ctx, assigned[0].ID)
+	if err != nil || !reflect.DeepEqual(before, assigned[0]) {
+		t.Fatalf("stale deletion changed task: %+v, %v", before, err)
+	}
+	if err := store.DeleteProject(ctx, project.ID, project.Version); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.DeleteProject(ctx, project.ID, project.Version); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("deleting a missing Project: %v", err)
+	}
+	for _, want := range assigned {
+		got, err := readTask(store.db.QueryRowContext(ctx, "SELECT document FROM tasks WHERE id=?", want.ID))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got.UpdatedAt.Before(want.UpdatedAt) {
+			t.Fatalf("task update time moved backward: %+v", got)
+		}
+		want.UpdatedAt = got.UpdatedAt
+		want.ProjectID = ""
+		want.Version++
+		if !reflect.DeepEqual(got, want) {
+			t.Fatalf("project deletion changed unexpected task fields: %+v; want %+v", got, want)
+		}
+	}
+	deleted := assigned[2]
+	restored, err := store.Restore(ctx, deleted.ID, deleted.Version+1)
+	if err != nil || restored.ProjectID != "" || restored.DeletedAt != nil {
+		t.Fatalf("restore after Project deletion: %+v, %v", restored, err)
+	}
+	boards, err := store.ListBoards(ctx)
+	board.ProjectIDs = []string{}
+	board.Version++
+	if err != nil || !reflect.DeepEqual(boards, []Board{board}) {
+		t.Fatalf("Board after Project deletion: %+v, %v", boards, err)
+	}
+}
+
 func TestProjectAssignmentsAndVersionChecks(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "famo.db")
 	store, err := Open(path)

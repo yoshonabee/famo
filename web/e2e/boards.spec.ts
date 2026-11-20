@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test'
 
 function boardNavigation(page: Page) {
-  return page.getByRole('region', { name: 'Board 導覽' })
+  return page.getByRole('navigation', { name: '主要導覽' })
 }
 
 test('Board 保存各自的今日 Project 篩選並支援重新編輯', async ({
@@ -86,13 +86,25 @@ test('Board 保存各自的今日 Project 篩選並支援重新編輯', async ({
   await expect(task('Board 採買清單')).toBeVisible()
   await expect(task('Board 練習樂器')).toBeVisible()
   await expect(task('Board 下次要買')).toHaveCount(0)
+  await page.getByRole('button', { name: '後一天' }).click()
+  await expect(
+    page.getByRole('heading', { name: '生活清單 Board' }),
+  ).toBeVisible()
+  await expect(page.locator('.board-date time')).toHaveAttribute(
+    'datetime',
+    '2041-02-16',
+  )
+  await expect(task('Board 下次要買')).toBeVisible()
+  await expect(task('Board 審閱報告')).toHaveCount(0)
+  await page.getByRole('button', { name: '前一天' }).click()
+  await expect(task('Board 採買清單')).toBeVisible()
   await expect(task('Board 審閱報告')).toHaveCount(0)
   await expect(task('Board 新增工作')).toHaveCount(0)
   await expect(task('Board 寄出簡報')).toHaveCount(0)
   await boardButton('工作清單 Board').click()
   await expect(task('Board 審閱報告')).toBeVisible()
 
-  await page.getByRole('button', { name: '編輯 Board' }).click()
+  await nav.getByRole('button', { name: '編輯 Board：工作清單 Board' }).click()
   const editor = page.getByRole('dialog', { name: '編輯 Board' })
   const choice = (name: string) =>
     editor.getByRole('checkbox', { name, exact: true })
@@ -133,7 +145,7 @@ test('編輯 Board 發生版本衝突時保留較新的設定', async ({ page, r
   await page.goto('/')
   const nav = boardNavigation(page)
   await nav.getByRole('button', { name: '待更新 Board', exact: true }).click()
-  await page.getByRole('button', { name: '編輯 Board' }).click()
+  await nav.getByRole('button', { name: '編輯 Board：待更新 Board' }).click()
   const editor = page.getByRole('dialog', { name: '編輯 Board' })
   await editor.getByRole('textbox', { name: 'Board 名稱' }).fill('舊版本 Board')
 
@@ -149,4 +161,101 @@ test('編輯 Board 發生版本衝突時保留較新的設定', async ({ page, r
   await expect(
     nav.getByRole('button', { name: '已更新 Board', exact: true }),
   ).toBeVisible()
+})
+
+test('主要導覽可混合排序 Board 和預設分頁，並記住隱藏今日', async ({
+  page,
+  request,
+}) => {
+  const response = await request.post('/api/boards', {
+    data: { name: '!排序測試 Board', project_ids: [] },
+  })
+  await expect(response).toBeOK()
+  await page.goto('/')
+  const nav = boardNavigation(page)
+  const items = nav.getByRole('listitem')
+  const board = nav.getByRole('button', {
+    name: '!排序測試 Board',
+    exact: true,
+  })
+  const handle = nav.getByRole('button', { name: '調整順序：!排序測試 Board' })
+  await expect(
+    items.nth(3).getByRole('button', { name: '!排序測試 Board', exact: true }),
+  ).toBeVisible()
+  await handle.focus()
+  await page.keyboard.press('Space')
+  await page.keyboard.press('ArrowUp')
+  await page.keyboard.press('Space')
+  await expect(
+    items.nth(2).getByRole('button', { name: '!排序測試 Board', exact: true }),
+  ).toBeVisible()
+  await page.reload()
+  await expect(
+    items.nth(2).getByRole('button', { name: '!排序測試 Board', exact: true }),
+  ).toBeVisible()
+  await page.getByRole('button', { name: '設定', exact: true }).click()
+  const showToday = page.getByRole('checkbox', {
+    name: '顯示預設的「今日」分頁',
+  })
+  await showToday.uncheck()
+  const today = nav.getByRole('button', { name: '今日任務' })
+  await expect(today).toHaveCount(0)
+  await page.reload()
+  await expect(today).toHaveCount(0)
+  await expect(board).toHaveAttribute('aria-current', 'page')
+  await page.getByRole('button', { name: '後一天' }).click()
+  await page.keyboard.press('Meta+k')
+  await expect(board).toHaveAttribute('aria-current', 'page')
+  await page.getByRole('button', { name: '設定', exact: true }).click()
+  await showToday.check()
+  await expect(today).toBeVisible()
+  await expect(
+    items.nth(2).getByRole('button', { name: '!排序測試 Board', exact: true }),
+  ).toBeVisible()
+})
+
+test('從側欄編輯並刪除 Board，保留任務和 Project', async ({
+  page,
+  request,
+}) => {
+  const { id: projectId } = await (
+    await request.post('/api/projects', {
+      data: { name: 'Board 刪除測試用 Project' },
+    })
+  ).json()
+  const { id: taskId } = await (
+    await request.post('/api/tasks', {
+      data: { title: '刪除 Board 仍需保留的任務', project_id: projectId },
+    })
+  ).json()
+  await expect(
+    await request.post('/api/boards', {
+      data: { name: '待刪除 Board', project_ids: [projectId] },
+    }),
+  ).toBeOK()
+  await page.goto('/')
+  const nav = boardNavigation(page)
+  const tab = nav.getByRole('button', { name: '待刪除 Board', exact: true })
+  await tab.click()
+  await expect(
+    page.getByRole('main').getByRole('button', { name: /編輯 Board/ }),
+  ).toHaveCount(0)
+  await nav.getByRole('button', { name: '編輯 Board：待刪除 Board' }).click()
+  const editor = page.getByRole('dialog', { name: '編輯 Board' })
+  const warn = page.getByRole('alertdialog', { name: '刪除 Board' })
+  await editor.getByRole('button', { name: '刪除', exact: true }).click()
+  await expect(warn).toContainText('無法復原')
+  await expect(warn).toContainText('任務和所屬的 Projects 都會保留')
+  await warn.getByRole('button', { name: '取消' }).click()
+  await expect(editor).toBeVisible()
+  await editor.getByRole('button', { name: '刪除', exact: true }).click()
+  await warn.getByRole('button', { name: '永久刪除' }).click()
+  await expect(tab).toHaveCount(0)
+  await expect(editor).toHaveCount(0)
+  expect(
+    await (await request.get(`/api/tasks/${taskId}`)).json(),
+  ).toMatchObject({
+    id: taskId,
+    project_id: projectId,
+  })
 })

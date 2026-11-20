@@ -33,7 +33,9 @@ test('設定提供 12 款主題，切換立即生效並在重開後保留', asyn
     '摩卡',
   ]) {
     await page.getByRole('radio', { name, exact: true }).check()
-    await expect(page.getByRole('status')).toHaveText(`目前主題：${name}`)
+    await expect(page.getByRole('main').getByRole('status')).toHaveText(
+      `目前主題：${name}`,
+    )
     backgrounds.add(
       await page
         .locator('html')
@@ -141,7 +143,9 @@ test('跟隨系統即時更新，固定主題維持選擇', async ({ page }) => 
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'moss')
   await page.emulateMedia({ colorScheme: 'dark' })
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'midnight')
-  await expect(page.getByRole('status')).toHaveText('跟隨系統 · 目前為午夜')
+  await expect(page.getByRole('main').getByRole('status')).toHaveText(
+    '跟隨系統 · 目前為午夜',
+  )
   await page.reload()
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'midnight')
   await page.getByRole('button', { name: '設定', exact: true }).click()
