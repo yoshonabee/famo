@@ -30,7 +30,7 @@ func NewEmbedded(store *tasks.Store, assets fs.FS) http.Handler {
 	return newHandler(store, assets, requireJSON, true)
 }
 
-func newHandler(store *tasks.Store, assets fs.FS, access func(http.Handler) http.Handler, workspaceEditable bool) http.Handler {
+func newHandler(store *tasks.Store, assets fs.FS, access func(http.Handler) http.Handler, settingsEditable bool) http.Handler {
 	r := chi.NewRouter()
 	r.Use(recoverer)
 	r.Use(access)
@@ -44,7 +44,25 @@ func newHandler(store *tasks.Store, assets fs.FS, access func(http.Handler) http
 			}
 			write(w, 200, workspace)
 		})
-		if workspaceEditable {
+		if settingsEditable {
+			r.Post("/tasks/recently-deleted/cleanup", func(w http.ResponseWriter, r *http.Request) {
+				var in struct {
+					Confirm bool `json:"confirm"`
+				}
+				if !decode(w, r, &in) {
+					return
+				}
+				if !in.Confirm {
+					write(w, http.StatusBadRequest, map[string]string{"error": "請先確認永久清理"})
+					return
+				}
+				count, err := store.PurgeExpiredDeleted(r.Context())
+				if err != nil {
+					fail(w, err)
+					return
+				}
+				write(w, http.StatusOK, map[string]int64{"deleted_count": count})
+			})
 			r.Post("/agent/workspace", func(w http.ResponseWriter, r *http.Request) {
 				var workspace agent.Workspace
 				if !decode(w, r, &workspace) {
