@@ -17,13 +17,11 @@ func projectRoutes(r chi.Router, store *tasks.Store) {
 		write(w, http.StatusOK, list)
 	})
 	r.Post("/projects", func(w http.ResponseWriter, r *http.Request) {
-		var in struct {
-			Name string `json:"name"`
-		}
+		var in tasks.ProjectInput
 		if !decode(w, r, &in) {
 			return
 		}
-		project, err := store.CreateProject(r.Context(), in.Name)
+		project, err := store.CreateProject(r.Context(), in)
 		if err != nil {
 			fail(w, err)
 			return
@@ -32,13 +30,13 @@ func projectRoutes(r chi.Router, store *tasks.Store) {
 	})
 	r.Post("/projects/{id}", func(w http.ResponseWriter, r *http.Request) {
 		var in struct {
-			Name    string `json:"name"`
-			Version int    `json:"version"`
+			tasks.ProjectInput
+			Version int `json:"version"`
 		}
 		if !decode(w, r, &in) {
 			return
 		}
-		project, err := store.RenameProject(r.Context(), chi.URLParam(r, "id"), in.Name, in.Version)
+		project, err := store.UpdateProject(r.Context(), chi.URLParam(r, "id"), in.ProjectInput, in.Version)
 		if err != nil {
 			fail(w, err)
 			return

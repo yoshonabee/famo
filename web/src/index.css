@@ -1177,8 +1177,13 @@ button:disabled {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.project-navigation-list svg {
+.project-color-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
   flex-shrink: 0;
+  border: 1px solid var(--border);
+  border-radius: 50%;
 }
 .project-load-error {
   display: grid;
@@ -1198,6 +1203,121 @@ button:disabled {
 }
 .project-form button {
   justify-self: end;
+}
+.project-color-options legend {
+  margin-bottom: 8px;
+  font-size: 14px;
+}
+.project-color-choices,
+.project-custom-color {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.project-color-option {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 30px;
+  height: 30px;
+  padding-inline: 5px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 13px;
+}
+.project-color-option:has(input:checked) {
+  border-color: var(--primary);
+  background: var(--accent);
+}
+.project-color-option:has(input:focus-visible) {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+.project-color-option input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+.project-color-option .project-color-dot {
+  width: 16px;
+  height: 16px;
+}
+.project-custom-color {
+  margin-top: 8px;
+}
+.project-custom-color input {
+  height: 32px;
+  min-width: 0;
+  padding-inline: 6px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.project-custom-color input[type='text'] {
+  width: 110px;
+}
+.today-project-filter {
+  margin-bottom: 12px;
+}
+.today-project-filter-toggle {
+  display: inline-flex;
+  min-height: 32px;
+  align-items: center;
+  gap: 7px;
+  padding: 0 9px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--background);
+  font-size: 13px;
+  list-style: none;
+  cursor: pointer;
+}
+.today-project-filter-toggle::-webkit-details-marker {
+  display: none;
+}
+.today-project-filter-toggle:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+.today-project-filter[open] .today-project-filter-toggle > svg:last-child {
+  transform: rotate(180deg);
+}
+.today-project-filter-count {
+  color: var(--muted-foreground);
+}
+.today-project-filter-panel {
+  display: grid;
+  justify-items: start;
+  gap: 8px;
+  margin-top: 8px;
+}
+.today-project-filter-panel fieldset {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+  max-height: 10rem;
+  overflow-y: auto;
+}
+.today-project-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--background);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+.today-project-option:has([data-state='checked']) {
+  background: var(--accent);
 }
 .list-title h1 {
   overflow-wrap: anywhere;
@@ -1387,9 +1507,14 @@ input.todo-title {
   line-height: 1.5;
 }
 .task-chip.task-project {
-  display: block;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   max-width: min(25%, 180px);
   flex-shrink: 0;
+}
+.task-chip.task-project > span:last-child {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

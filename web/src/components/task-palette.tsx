@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { CalendarDays, ChevronDown, Search } from 'lucide-react'
 import { DatePicker } from '@/components/date-picker'
+import { ProjectBadge } from '@/components/project-appearance'
 import {
   CaptureAnnouncement,
   CaptureDraftRow,
@@ -13,6 +14,7 @@ import {
   DialogDescription,
   DialogTitle,
 } from '@/components/ui/dialog'
+import type { Project } from '@/lib/api'
 
 export function TaskSearch({
   value,
@@ -61,7 +63,7 @@ export function TaskPalette({
   onClose: () => void
   capture: ReturnType<typeof useQuickCapture>
   captureDate: string
-  captureProject?: string
+  captureProject?: Project
   onCaptureDateChange: (date: string) => void
   search: string
   onSearchChange: (value: string) => void
@@ -134,14 +136,7 @@ export function TaskPalette({
                   {captureDate}
                   <ChevronDown size={12} />
                 </DatePicker>
-                {captureProject && (
-                  <span
-                    className="task-chip task-project"
-                    title={captureProject}
-                  >
-                    {captureProject}
-                  </span>
-                )}
+                {captureProject && <ProjectBadge project={captureProject} />}
               </div>
             </>
           ) : (

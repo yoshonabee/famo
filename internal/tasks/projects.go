@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"math/rand/v2"
+	"regexp"
 	"strings"
 	"unicode/utf8"
 
@@ -15,11 +17,26 @@ import (
 type Project struct {
 	ID      string `json:"id"`
 	Name    string `json:"name"`
+	Color   string `json:"color"`
 	Version int    `json:"version"`
 }
 
+type ProjectInput struct {
+	Name  string  `json:"name"`
+	Color *string `json:"color"`
+}
+
+const defaultProjectColor = "#64748B"
+
+var projectColorPattern = regexp.MustCompile(`^#[0-9a-fA-F]{6}$`)
+
+var projectColors = [...]string{
+	"#E06464", "#D98738", "#BD9229", "#4F9D69", "#32958E",
+	"#4F87CC", "#8A6BCC", "#C369A0", defaultProjectColor,
+}
+
 func (s *Store) ListProjects(ctx context.Context) ([]Project, error) {
-	rows, err := s.db.QueryContext(ctx, "SELECT id,name,version FROM projects ORDER BY name,id")
+	rows, err := s.db.QueryContext(ctx, "SELECT id,name,color,version FROM projects ORDER BY name,id")
 	if err != nil {
 		return nil, err
 	}
@@ -27,7 +44,7 @@ func (s *Store) ListProjects(ctx context.Context) ([]Project, error) {
 	out := []Project{}
 	for rows.Next() {
 		var p Project
-		if err := rows.Scan(&p.ID, &p.Name, &p.Version); err != nil {
+		if err := rows.Scan(&p.ID, &p.Name, &p.Color, &p.Version); err != nil {
 			return nil, err
 		}
 		out = append(out, p)
@@ -35,12 +52,19 @@ func (s *Store) ListProjects(ctx context.Context) ([]Project, error) {
 	return out, rows.Err()
 }
 
-func projectName(name string) (string, error) {
-	name = strings.TrimSpace(name)
-	if name == "" || utf8.RuneCountInString(name) > 80 || strings.ContainsAny(name, "\x00\r\n") {
-		return "", fmt.Errorf("%w：Project 名稱須為 1 到 80 個字元，且不可換行", ErrInvalid)
+func validateProjectInput(in ProjectInput) (ProjectInput, error) {
+	in.Name = strings.TrimSpace(in.Name)
+	if in.Name == "" || utf8.RuneCountInString(in.Name) > 80 || strings.ContainsAny(in.Name, "\x00\r\n") {
+		return ProjectInput{}, fmt.Errorf("%w：Project 名稱須為 1 到 80 個字元，且不可換行", ErrInvalid)
 	}
-	return name, nil
+	if in.Color != nil {
+		color := strings.ToUpper(strings.TrimSpace(*in.Color))
+		if !projectColorPattern.MatchString(color) {
+			return ProjectInput{}, fmt.Errorf("%w：Project 顏色須為 #RRGGBB 色碼", ErrInvalid)
+		}
+		in.Color = &color
+	}
+	return in, nil
 }
 
 func projectWriteError(err error) error {
@@ -51,25 +75,31 @@ func projectWriteError(err error) error {
 	return err
 }
 
-func (s *Store) CreateProject(ctx context.Context, name string) (Project, error) {
-	name, err := projectName(name)
+func (s *Store) CreateProject(ctx context.Context, in ProjectInput) (Project, error) {
+	in, err := validateProjectInput(in)
 	if err != nil {
 		return Project{}, err
 	}
-	p := Project{ID: id(), Name: name, Version: 1}
-	if _, err := s.db.ExecContext(ctx, "INSERT INTO projects(id,name,version) VALUES(?,?,?)", p.ID, p.Name, p.Version); err != nil {
+	p := Project{ID: id(), Name: in.Name, Version: 1}
+	if in.Color == nil {
+		p.Color = projectColors[rand.IntN(len(projectColors))]
+	} else {
+		p.Color = *in.Color
+	}
+	if _, err := s.db.ExecContext(ctx, "INSERT INTO projects(id,name,color,version) VALUES(?,?,?,?)", p.ID, p.Name, p.Color, p.Version); err != nil {
 		return Project{}, projectWriteError(err)
 	}
 	return p, nil
 }
 
-func (s *Store) RenameProject(ctx context.Context, id, name string, version int) (Project, error) {
-	name, err := projectName(name)
+func (s *Store) UpdateProject(ctx context.Context, id string, in ProjectInput, version int) (Project, error) {
+	in, err := validateProjectInput(in)
 	if err != nil {
 		return Project{}, err
 	}
-	var newVersion int
-	err = s.db.QueryRowContext(ctx, "UPDATE projects SET name=?,version=version+1 WHERE id=? AND version=? RETURNING version", name, id, version).Scan(&newVersion)
+	p := Project{ID: id, Name: in.Name}
+	err = s.db.QueryRowContext(ctx, `UPDATE projects SET name=?,color=COALESCE(?,color),version=version+1
+		WHERE id=? AND version=? RETURNING color,version`, in.Name, in.Color, id, version).Scan(&p.Color, &p.Version)
 	if errors.Is(err, sql.ErrNoRows) {
 		var exists bool
 		if err := s.db.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM projects WHERE id=?)", id).Scan(&exists); err != nil {
@@ -83,7 +113,7 @@ func (s *Store) RenameProject(ctx context.Context, id, name string, version int)
 	if err != nil {
 		return Project{}, projectWriteError(err)
 	}
-	return Project{ID: id, Name: name, Version: newVersion}, nil
+	return p, nil
 }
 
 func (s *Store) validateProject(ctx context.Context, id string) error {

@@ -1,7 +1,12 @@
 import { notifyTasksChanged } from '@/lib/desktop'
 
 export type Link = { url: string }
-export type Project = { id: string; name: string; version: number }
+export type Project = {
+  id: string
+  name: string
+  color: string
+  version: number
+}
 export type Task = {
   id: string
   title: string

@@ -26,9 +26,14 @@ import {
   Trash2,
 } from 'lucide-react'
 import { PreferencesPage } from '@/components/preferences-page'
+import { ProjectBadge } from '@/components/project-appearance'
 import { ProjectEditor } from '@/components/project-editor'
 import { ProjectNavigation } from '@/components/project-navigation'
 import { RecentlyDeletedPage } from '@/components/recently-deleted-page'
+import {
+  TodayProjectFilter,
+  useTodayProjectFilter,
+} from '@/components/today-project-filter'
 import { useTheme } from '@/lib/theme'
 import { isDesktop, openSettingsEvent, shortcutEvent } from '@/lib/desktop'
 import { DatePicker } from '@/components/date-picker'
@@ -135,8 +140,13 @@ function App() {
   const currentProjectId = view === 'project' ? projectId : undefined
   const currentProject = projectList.find(({ id }) => id === currentProjectId)
   const editProject = projectList.find(({ id }) => id === projectEditor)
-  const projectNames = new Map(projectList.map(({ id, name }) => [id, name]))
+  const projectsById = new Map(
+    projectList.map((project) => [project.id, project]),
+  )
   const [date, setDate] = useState(localDate)
+  const todayFilter = useTodayProjectFilter()
+  const isToday = view === 'date' && date === localDate()
+  const projectFiltered = isToday && todayFilter.hidden.length > 0
   const [search, setSearch] = useState('')
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [palette, setPalette] = useState<'capture' | 'search' | null>(null)
@@ -313,9 +323,9 @@ function App() {
         key={task.id}
         task={task}
         index={index}
-        projectName={
+        project={
           view !== 'project' && task.project_id
-            ? projectNames.get(task.project_id)
+            ? projectsById.get(task.project_id)
             : undefined
         }
         hideCompletion={hideCompletion}
@@ -449,8 +459,8 @@ function App() {
                   <Button
                     variant="ghost"
                     size="icon"
-                    aria-label="重新命名 Project"
-                    title="重新命名 Project"
+                    aria-label="編輯 Project"
+                    title="編輯 Project"
                     onClick={() => setProjectEditor(currentProject.id)}
                   >
                     <Pencil />
@@ -459,6 +469,9 @@ function App() {
               </div>
               {searchField}
             </div>
+          )}
+          {isToday && (projectList.length > 0 || projectFiltered) && (
+            <TodayProjectFilter projects={projectList} filter={todayFilter} />
           )}
           <QuickCapture
             hidden={!isActiveList && view !== 'date'}
@@ -469,7 +482,15 @@ function App() {
             <CalendarPage
               date={date}
               key={date}
-              tasks={all}
+              tasks={
+                projectFiltered
+                  ? all.filter(
+                      (task) =>
+                        !todayFilter.hidden.includes(task.project_id ?? ''),
+                    )
+                  : all
+              }
+              projectFiltered={projectFiltered}
               search={search}
               loading={!tasks.isSuccess}
               busy={busy}
@@ -623,7 +644,7 @@ function App() {
         onClose={() => setPalette(null)}
         capture={capture}
         captureDate={paletteCaptureDate}
-        captureProject={currentProject?.name}
+        captureProject={currentProject}
         onCaptureDateChange={setPaletteCaptureDate}
         search={search}
         onSearchChange={setSearch}
@@ -641,7 +662,7 @@ function App() {
 }
 function TaskRow({
   task: t,
-  projectName,
+  project,
   busy,
   onOpen,
   onComplete,
@@ -651,7 +672,7 @@ function TaskRow({
   hideCompletion = false,
 }: {
   task: Task
-  projectName?: string
+  project?: Project
   busy: boolean
   onOpen: () => void
   onComplete: () => void
@@ -693,11 +714,7 @@ function TaskRow({
         )}
         <TodoTitle task={t} title={title} onDeleted={() => {}} />
         <Links task={t} onOpen={onOpen} />
-        {projectName && (
-          <span className="task-chip task-project" title={projectName}>
-            {projectName}
-          </span>
-        )}
+        {project && <ProjectBadge project={project} />}
         <DatePicker
           date={t.scheduled_date}
           onChange={onSetDate}

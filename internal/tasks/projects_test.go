@@ -5,6 +5,7 @@ import (
 	"errors"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"testing"
 )
 
@@ -16,30 +17,34 @@ func TestProjectAssignmentsAndVersionChecks(t *testing.T) {
 	}
 	defer store.Close()
 	ctx := t.Context()
-	work, err := store.CreateProject(ctx, " 工作 ")
-	if err != nil || work.Name != "工作" || work.Version != 1 {
+	work, err := store.CreateProject(ctx, ProjectInput{Name: " 工作 "})
+	if err != nil || work.Name != "工作" || work.Version != 1 || !slices.Contains(projectColors[:], work.Color) {
 		t.Fatalf("create project: %+v, %v", work, err)
 	}
-	life, err := store.CreateProject(ctx, "生活")
-	if err != nil {
-		t.Fatal(err)
+	life, err := store.CreateProject(ctx, ProjectInput{Name: "生活", Color: ptr("#aabbcc")})
+	if err != nil || life.Color != "#AABBCC" {
+		t.Fatalf("create with a custom color: %+v, %v", life, err)
 	}
 	for _, name := range []string{"  ", "工作", "第一行\n第二行"} {
-		if _, err := store.CreateProject(ctx, name); !errors.Is(err, ErrInvalid) {
+		if _, err := store.CreateProject(ctx, ProjectInput{Name: name}); !errors.Is(err, ErrInvalid) {
 			t.Fatalf("accepted invalid project name %q: %v", name, err)
 		}
 	}
-	if _, err := store.RenameProject(ctx, life.ID, work.Name, life.Version); !errors.Is(err, ErrInvalid) {
+	if _, err := store.UpdateProject(ctx, life.ID, ProjectInput{Name: work.Name}, life.Version); !errors.Is(err, ErrInvalid) {
 		t.Fatalf("allowed duplicate name on rename: %v", err)
 	}
-	work, err = store.RenameProject(ctx, work.ID, "產品工作", work.Version)
-	if err != nil || work.Name != "產品工作" || work.Version != 2 {
+	color := work.Color
+	work, err = store.UpdateProject(ctx, work.ID, ProjectInput{Name: "產品工作"}, work.Version)
+	if err != nil || work.Name != "產品工作" || work.Color != color || work.Version != 2 {
 		t.Fatalf("rename project: %+v, %v", work, err)
 	}
-	if _, err := store.RenameProject(ctx, work.ID, "舊版本", 1); !errors.Is(err, ErrConflict) {
+	if _, err := store.UpdateProject(ctx, work.ID, ProjectInput{Name: work.Name, Color: ptr("transparent")}, work.Version); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("allowed invalid color: %v", err)
+	}
+	if _, err := store.UpdateProject(ctx, work.ID, ProjectInput{Name: "舊版本", Color: ptr("#123456")}, 1); !errors.Is(err, ErrConflict) {
 		t.Fatalf("allowed stale project rename: %v", err)
 	}
-	if _, err := store.RenameProject(ctx, "missing", "不存在", 1); !errors.Is(err, ErrNotFound) {
+	if _, err := store.UpdateProject(ctx, "missing", ProjectInput{Name: "不存在"}, 1); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("unknown project rename: %v", err)
 	}
 	projects, err := store.ListProjects(ctx)
@@ -150,7 +155,7 @@ UPDATE agent_preferences SET workspace_dir='/workspace' WHERE id=1;`)
 			if workspace, err := store.Workspace(ctx); err != nil || workspace.Dir != "/workspace" {
 				t.Fatalf("workspace changed: %+v, %v", workspace, err)
 			}
-			project, err := store.CreateProject(ctx, "工作")
+			project, err := store.CreateProject(ctx, ProjectInput{Name: "工作"})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -159,5 +164,59 @@ UPDATE agent_preferences SET workspace_dir='/workspace' WHERE id=1;`)
 				t.Fatalf("assign existing task: %+v, %v", task, err)
 			}
 		})
+	}
+}
+
+func TestAddColorToEarlierV7Projects(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "v7.db")
+	db, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	execSQL(t, db, activeSchema+orderNewTasks+`
+CREATE TABLE projects (id TEXT PRIMARY KEY, name TEXT NOT NULL COLLATE NOCASE UNIQUE, version INTEGER NOT NULL);
+INSERT INTO projects(id,name,version) VALUES('existing','Existing project',3);
+INSERT INTO tasks(id,version,document) VALUES('task',1,'{"id":"task","title":"Existing task","project_id":"existing","version":1}');
+PRAGMA user_version=7;`)
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+	store, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	ctx := t.Context()
+	projects, err := store.ListProjects(ctx)
+	want := Project{ID: "existing", Name: "Existing project", Color: defaultProjectColor, Version: 3}
+	if err != nil || !slices.Equal(projects, []Project{want}) {
+		t.Fatalf("migrated projects: %+v, %v", projects, err)
+	}
+	task, err := store.Get(ctx, "task")
+	if err != nil || task.ProjectID != want.ID {
+		t.Fatalf("lost assignment: %+v, %v", task, err)
+	}
+	saved, err := store.UpdateProject(ctx, want.ID, ProjectInput{Name: want.Name, Color: ptr("#123456")}, want.Version)
+	if err != nil || saved.Color != "#123456" || saved.Version != want.Version+1 {
+		t.Fatalf("update color: %+v, %v", saved, err)
+	}
+	// Earlier v7 binaries use explicit columns for creation and renaming.
+	execSQL(t, store.db, "INSERT INTO projects(id,name,version) VALUES('old-app','Created by older app',1)")
+	execSQL(t, store.db, "UPDATE projects SET name='Renamed by older app' WHERE id='existing'")
+	version, err := databaseVersion(ctx, store.db)
+	if err != nil || version != 7 {
+		t.Fatalf("schema version changed: %d, %v", version, err)
+	}
+	if err := store.Close(); err != nil {
+		t.Fatal(err)
+	}
+	reopened, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer reopened.Close()
+	projects, err = reopened.ListProjects(ctx)
+	if err != nil || len(projects) != 2 || projects[0].Color != defaultProjectColor || projects[1].Color != saved.Color {
+		t.Fatalf("earlier v7 writes lost colors: %+v, %v", projects, err)
 	}
 }

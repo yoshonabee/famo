@@ -30,9 +30,11 @@
 
 ## Projects
 
-從側欄的「Projects」按 + 建立分類，點選名稱即可查看該 Project 的待辦及已完成任務。可在 Project 標題旁重新命名。在 Project 頁面的清單或快速新增浮窗建立的任務會直接歸入目前的 Project。
+從側欄的「Projects」按 + 建立分類，點選名稱即可查看該 Project 的待辦及已完成任務。在 Project 標題旁可編輯名稱和顏色。新建時預設從 9 款顏色隨機挑選，可改選色票、使用調色盤或輸入 `#RRGGBB` 色碼。在 Project 頁面的清單或快速新增浮窗建立的任務會直接歸入目前的 Project。
 
 在任務詳情的「Project」欄位可指派或變更分類，選擇「未分類」可清除歸屬。任務可同時有日期與 Project。「今日」和其他日期會一起顯示當天各 Project 的任務，原有「任務」與「已完成」仍跨 Project 檢視。
+
+「今日」上方的「篩選 Project」可複選要顯示的分類與未分類任務。今日進度、已完成、先前未完成與未指定日期區段都會套用篩選。選擇會記在目前的瀏覽器或桌面 WebView，按「顯示全部」即可重設。
 
 ## macOS 選單列
 
@@ -137,7 +139,7 @@ Agent 應先讀取這個檔案，再呼叫 `url` 下的 `/health`，確認狀態
 
 ### 資料升級
 
-首次用新版開啟舊 SQLite 資料庫時，Famo 會在交易中升級到 v7，保留任務標題、備註、日期、連結網址、完成與刪除狀態、時間、排序和版本。很早期的任務若尚無備註欄位，會將原有目標、背景和驗收條件合併成備註。v6 之前的原始任務、排序和選項會封存，待你主動清理。v6 升級會保留現有任務和封存資料，既有任務預設為未分類。升級後請用支援 v7 的執行檔。
+首次用新版開啟舊 SQLite 資料庫時，Famo 會在交易中升級到 v7，保留任務標題、備註、日期、連結網址、完成與刪除狀態、時間、排序和版本。很早期的任務若尚無備註欄位，會將原有目標、背景和驗收條件合併成備註。v6 之前的原始任務、排序和選項會封存，待你主動清理。v6 升級會保留現有任務和封存資料，既有任務預設為未分類。早期 v7 資料庫的既有 Project 會補上石板灰色。升級後請用支援 v7 的執行檔。不同 worktree 的桌面版預設共用同一份 SQLite，測試分支可用 `-db` 指定獨立的資料庫。
 
 ### 清理舊任務資料
 
@@ -191,9 +193,9 @@ npm run format:check
 | --- | --- |
 | `GET /health` | 健康檢查 |
 | `GET /agent/workspace` | 預設工作區路徑 `dir` 和選填指引 `prompt` |
-| `GET /projects` | 所有 Project，包含 `id`、`name` 與 `version` |
-| `POST /projects` | 以 `{"name":"工作"}` 建立 Project |
-| `POST /projects/{id}` | 以 `{"name":"新名稱","version":1}` 重新命名 Project |
+| `GET /projects` | 所有 Project，包含 `id`、`name`、`color` 與 `version` |
+| `POST /projects` | 以 `{"name":"工作"}` 建立 Project。可選填 `#RRGGBB` 格式的 `color`，省略則隨機指定 |
+| `POST /projects/{id}` | 以 `{"name":"新名稱","version":1,"color":"#4F87CC"}` 更新 Project。省略 `color` 時沿用原色 |
 | `GET /tasks` | 全部未刪除任務，含已完成任務 |
 | `POST /tasks` | 建立任務 |
 | `GET /tasks/recently-deleted` | 最近 7 天軟刪除的任務，依刪除時間由新到舊排列 |

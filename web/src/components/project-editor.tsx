@@ -1,4 +1,5 @@
-import { useRef, useState, type FormEvent } from 'react'
+import { useId, useRef, useState, type FormEvent } from 'react'
+import { ProjectColorDot, projectColors } from '@/components/project-appearance'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Button } from '@/components/ui/button'
 import {
@@ -17,15 +18,26 @@ export function ProjectEditor({
 }) {
   const client = useQueryClient()
   const [name, setName] = useState(project?.name ?? '')
+  const colorGroup = useId()
+  const [choice, setChoice] = useState(() => {
+    if (!project) return 'random'
+    return projectColors.some(({ value }) => value === project.color)
+      ? project.color
+      : 'custom'
+  })
+  const [customColor, setCustomColor] = useState(project?.color ?? '#64748B')
+  const color =
+    choice === 'random' ? undefined : choice === 'custom' ? customColor : choice
+  const validColor = color === undefined || /^#[0-9a-fA-F]{6}$/.test(color)
   const returnFocus = useRef<HTMLElement | null>(null)
   const save = useMutation({
-    mutationFn: (name: string) =>
+    mutationFn: (input: { name: string; color?: string }) =>
       project
         ? request<Project>(`/projects/${project.id}`, {
-            name,
+            ...input,
             version: project.version,
           })
-        : request<Project>('/projects', { name }),
+        : request<Project>('/projects', input),
     onSuccess: async (saved) => {
       await client.cancelQueries({ queryKey: ['projects'] })
       client.setQueryData<Project[]>(['projects'], (old = []) => [
@@ -43,12 +55,13 @@ export function ProjectEditor({
   const conflict = save.error instanceof ApiError && save.error.status === 409
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (!save.isPending && name.trim()) save.mutate(name)
+    if (!save.isPending && name.trim() && validColor)
+      save.mutate({ name, color })
   }
 
   return (
     <DialogContent
-      className="project-editor max-w-sm"
+      className="project-editor max-w-md"
       showCloseButton={!save.isPending}
       onEscapeKeyDown={(event) => {
         if (save.isPending) event.preventDefault()
@@ -66,10 +79,10 @@ export function ProjectEditor({
       }}
     >
       <DialogTitle className="dialog-title">
-        {project ? '重新命名 Project' : '新增 Project'}
+        {project ? '編輯 Project' : '新增 Project'}
       </DialogTitle>
       <DialogDescription className="sr-only">
-        輸入 Project 名稱後儲存。
+        設定 Project 名稱和顏色後儲存。
       </DialogDescription>
       <form className="project-form" onSubmit={submit}>
         <label className="field">
@@ -81,6 +94,66 @@ export function ProjectEditor({
             required
           />
         </label>
+        <fieldset className="project-color-options" disabled={save.isPending}>
+          <legend>Project 顏色</legend>
+          <div className="project-color-choices">
+            {!project && (
+              <label className="project-color-option">
+                <input
+                  type="radio"
+                  name={colorGroup}
+                  checked={choice === 'random'}
+                  onChange={() => setChoice('random')}
+                />
+                隨機
+              </label>
+            )}
+            {projectColors.map(({ value, label }) => (
+              <label className="project-color-option" key={value} title={label}>
+                <input
+                  type="radio"
+                  name={colorGroup}
+                  aria-label={label}
+                  checked={choice === value}
+                  onChange={() => setChoice(value)}
+                />
+                <ProjectColorDot color={value} />
+              </label>
+            ))}
+            <label className="project-color-option">
+              <input
+                type="radio"
+                name={colorGroup}
+                checked={choice === 'custom'}
+                onChange={() => setChoice('custom')}
+              />
+              自訂
+            </label>
+          </div>
+          {choice === 'custom' && (
+            <div className="project-custom-color">
+              <input
+                type="color"
+                aria-label="Project 調色盤"
+                value={validColor ? customColor : '#64748B'}
+                onChange={(event) =>
+                  setCustomColor(event.target.value.toUpperCase())
+                }
+              />
+              <input
+                type="text"
+                aria-label="Project 色碼"
+                placeholder="#RRGGBB"
+                pattern="#[0-9a-fA-F]{6}"
+                maxLength={7}
+                spellCheck={false}
+                required
+                value={customColor}
+                onChange={(event) => setCustomColor(event.target.value)}
+              />
+            </div>
+          )}
+        </fieldset>
         {save.isError && (
           <p className="inline-edit-error" role="alert">
             {conflict
@@ -88,7 +161,7 @@ export function ProjectEditor({
               : save.error.message}
           </p>
         )}
-        <Button disabled={save.isPending || !name.trim()}>
+        <Button disabled={save.isPending || !name.trim() || !validColor}>
           {save.isPending ? '儲存中…' : '儲存'}
         </Button>
       </form>

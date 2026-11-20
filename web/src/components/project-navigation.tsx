@@ -1,4 +1,5 @@
 import { Folder, Plus } from 'lucide-react'
+import { ProjectColorDot } from '@/components/project-appearance'
 import { Button } from '@/components/ui/button'
 import type { Project } from '@/lib/api'
 
@@ -72,7 +73,7 @@ export function ProjectNavigation({
                 onClick={() => onSelect(project.id)}
                 title={project.name}
               >
-                <Folder size={16} />
+                <ProjectColorDot color={project.color} />
                 <span className="nav-label">{project.name}</span>
               </button>
             </li>

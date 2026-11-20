@@ -11,10 +11,17 @@ test('Project 新增、改名、指派和日期檢視', async ({ page }) => {
     await nav.getByRole('button', { name: '新增 Project' }).click()
     const editor = page.getByRole('dialog', { name: '新增 Project' })
     await editor.getByRole('textbox', { name: 'Project 名稱' }).fill(name)
+    await expect(editor.getByRole('radio', { name: '隨機' })).toBeChecked()
+    if (name === '網站改版')
+      await editor.getByRole('radio', { name: '海藍' }).check()
     await editor.getByRole('button', { name: '儲存' }).click()
     await expect(editor).toBeHidden()
     await expect(page.getByRole('heading', { name, exact: true })).toBeVisible()
   }
+  const websiteDot = nav
+    .getByRole('button', { name: '網站改版', exact: true })
+    .locator('.project-color-dot')
+  await expect(websiteDot).toHaveCSS('background-color', 'rgb(79, 135, 204)')
 
   const input = page.getByRole('textbox', { name: '快速新增任務名稱' })
   await input.fill('整理家裡文件')
@@ -70,15 +77,25 @@ test('Project 新增、改名、指派和日期檢視', async ({ page }) => {
       .getByRole('textbox', { name: '編輯任務標題：整理家裡文件' }),
   ).toBeVisible()
 
-  await page.getByRole('button', { name: '重新命名 Project' }).click()
-  const rename = page.getByRole('dialog', { name: '重新命名 Project' })
+  await page.getByRole('button', { name: '編輯 Project' }).click()
+  const rename = page.getByRole('dialog', { name: '編輯 Project' })
   await rename.getByRole('textbox').fill('網站維護')
+  await rename.getByRole('radio', { name: '自訂' }).check()
+  await rename.getByRole('textbox', { name: 'Project 色碼' }).fill('#123456')
   await rename.getByRole('button', { name: '儲存' }).click()
   await expect(rename).toBeHidden()
   await expect(page.getByRole('heading', { name: '網站維護' })).toBeVisible()
 
   await page.reload()
-  await nav.getByRole('button', { name: '網站維護', exact: true }).click()
+  const updatedProject = nav.getByRole('button', {
+    name: '網站維護',
+    exact: true,
+  })
+  await expect(updatedProject.locator('.project-color-dot')).toHaveCSS(
+    'background-color',
+    'rgb(18, 52, 86)',
+  )
+  await updatedProject.click()
   await expect(open('整理家裡文件')).toBeVisible()
   await open('整理家裡文件').click()
   await project.selectOption({ label: '未分類' })
