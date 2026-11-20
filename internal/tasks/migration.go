@@ -8,7 +8,10 @@ import (
 	"strings"
 )
 
-const schemaVersion = 6
+const (
+	activeTaskSchemaVersion = 6
+	schemaVersion           = 7
+)
 
 const activeSchema = `
 CREATE TABLE IF NOT EXISTS tasks (
@@ -75,8 +78,14 @@ func migrate(db *sql.DB) error {
 
 func migrateTasks(ctx context.Context, tx *sql.Tx) error {
 	version, err := databaseVersion(ctx, tx)
-	if err != nil || version == schemaVersion {
+	if err != nil {
 		return err
+	}
+	if version == schemaVersion {
+		return ensureProjectColor(ctx, tx)
+	}
+	if version >= activeTaskSchemaVersion {
+		return migrateProjects(ctx, tx)
 	}
 	// Leave original rows and options archived until the user confirms cleanup.
 	if _, err := tx.ExecContext(ctx, `
@@ -108,10 +117,34 @@ DROP INDEX IF EXISTS task_order_position;`); err != nil {
 			return err
 		}
 	}
-	if _, err := tx.ExecContext(ctx, orderNewTasks+fmt.Sprintf("PRAGMA user_version=%d;", schemaVersion)); err != nil {
+	if _, err := tx.ExecContext(ctx, orderNewTasks); err != nil {
 		return err
 	}
-	return nil
+	return migrateProjects(ctx, tx)
+}
+
+func migrateProjects(ctx context.Context, tx *sql.Tx) error {
+	_, err := tx.ExecContext(ctx, `
+CREATE TABLE projects (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL COLLATE NOCASE UNIQUE,
+    color TEXT NOT NULL DEFAULT '`+defaultProjectColor+`',
+    version INTEGER NOT NULL
+);
+`+fmt.Sprintf("PRAGMA user_version=%d;", schemaVersion))
+	return err
+}
+
+// Earlier v7 builds already support Projects and can still read and update them
+// when the color column is present. Add it without changing the schema version.
+func ensureProjectColor(ctx context.Context, tx *sql.Tx) error {
+	var exists bool
+	err := tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM pragma_table_info('projects') WHERE name='color')`).Scan(&exists)
+	if err != nil || exists {
+		return err
+	}
+	_, err = tx.ExecContext(ctx, "ALTER TABLE projects ADD COLUMN color TEXT NOT NULL DEFAULT '"+defaultProjectColor+"'")
+	return err
 }
 
 func copyLegacyTasks(ctx context.Context, tx *sql.Tx) error {

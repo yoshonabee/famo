@@ -9,6 +9,7 @@ type Draft = {
   id: string
   title: string
   scheduled_date: string
+  project_id?: string
   floating?: boolean
   error?: string
 }
@@ -20,7 +21,11 @@ function taskTitle(value: string) {
     .trim()
 }
 
-export function useQuickCapture(onCapture: () => void, scheduledDate = '') {
+export function useQuickCapture(
+  onCapture: () => void,
+  scheduledDate = '',
+  projectId?: string,
+) {
   const client = useQueryClient()
   const [drafts, setDrafts] = useState<Draft[]>([])
   const [announcement, setAnnouncement] = useState('')
@@ -29,6 +34,7 @@ export function useQuickCapture(onCapture: () => void, scheduledDate = '') {
       request<Task>('/tasks', {
         title: draft.title,
         scheduled_date: draft.scheduled_date,
+        project_id: draft.project_id,
       }),
     retry: false,
     onSuccess: async (task) => {
@@ -69,6 +75,7 @@ export function useQuickCapture(onCapture: () => void, scheduledDate = '') {
       id: crypto.randomUUID(),
       title,
       scheduled_date: fromPalette?.scheduledDate ?? scheduledDate,
+      project_id: projectId,
       floating: !!fromPalette,
     }
     setDrafts((old) => [...old, draft])

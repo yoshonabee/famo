@@ -9,6 +9,7 @@ import { compareCompletionTime, type Task } from '@/lib/api'
 type Props = {
   date: string
   tasks: Task[]
+  projectFiltered: boolean
   search: string
   loading: boolean
   busy: boolean
@@ -27,6 +28,7 @@ type Props = {
 export function CalendarPage({
   date,
   tasks,
+  projectFiltered,
   search,
   loading,
   busy,
@@ -95,7 +97,7 @@ export function CalendarPage({
           </DragDropProvider>
           {!active.length && !completed.length && !drafts.length && (
             <div className="empty-list">
-              {search ? '沒有符合的任務' : '這天尚無任務'}
+              {search || projectFiltered ? '沒有符合的任務' : '這天尚無任務'}
             </div>
           )}
           {completed.length > 0 && (

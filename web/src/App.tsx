@@ -19,13 +19,21 @@ import {
   LoaderCircle,
   PanelLeftClose,
   PanelLeftOpen,
+  Pencil,
   Plus,
   PanelRightOpen,
   Settings,
   Trash2,
 } from 'lucide-react'
 import { PreferencesPage } from '@/components/preferences-page'
+import { ProjectBadge } from '@/components/project-appearance'
+import { ProjectEditor } from '@/components/project-editor'
+import { ProjectNavigation } from '@/components/project-navigation'
 import { RecentlyDeletedPage } from '@/components/recently-deleted-page'
+import {
+  TodayProjectFilter,
+  useTodayProjectFilter,
+} from '@/components/today-project-filter'
 import { useTheme } from '@/lib/theme'
 import { isDesktop, openSettingsEvent, shortcutEvent } from '@/lib/desktop'
 import { DatePicker } from '@/components/date-picker'
@@ -57,6 +65,7 @@ import {
   orderSubset,
   request,
   type Action,
+  type Project,
   type Task,
 } from '@/lib/api'
 
@@ -113,9 +122,31 @@ function App() {
     refetchInterval: 30_000,
   })
   const [view, setView] = useState<
-    'active' | 'date' | 'completed' | 'recently-deleted' | 'preferences'
+    | 'active'
+    | 'date'
+    | 'completed'
+    | 'recently-deleted'
+    | 'preferences'
+    | 'project'
   >('date')
+  const projects = useQuery({
+    queryKey: ['projects'],
+    queryFn: ({ signal }) => request<Project[]>('/projects', undefined, signal),
+    refetchInterval: 30_000,
+  })
+  const projectList = projects.data ?? []
+  const [projectId, setProjectId] = useState<string>()
+  const [projectEditor, setProjectEditor] = useState<string | null>(null)
+  const currentProjectId = view === 'project' ? projectId : undefined
+  const currentProject = projectList.find(({ id }) => id === currentProjectId)
+  const editProject = projectList.find(({ id }) => id === projectEditor)
+  const projectsById = new Map(
+    projectList.map((project) => [project.id, project]),
+  )
   const [date, setDate] = useState(localDate)
+  const todayFilter = useTodayProjectFilter()
+  const isToday = view === 'date' && date === localDate()
+  const projectFiltered = isToday && todayFilter.hidden.length > 0
   const [search, setSearch] = useState('')
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [palette, setPalette] = useState<'capture' | 'search' | null>(null)
@@ -123,11 +154,22 @@ function App() {
   const capture = useQuickCapture(
     () => setSearch(''),
     view === 'date' ? date : '',
+    currentProjectId,
   )
-  const visibleDrafts = capture.drafts.filter((draft) =>
-    view === 'date' ? draft.scheduled_date === date : true,
-  )
+  const visibleDrafts = capture.drafts.filter((draft) => {
+    if (view === 'date') return draft.scheduled_date === date
+    if (view === 'project') return draft.project_id === currentProjectId
+    return true
+  })
   const [selected, setSelected] = useState<string | null>(null)
+  function goToProject(id: string) {
+    setProjectId(id)
+    setView('project')
+    setSelected(null)
+    setPalette(null)
+    setSearch('')
+    window.scrollTo(0, 0)
+  }
   function goToToday() {
     setDate(localDate())
     setView('date')
@@ -136,6 +178,7 @@ function App() {
     window.scrollTo(0, 0)
   }
   const runShortcut = useEffectEvent((action: unknown) => {
+    if (projectEditor !== null) return
     switch (action) {
       case 'sidebar':
         setSidebarCollapsed((collapsed) => !collapsed)
@@ -245,14 +288,60 @@ function App() {
     mutation.mutate({ t, action, failed }, { onSuccess: done })
   const all = tasks.data ?? []
   const active = all.filter((t) => !t.completed_at)
-  const filtered = all.filter(
+  const matching = all.filter(
     (t) =>
-      (view === 'completed') === !!t.completed_at &&
+      (view !== 'project' || t.project_id === currentProjectId) &&
       `${t.title} ${t.description}`
         .toLowerCase()
         .includes(search.toLowerCase()),
   )
-  if (view === 'completed') filtered.sort(compareCompletionTime)
+  const filtered = matching.filter((t) => !t.completed_at)
+  const completed = matching
+    .filter((t) => t.completed_at)
+    .sort(compareCompletionTime)
+  const listTitle =
+    view === 'project'
+      ? currentProject?.name
+      : view === 'active'
+        ? '任務'
+        : '已完成'
+  const listCount =
+    view === 'project'
+      ? matching.length
+      : view === 'completed'
+        ? completed.length
+        : filtered.length
+  const busy = mutation.isPending || reorder.isPending
+  function renderTask(
+    task: Task,
+    index: number,
+    sortableDisabled: boolean,
+    hideCompletion?: boolean,
+  ) {
+    return (
+      <TaskRow
+        key={task.id}
+        task={task}
+        index={index}
+        project={
+          view !== 'project' && task.project_id
+            ? projectsById.get(task.project_id)
+            : undefined
+        }
+        hideCompletion={hideCompletion}
+        sortableDisabled={sortableDisabled || visibleDrafts.length > 0}
+        busy={busy}
+        onSetDate={(date) => act(task, { op: 'update', scheduled_date: date })}
+        onOpen={() => setSelected(task.id)}
+        onComplete={() =>
+          act(task, {
+            op: task.completed_at ? 'reopen_task' : 'complete_task',
+          })
+        }
+      />
+    )
+  }
+  const isActiveList = view === 'active' || view === 'project'
   const detail = all.find((t) => t.id === selected)
   const searchField = <TaskSearch value={search} onChange={setSearch} />
   const SidebarIcon = sidebarCollapsed ? PanelLeftOpen : PanelLeftClose
@@ -325,6 +414,16 @@ function App() {
             <span className="nav-label">最近刪除</span>
           </button>
         </nav>
+        <ProjectNavigation
+          projects={projectList}
+          current={currentProjectId}
+          collapsed={sidebarCollapsed}
+          error={projects.error?.message}
+          onSelect={goToProject}
+          onExpand={() => setSidebarCollapsed(false)}
+          onCreate={() => setProjectEditor('new')}
+          onRetry={() => void projects.refetch()}
+        />
         <div className="sidebar-footer">
           <button
             className={view === 'preferences' ? 'nav-item active' : 'nav-item'}
@@ -355,14 +454,28 @@ function App() {
           {view !== 'date' && (
             <div className="list-toolbar">
               <div className="list-title">
-                <h1>{view === 'active' ? '任務' : '已完成'}</h1>
-                <span className="list-count">{filtered.length}</span>
+                <h1>{listTitle}</h1>
+                <span className="list-count">{listCount}</span>
+                {currentProject && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label="編輯 Project"
+                    title="編輯 Project"
+                    onClick={() => setProjectEditor(currentProject.id)}
+                  >
+                    <Pencil />
+                  </Button>
+                )}
               </div>
               {searchField}
             </div>
           )}
+          {isToday && (projectList.length > 0 || projectFiltered) && (
+            <TodayProjectFilter projects={projectList} filter={todayFilter} />
+          )}
           <QuickCapture
-            hidden={view !== 'active' && view !== 'date'}
+            hidden={!isActiveList && view !== 'date'}
             onSubmit={capture.submit}
             announcement={capture.announcement}
           />
@@ -370,10 +483,18 @@ function App() {
             <CalendarPage
               date={date}
               key={date}
-              tasks={all}
+              tasks={
+                projectFiltered
+                  ? all.filter(
+                      (task) =>
+                        !todayFilter.hidden.includes(task.project_id ?? ''),
+                    )
+                  : all
+              }
+              projectFiltered={projectFiltered}
               search={search}
               loading={!tasks.isSuccess}
-              busy={mutation.isPending || reorder.isPending}
+              busy={busy}
               onReorder={(ids) => reorder.mutate(ids)}
               onDragging={setDragging}
               onMove={async (task, targetDate) => {
@@ -382,25 +503,7 @@ function App() {
                   action: { op: 'update', scheduled_date: targetDate },
                 })
               }}
-              renderTask={(task, index, disabled, hideCompletion) => (
-                <TaskRow
-                  key={task.id}
-                  task={task}
-                  index={index}
-                  hideCompletion={hideCompletion}
-                  sortableDisabled={disabled || visibleDrafts.length > 0}
-                  busy={mutation.isPending || reorder.isPending}
-                  onSetDate={(date) =>
-                    act(task, { op: 'update', scheduled_date: date })
-                  }
-                  onOpen={() => setSelected(task.id)}
-                  onComplete={() =>
-                    act(task, {
-                      op: task.completed_at ? 'reopen_task' : 'complete_task',
-                    })
-                  }
-                />
-              )}
+              renderTask={renderTask}
               drafts={visibleDrafts.map((draft) => (
                 <CaptureDraftRow
                   key={draft.id}
@@ -424,7 +527,7 @@ function App() {
               </Button>
             </div>
           )}
-          {tasks.isSuccess && view === 'active' && (
+          {tasks.isSuccess && isActiveList && (
             <>
               <DragDropProvider
                 onDragStart={() => {
@@ -443,26 +546,14 @@ function App() {
                   reorder.mutate(next.map((t) => t.id))
                 }}
               >
-                <ul className="task-list" aria-label="主要任務列表">
-                  {filtered.map((t, index) => (
-                    <TaskRow
-                      key={t.id}
-                      index={index}
-                      sortableDisabled={
-                        reorder.isPending ||
-                        mutation.isPending ||
-                        capture.drafts.length > 0
-                      }
-                      task={t}
-                      busy={mutation.isPending || reorder.isPending}
-                      onSetDate={(date) =>
-                        act(t, { op: 'update', scheduled_date: date })
-                      }
-                      onOpen={() => setSelected(t.id)}
-                      onComplete={() => act(t, { op: 'complete_task' })}
-                    />
-                  ))}
-                  {capture.drafts.map((draft) => (
+                <ul
+                  className="task-list"
+                  aria-label={
+                    view === 'project' ? 'Project 未完成任務' : '主要任務列表'
+                  }
+                >
+                  {filtered.map((t, index) => renderTask(t, index, busy))}
+                  {visibleDrafts.map((draft) => (
                     <CaptureDraftRow
                       key={draft.id}
                       draft={draft}
@@ -471,39 +562,43 @@ function App() {
                   ))}
                 </ul>
               </DragDropProvider>
-              {!filtered.length && !capture.drafts.length && (
-                <div className="empty-list">
-                  {search ? '沒有符合的任務' : '尚無任務'}
-                </div>
-              )}
+              {!filtered.length &&
+                !visibleDrafts.length &&
+                (view === 'active' || !completed.length) && (
+                  <div className="empty-list">
+                    {search ? '沒有符合的任務' : '尚無任務'}
+                  </div>
+                )}
             </>
           )}
           {tasks.isSuccess &&
-            view === 'completed' &&
-            (filtered.length ? (
-              <DragDropProvider>
-                <ul className="task-list" aria-label="已完成任務列表">
-                  {filtered.map((t, index) => (
-                    <TaskRow
-                      key={t.id}
-                      index={index}
-                      task={t}
-                      busy={mutation.isPending || reorder.isPending}
-                      onSetDate={(date) =>
-                        act(t, { op: 'update', scheduled_date: date })
-                      }
-                      onOpen={() => setSelected(t.id)}
-                      onComplete={() => act(t, { op: 'reopen_task' })}
-                    />
-                  ))}
-                </ul>
-              </DragDropProvider>
-            ) : (
-              <div className="state">
-                <CheckCheck />
-                {search ? '沒有符合的任務。' : '尚無已完成任務'}
-              </div>
-            ))}
+            (view === 'completed' || view === 'project') &&
+            completed.length > 0 && (
+              <section
+                className={view === 'project' ? 'daily-completed' : undefined}
+                aria-label={view === 'project' ? 'Project 已完成' : undefined}
+              >
+                {view === 'project' && <h2>已完成</h2>}
+                <DragDropProvider>
+                  <ul
+                    className="task-list"
+                    aria-label={
+                      view === 'project'
+                        ? 'Project 已完成任務'
+                        : '已完成任務列表'
+                    }
+                  >
+                    {completed.map((t, index) => renderTask(t, index, true))}
+                  </ul>
+                </DragDropProvider>
+              </section>
+            )}
+          {tasks.isSuccess && view === 'completed' && !completed.length && (
+            <div className="state">
+              <CheckCheck />
+              {search ? '沒有符合的任務。' : '尚無已完成任務'}
+            </div>
+          )}
         </div>
         {view === 'recently-deleted' && (
           <div className="main-content">
@@ -524,8 +619,24 @@ function App() {
           <Detail
             key={detail.id}
             task={detail}
+            projects={projects.data}
             act={act}
-            busy={mutation.isPending || reorder.isPending}
+            busy={busy}
+          />
+        )}
+      </Dialog>
+      <Dialog
+        open={projectEditor !== null}
+        onOpenChange={(open) => !open && setProjectEditor(null)}
+      >
+        {projectEditor !== null && (
+          <ProjectEditor
+            key={projectEditor}
+            project={editProject}
+            onSaved={(saved) => {
+              if (projectEditor === 'new') goToProject(saved.id)
+              setProjectEditor(null)
+            }}
           />
         )}
       </Dialog>
@@ -534,6 +645,7 @@ function App() {
         onClose={() => setPalette(null)}
         capture={capture}
         captureDate={paletteCaptureDate}
+        captureProject={currentProject}
         onCaptureDateChange={setPaletteCaptureDate}
         search={search}
         onSearchChange={setSearch}
@@ -551,6 +663,7 @@ function App() {
 }
 function TaskRow({
   task: t,
+  project,
   busy,
   onOpen,
   onComplete,
@@ -560,6 +673,7 @@ function TaskRow({
   hideCompletion = false,
 }: {
   task: Task
+  project?: Project
   busy: boolean
   onOpen: () => void
   onComplete: () => void
@@ -601,6 +715,7 @@ function TaskRow({
         )}
         <TodoTitle task={t} title={title} onDeleted={() => {}} />
         <Links task={t} onOpen={onOpen} />
+        {project && <ProjectBadge project={project} />}
         <DatePicker
           date={t.scheduled_date}
           onChange={onSetDate}
@@ -628,10 +743,12 @@ function TaskRow({
 }
 function Detail({
   task: t,
+  projects,
   act,
   busy,
 }: {
   task: Task
+  projects?: Project[]
   act: Act
   busy: boolean
 }) {
@@ -639,6 +756,7 @@ function Detail({
   const [adding, setAdding] = useState(false)
   const [linkError, setLinkError] = useState('')
   const [removeError, setRemoveError] = useState('')
+  const [projectError, setProjectError] = useState('')
   const completed = !!t.completed_at
   const CompletionIcon = completed ? SolidCheckCircle : OutlineCheckCircle
   function addLink(e: FormEvent<HTMLFormElement>) {
@@ -698,11 +816,43 @@ function Detail({
           <InlineContent task={t} field="title" busy={busy} />
         </DialogTitle>
         <DialogDescription className="sr-only">
-          日期、備註與相關連結
+          日期、Project、備註與相關連結
         </DialogDescription>
       </div>
       <div className="detail-meta">
         <TaskDate task={t} busy={busy} />
+        {projects && projects.length > 0 && (
+          <div className="task-project-field">
+            <label>
+              <span className="task-date-label">Project</span>
+              <select
+                value={t.project_id ?? ''}
+                disabled={busy}
+                onChange={(event) => {
+                  setProjectError('')
+                  act(
+                    t,
+                    { op: 'update', project_id: event.target.value },
+                    undefined,
+                    setProjectError,
+                  )
+                }}
+              >
+                <option value="">未分類</option>
+                {projects.map((project) => (
+                  <option key={project.id} value={project.id}>
+                    {project.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {projectError && (
+              <p className="inline-edit-error" role="alert">
+                {projectError}
+              </p>
+            )}
+          </div>
+        )}
         {completed && <span>已完成 · {dateTime(t.completed_at)}</span>}
       </div>
       <div className="detail-block">

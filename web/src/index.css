@@ -1157,6 +1157,196 @@ button:disabled {
   font-size: 12px;
   color: var(--muted-foreground);
 }
+.project-expand {
+  margin-top: 2px;
+}
+.project-navigation {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+  margin-top: 14px;
+}
+.project-navigation-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding-inline: 8px 2px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+.project-navigation-heading h2 {
+  font-weight: 600;
+}
+.project-add-button {
+  width: 28px;
+  height: 28px;
+}
+.project-navigation-list {
+  display: grid;
+  gap: 2px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+.project-navigation-list .nav-item:focus-visible {
+  outline-offset: -2px;
+}
+.project-navigation-list .nav-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.project-color-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  flex-shrink: 0;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+}
+.project-load-error {
+  display: grid;
+  gap: 6px;
+  padding: 4px 8px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.project-editor .dialog-title {
+  margin-bottom: 12px;
+  padding-right: 28px;
+}
+.project-form {
+  display: grid;
+  gap: 12px;
+}
+.project-form button {
+  justify-self: end;
+}
+.project-color-options legend {
+  margin-bottom: 8px;
+  font-size: 14px;
+}
+.project-color-choices,
+.project-custom-color {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.project-color-option {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 30px;
+  height: 30px;
+  padding-inline: 5px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 13px;
+}
+.project-color-option:has(input:checked) {
+  border-color: var(--primary);
+  background: var(--accent);
+}
+.project-color-option:has(input:focus-visible) {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+.project-color-option input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+.project-color-option .project-color-dot {
+  width: 16px;
+  height: 16px;
+}
+.project-custom-color {
+  margin-top: 8px;
+}
+.project-custom-color input {
+  height: 32px;
+  min-width: 0;
+  padding-inline: 6px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.project-custom-color input[type='text'] {
+  width: 110px;
+}
+.today-project-filter {
+  margin-bottom: 12px;
+}
+.today-project-filter-toggle {
+  display: inline-flex;
+  min-height: 32px;
+  align-items: center;
+  gap: 7px;
+  padding: 0 9px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--background);
+  font-size: 13px;
+  list-style: none;
+  cursor: pointer;
+}
+.today-project-filter-toggle::-webkit-details-marker {
+  display: none;
+}
+.today-project-filter-toggle:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+.today-project-filter[open] .today-project-filter-toggle > svg:last-child {
+  transform: rotate(180deg);
+}
+.today-project-filter-count {
+  color: var(--muted-foreground);
+}
+.today-project-filter-panel {
+  display: grid;
+  justify-items: start;
+  gap: 8px;
+  margin-top: 8px;
+}
+.today-project-filter-panel fieldset {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+  max-height: 10rem;
+  overflow-y: auto;
+}
+.today-project-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--background);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+.today-project-option:has([data-state='checked']) {
+  background: var(--accent);
+}
+.list-title h1 {
+  overflow-wrap: anywhere;
+}
+.list-title > button {
+  flex-shrink: 0;
+}
+
 main {
   width: calc(100% - var(--sidebar-width));
   margin-left: var(--sidebar-width);
@@ -1260,6 +1450,10 @@ h1 {
   font-size: 12px;
 }
 .task-palette-date {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
   padding: 5px 12px;
 }
 .task-palette-date-button {
@@ -1334,6 +1528,20 @@ input.todo-title {
   font-size: 12px;
   line-height: 1.5;
 }
+.task-chip.task-project {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: min(25%, 180px);
+  flex-shrink: 0;
+}
+.task-chip.task-project > span:last-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .empty-list,
 .state {
   display: flex;
@@ -1426,6 +1634,31 @@ input.todo-title {
     flex: 1;
     margin: 0;
   }
+  .project-expand {
+    margin: 0;
+  }
+  .project-navigation {
+    order: 1;
+    flex: 0 0 100%;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px;
+    margin-top: 4px;
+  }
+  .project-navigation-list {
+    display: flex;
+    flex: 1;
+    min-width: min(180px, 100%);
+    overflow-x: auto;
+    scrollbar-width: thin;
+  }
+  .project-navigation-list .nav-item {
+    max-width: 185px;
+  }
+  .project-load-error {
+    flex: 0 0 100%;
+  }
   .nav-item {
     width: auto;
     padding: 7px 6px;
@@ -1493,6 +1726,15 @@ input.todo-title {
     max-width: 100%;
     justify-content: flex-start;
     gap: 5px;
+  }
+  .todo-line > .task-project {
+    grid-column: 3;
+    grid-row: 2;
+    justify-self: start;
+    max-width: 100%;
+  }
+  .todo-line > .link-list + .task-project {
+    grid-row: 3;
   }
   .todo-line > .date-picker {
     grid-column: 4;
@@ -1719,6 +1961,25 @@ input.todo-title {
 }
 .task-date-label {
   font-size: 14px;
+}
+.task-project-field {
+  min-width: 0;
+  max-width: min(100%, 230px);
+  align-self: flex-start;
+}
+.detail-meta .task-project-field label {
+  gap: 6px;
+}
+.detail-meta .task-project-field select {
+  min-width: 135px;
+  min-height: 34px;
+  padding: 0 8px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 400;
+}
+.task-project-field .inline-edit-error {
+  margin-top: 6px;
 }
 .task-date-button {
   display: flex;
