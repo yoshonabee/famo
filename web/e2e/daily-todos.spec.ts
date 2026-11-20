@@ -90,7 +90,9 @@ test('先前未完成移到今日會保留連結與備註', async ({ page, reque
   await expect(dialog.getByRole('button', { name: '編輯備註' })).toHaveText(
     task.description,
   )
-  await expect(dialog.getByRole('combobox')).toHaveCount(0)
+  await expect(
+    dialog.getByRole('combobox', { name: /^(?!Project$)/ }),
+  ).toHaveCount(0)
   await expect(dialog.getByText('類型資訊', { exact: true })).toHaveCount(0)
   await dialog.getByRole('button', { name: '編輯備註' }).click()
   await dialog

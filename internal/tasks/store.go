@@ -132,6 +132,9 @@ func (s *Store) Create(ctx context.Context, in CreateInput) (Task, error) {
 	if err != nil {
 		return Task{}, fmt.Errorf("%w：%v", ErrInvalid, err)
 	}
+	if err := s.validateProject(ctx, t.ProjectID); err != nil {
+		return Task{}, err
+	}
 	raw, err := json.Marshal(t)
 	if err != nil {
 		return Task{}, err
@@ -151,6 +154,11 @@ func (s *Store) Act(ctx context.Context, id string, a Action) (Task, error) {
 	}
 	if err = apply(&t, a, time.Now().UTC()); err != nil {
 		return Task{}, fmt.Errorf("%w：%v", ErrInvalid, err)
+	}
+	if a.Op == "update" && a.ProjectID != nil {
+		if err := s.validateProject(ctx, t.ProjectID); err != nil {
+			return Task{}, err
+		}
 	}
 	raw, err := json.Marshal(t)
 	if err != nil {

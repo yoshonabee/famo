@@ -52,6 +52,7 @@ export function TaskPalette({
   onClose,
   capture,
   captureDate,
+  captureProject,
   onCaptureDateChange,
   search,
   onSearchChange,
@@ -60,6 +61,7 @@ export function TaskPalette({
   onClose: () => void
   capture: ReturnType<typeof useQuickCapture>
   captureDate: string
+  captureProject?: string
   onCaptureDateChange: (date: string) => void
   search: string
   onSearchChange: (value: string) => void
@@ -132,6 +134,14 @@ export function TaskPalette({
                   {captureDate}
                   <ChevronDown size={12} />
                 </DatePicker>
+                {captureProject && (
+                  <span
+                    className="task-chip task-project"
+                    title={captureProject}
+                  >
+                    {captureProject}
+                  </span>
+                )}
               </div>
             </>
           ) : (

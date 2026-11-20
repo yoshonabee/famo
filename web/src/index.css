@@ -1136,6 +1136,76 @@ button:disabled {
   font-size: 12px;
   color: var(--muted-foreground);
 }
+.project-expand {
+  margin-top: 2px;
+}
+.project-navigation {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+  margin-top: 14px;
+}
+.project-navigation-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding-inline: 8px 2px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+.project-navigation-heading h2 {
+  font-weight: 600;
+}
+.project-add-button {
+  width: 28px;
+  height: 28px;
+}
+.project-navigation-list {
+  display: grid;
+  gap: 2px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+.project-navigation-list .nav-item:focus-visible {
+  outline-offset: -2px;
+}
+.project-navigation-list .nav-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.project-navigation-list svg {
+  flex-shrink: 0;
+}
+.project-load-error {
+  display: grid;
+  gap: 6px;
+  padding: 4px 8px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.project-editor .dialog-title {
+  margin-bottom: 12px;
+  padding-right: 28px;
+}
+.project-form {
+  display: grid;
+  gap: 12px;
+}
+.project-form button {
+  justify-self: end;
+}
+.list-title h1 {
+  overflow-wrap: anywhere;
+}
+.list-title > button {
+  flex-shrink: 0;
+}
+
 main {
   width: calc(100% - var(--sidebar-width));
   margin-left: var(--sidebar-width);
@@ -1238,6 +1308,10 @@ h1 {
   font-size: 12px;
 }
 .task-palette-date {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
   padding: 5px 12px;
 }
 .task-palette-date-button {
@@ -1312,6 +1386,15 @@ input.todo-title {
   font-size: 12px;
   line-height: 1.5;
 }
+.task-chip.task-project {
+  display: block;
+  max-width: min(25%, 180px);
+  flex-shrink: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .empty-list,
 .state {
   display: flex;
@@ -1397,6 +1480,31 @@ input.todo-title {
     flex: 1;
     margin: 0;
   }
+  .project-expand {
+    margin: 0;
+  }
+  .project-navigation {
+    order: 1;
+    flex: 0 0 100%;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px;
+    margin-top: 4px;
+  }
+  .project-navigation-list {
+    display: flex;
+    flex: 1;
+    min-width: min(180px, 100%);
+    overflow-x: auto;
+    scrollbar-width: thin;
+  }
+  .project-navigation-list .nav-item {
+    max-width: 185px;
+  }
+  .project-load-error {
+    flex: 0 0 100%;
+  }
   .nav-item {
     width: auto;
     padding: 7px 6px;
@@ -1463,6 +1571,15 @@ input.todo-title {
     max-width: 100%;
     justify-content: flex-start;
     gap: 5px;
+  }
+  .todo-line > .task-project {
+    grid-column: 3;
+    grid-row: 2;
+    justify-self: start;
+    max-width: 100%;
+  }
+  .todo-line > .link-list + .task-project {
+    grid-row: 3;
   }
   .todo-line > .date-picker {
     grid-column: 4;
@@ -1689,6 +1806,25 @@ input.todo-title {
 }
 .task-date-label {
   font-size: 14px;
+}
+.task-project-field {
+  min-width: 0;
+  max-width: min(100%, 230px);
+  align-self: flex-start;
+}
+.detail-meta .task-project-field label {
+  gap: 6px;
+}
+.detail-meta .task-project-field select {
+  min-width: 135px;
+  min-height: 34px;
+  padding: 0 8px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 400;
+}
+.task-project-field .inline-edit-error {
+  margin-top: 6px;
 }
 .task-date-button {
   display: flex;

@@ -8,7 +8,10 @@ import (
 	"strings"
 )
 
-const schemaVersion = 6
+const (
+	activeTaskSchemaVersion = 6
+	schemaVersion           = 7
+)
 
 const activeSchema = `
 CREATE TABLE IF NOT EXISTS tasks (
@@ -78,6 +81,9 @@ func migrateTasks(ctx context.Context, tx *sql.Tx) error {
 	if err != nil || version == schemaVersion {
 		return err
 	}
+	if version >= activeTaskSchemaVersion {
+		return migrateProjects(ctx, tx)
+	}
 	// Leave original rows and options archived until the user confirms cleanup.
 	if _, err := tx.ExecContext(ctx, `
 DROP TRIGGER IF EXISTS tasks_order_insert;
@@ -108,10 +114,21 @@ DROP INDEX IF EXISTS task_order_position;`); err != nil {
 			return err
 		}
 	}
-	if _, err := tx.ExecContext(ctx, orderNewTasks+fmt.Sprintf("PRAGMA user_version=%d;", schemaVersion)); err != nil {
+	if _, err := tx.ExecContext(ctx, orderNewTasks); err != nil {
 		return err
 	}
-	return nil
+	return migrateProjects(ctx, tx)
+}
+
+func migrateProjects(ctx context.Context, tx *sql.Tx) error {
+	_, err := tx.ExecContext(ctx, `
+CREATE TABLE projects (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL COLLATE NOCASE UNIQUE,
+    version INTEGER NOT NULL
+);
+`+fmt.Sprintf("PRAGMA user_version=%d;", schemaVersion))
+	return err
 }
 
 func copyLegacyTasks(ctx context.Context, tx *sql.Tx) error {

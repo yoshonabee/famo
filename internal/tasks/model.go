@@ -22,6 +22,7 @@ type Task struct {
 	ID            string     `json:"id"`
 	Title         string     `json:"title"`
 	ScheduledDate string     `json:"scheduled_date"`
+	ProjectID     string     `json:"project_id,omitempty"`
 	Description   string     `json:"description"`
 	CompletedAt   *time.Time `json:"completed_at"`
 	DeletedAt     *time.Time `json:"deleted_at"`
@@ -34,6 +35,7 @@ type Task struct {
 type CreateInput struct {
 	Title         string `json:"title"`
 	ScheduledDate string `json:"scheduled_date"`
+	ProjectID     string `json:"project_id"`
 	Description   string `json:"description"`
 	Links         []Link `json:"links"`
 }
@@ -41,6 +43,7 @@ type CreateInput struct {
 type Action struct {
 	Op            string  `json:"op"`
 	ScheduledDate *string `json:"scheduled_date"`
+	ProjectID     *string `json:"project_id"`
 	Version       int     `json:"version"`
 	Links         []Link  `json:"links"`
 	LinkIndex     *int    `json:"link_index"`
@@ -78,7 +81,7 @@ func validate(t Task) error {
 func newTask(in CreateInput, now time.Time) (Task, error) {
 	t := Task{
 		ID: id(), Title: strings.TrimSpace(in.Title), ScheduledDate: in.ScheduledDate,
-		Description: in.Description, Version: 1, CreatedAt: now, UpdatedAt: now,
+		ProjectID: in.ProjectID, Description: in.Description, Version: 1, CreatedAt: now, UpdatedAt: now,
 		Links: make([]Link, 0, len(in.Links)),
 	}
 	t.appendLinks(in.Links)
@@ -118,6 +121,9 @@ func apply(t *Task, a Action, now time.Time) error {
 		}
 		t.Links = slices.Delete(t.Links, *a.LinkIndex, *a.LinkIndex+1)
 	case "update":
+		if a.ProjectID != nil {
+			t.ProjectID = *a.ProjectID
+		}
 		if a.ScheduledDate != nil {
 			t.ScheduledDate = *a.ScheduledDate
 		}

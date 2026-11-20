@@ -95,7 +95,7 @@ func cleanupReport(ctx context.Context, db schemaReader) (CleanupReport, error) 
 	}
 	report := CleanupReport{SchemaVersion: version, LegacyTables: []string{}}
 	prefix := ""
-	if version == schemaVersion {
+	if version >= activeTaskSchemaVersion {
 		prefix = "famo_legacy_"
 	}
 	for _, entry := range []struct {

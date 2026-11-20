@@ -28,6 +28,12 @@
 
 任務每 30 秒及視窗重新聚焦時同步。
 
+## Projects
+
+從側欄的「Projects」按 + 建立分類，點選名稱即可查看該 Project 的待辦及已完成任務。可在 Project 標題旁重新命名。在 Project 頁面的清單或快速新增浮窗建立的任務會直接歸入目前的 Project。
+
+在任務詳情的「Project」欄位可指派或變更分類，選擇「未分類」可清除歸屬。任務可同時有日期與 Project。「今日」和其他日期會一起顯示當天各 Project 的任務，原有「任務」與「已完成」仍跨 Project 檢視。
+
 ## macOS 選單列
 
 桌面版啟動後，macOS 選單列會顯示 Famo 小圖示與今天的「已完成／總數」，例如 `2/5`。只計算安排在本機今天的任務，未指定日期、其他日期和已刪除任務不列入；沒有任務時顯示 `0/0`。進度每 2 秒更新，也會反映 Agent API 的修改與跨日變化；讀取失敗時顯示 `—`。
@@ -127,7 +133,7 @@ Agent 應先讀取這個檔案，再呼叫 `url` 下的 `/health`，確認狀態
 
 ### 資料升級
 
-首次用新版開啟舊 SQLite 資料庫時，Famo 會在交易中升級到 v6，保留任務標題、備註、日期、連結網址、完成與刪除狀態、時間、排序和版本。很早期的任務若尚無備註欄位，會將原有目標、背景和驗收條件合併成備註。原始任務、排序和選項會封存，待你主動清理。升級後請用支援 v6 的執行檔。
+首次用新版開啟舊 SQLite 資料庫時，Famo 會在交易中升級到 v7，保留任務標題、備註、日期、連結網址、完成與刪除狀態、時間、排序和版本。很早期的任務若尚無備註欄位，會將原有目標、背景和驗收條件合併成備註。v6 之前的原始任務、排序和選項會封存，待你主動清理。v6 升級會保留現有任務和封存資料，既有任務預設為未分類。升級後請用支援 v7 的執行檔。
 
 ### 清理舊任務資料
 
@@ -181,6 +187,9 @@ npm run format:check
 | --- | --- |
 | `GET /health` | 健康檢查 |
 | `GET /agent/workspace` | 預設工作區路徑 `dir` 和選填指引 `prompt` |
+| `GET /projects` | 所有 Project，包含 `id`、`name` 與 `version` |
+| `POST /projects` | 以 `{"name":"工作"}` 建立 Project |
+| `POST /projects/{id}` | 以 `{"name":"新名稱","version":1}` 重新命名 Project |
 | `GET /tasks` | 全部未刪除任務，含已完成任務 |
 | `POST /tasks` | 建立任務 |
 | `GET /tasks/recently-deleted` | 最近 7 天軟刪除的任務，依刪除時間由新到舊排列 |
@@ -190,7 +199,7 @@ npm run format:check
 | `POST /tasks/{id}/actions` | 具版本檢查的任務操作 |
 | `POST /tasks/{id}/restore` | 以 `{"version":3}` 還原最近刪除的任務，回傳完整任務及新版本 |
 
-建立任務只需標題，可同時指定備註、日期或連結。
+建立任務只需標題，可同時指定備註、日期、Project 或連結。
 
 ```sh
 curl http://127.0.0.1:8787/tasks \
@@ -220,7 +229,7 @@ curl http://127.0.0.1:8787/tasks/TASK_ID/actions \
 
 | `op` | 行為 |
 | --- | --- |
-| `update` | 更新 `title`、`description` 或 `scheduled_date`，也可附加 `links` |
+| `update` | 更新 `title`、`description`、`scheduled_date` 或 `project_id`，也可附加 `links` |
 | `rename` | 重新命名任務，標題必須有內容 |
 | `add_link` | 附加一筆或多筆相關連結 |
 | `remove_link` | 送出目前版本與從 0 起算的 `link_index`，移除一筆相關連結 |
@@ -228,7 +237,7 @@ curl http://127.0.0.1:8787/tasks/TASK_ID/actions \
 | `reopen_task` | 恢復任務為未完成 |
 | `delete_item` | 軟刪除任務 |
 
-`scheduled_date` 接受有效的 `YYYY-MM-DD`（年份 0001–9999），不含時間或時區。建立時省略或送空字串代表無日期，更新時送空字串清除日期。更新省略的欄位會保留原值，空字串 `description` 可清除備註。寫入成功會回傳完整任務，版本遞增一次。版本衝突回傳 `409`，先重新讀取，再確認如何套用修改。
+`scheduled_date` 接受有效的 `YYYY-MM-DD`（年份 0001–9999），不含時間或時區。建立時省略或送空字串代表無日期，更新時送空字串清除日期。更新省略的欄位會保留原值，空字串 `description` 可清除備註。建立與更新可傳入既有的 `project_id`；更新時送空字串可清除分類。回傳的任務若有分類，會包含 `project_id`。寫入成功會回傳完整任務，版本遞增一次。版本衝突回傳 `409`，先重新讀取，再確認如何套用修改。
 
 舊版類型、階段、優先順序、等待狀態、子步驟、獨立脈絡、類型 metadata、寫入來源與歷程、手動連結種類，以及 `/settings`、`/workflows` 端點已移除。串接舊版 API 的工具請改用備註、日期及 URL 連結等現行欄位。
 
