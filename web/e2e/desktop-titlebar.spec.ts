@@ -20,8 +20,12 @@ test('桌面標題列隨側欄和主題調整，保留上方控制項的操作�
     )
 
   await expect(titlebar).toHaveCSS('height', '0px')
+  await page.getByRole('button', { name: '收合側邊欄' }).click()
+  await expect(sidebar).toHaveCSS('width', '56px')
+  await page.getByRole('button', { name: '展開側邊欄' }).click()
   await page.addStyleTag({
-    content: ':root { --window-titlebar-height: 30px; }',
+    content:
+      ':root { --window-titlebar-height: 30px; --window-controls-width: 78px; }',
   })
   await expect(titlebar).toHaveCSS('height', '30px')
   await expect(sidebar).toHaveCSS('padding-top', '50px')
@@ -30,8 +34,9 @@ test('桌面標題列隨側欄和主題調整，保留上方控制項的操作�
   expect(await sidebarStrip()).not.toBe('none')
 
   await page.getByRole('button', { name: '收合側邊欄' }).click()
-  expect(await sidebarStrip()).toBe('none')
-  await expect(sidebar).toHaveCSS('width', '56px')
+  expect(await sidebarStrip()).not.toBe('none')
+  expect(await sidebarWidth()).toBe('78px')
+  await expect(sidebar).toHaveCSS('width', '78px')
   await expect(sidebar).toHaveCSS('border-right-width', '1px')
   const light = await themeColours()
   await page.getByRole('button', { name: '設定', exact: true }).click()

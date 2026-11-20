@@ -235,7 +235,7 @@ select {
   min-height: 100dvh;
 }
 .app-shell.sidebar-collapsed {
-  --sidebar-width: 56px;
+  --sidebar-width: var(--window-controls-width, 56px);
 }
 /* The native main window sets the height for its transparent title bar. */
 .window-titlebar {
@@ -254,10 +254,6 @@ select {
   border-right: 1px solid var(--border);
   background: var(--sidebar);
   pointer-events: none;
-}
-/* Keep the collapsed divider below the native window controls. */
-.sidebar-collapsed .window-titlebar::before {
-  content: none;
 }
 
 .task-list {
