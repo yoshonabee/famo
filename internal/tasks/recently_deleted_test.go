@@ -13,25 +13,10 @@ func TestRecentlyDeletedRetention(t *testing.T) {
 	ctx := t.Context()
 	now := time.Date(2026, 11, 20, 12, 0, 0, 500_000_000, time.UTC)
 	cutoff := now.Add(-7 * 24 * time.Hour)
-	deleteAt := func(at time.Time) Task {
-		t.Helper()
-		task := createTest(t, s)
-		if err := apply(&task, Action{Op: "delete_item"}, at); err != nil {
-			t.Fatal(err)
-		}
-		raw, err := json.Marshal(task)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if _, err = s.db.ExecContext(ctx, `UPDATE tasks SET deleted_at=?,version=?,document=? WHERE id=?`, at, task.Version, string(raw), task.ID); err != nil {
-			t.Fatal(err)
-		}
-		return task
-	}
-	inside := deleteAt(cutoff.Add(time.Nanosecond).In(time.FixedZone("+0800", 8*60*60)))
-	atBoundary := deleteAt(cutoff)
-	expired := deleteAt(cutoff.Add(-time.Nanosecond))
-	recent := deleteAt(now)
+	inside := softDeleteAt(t, s, cutoff.Add(time.Nanosecond).In(time.FixedZone("+0800", 8*60*60)))
+	atBoundary := softDeleteAt(t, s, cutoff)
+	expired := softDeleteAt(t, s, cutoff.Add(-time.Nanosecond))
+	recent := softDeleteAt(t, s, now)
 	active := createTest(t, s)
 
 	list, err := s.listRecentlyDeletedAt(ctx, now)
@@ -54,6 +39,22 @@ func TestRecentlyDeletedRetention(t *testing.T) {
 	if err != nil || len(list) != 1 || list[0].ID != recent.ID {
 		t.Fatalf("restored task remained in recently deleted: %+v, %v", list, err)
 	}
+}
+
+func softDeleteAt(t *testing.T, s *Store, at time.Time) Task {
+	t.Helper()
+	task := createTest(t, s)
+	if err := apply(&task, Action{Op: "delete_item"}, at); err != nil {
+		t.Fatal(err)
+	}
+	raw, err := json.Marshal(task)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = s.db.ExecContext(t.Context(), `UPDATE tasks SET deleted_at=?,version=?,document=? WHERE id=?`, at, task.Version, string(raw), task.ID); err != nil {
+		t.Fatal(err)
+	}
+	return task
 }
 
 func TestRestorePreservesTaskDataAndPosition(t *testing.T) {
