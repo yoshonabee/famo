@@ -258,6 +258,7 @@ function App() {
     <div
       className={sidebarCollapsed ? 'app-shell sidebar-collapsed' : 'app-shell'}
     >
+      <div className="window-titlebar" aria-hidden="true" />
       <aside className="sidebar">
         <div className="sidebar-heading">
           <a className="brand" href="/" aria-label="Famo">

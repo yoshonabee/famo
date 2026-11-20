@@ -96,6 +96,8 @@ func Run(cfg Config) error {
 		Name: "famo", Title: "Famo", URL: "/",
 		Width: 1100, Height: 780, MinWidth: 620, MinHeight: 480,
 		BackgroundColour: application.NewRGB(248, 247, 244),
+		Mac:              application.MacWindow{TitleBar: application.MacTitleBarHidden},
+		CSS:              ":root { --window-titlebar-height: 30px; }",
 	})
 	mainWindow.RegisterHook(events.Common.WindowClosing, func(event *application.WindowEvent) {
 		event.Cancel()
