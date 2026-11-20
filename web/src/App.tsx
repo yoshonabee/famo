@@ -66,6 +66,7 @@ import {
   useQuickCapture,
 } from '@/components/quick-capture'
 import { TaskPalette, TaskSearch } from '@/components/task-palette'
+import { TaskProjectAssignment } from '@/components/task-project-assignment'
 import {
   Dialog,
   DialogContent,
@@ -393,14 +394,38 @@ function App() {
   })
   const act: Act = (t, action, done, failed) =>
     mutation.mutate({ t, action, failed }, { onSuccess: done })
+  const assignment = useMutation({
+    mutationFn: ({ projectId, items }: { projectId: string; items: Task[] }) =>
+      request<Task[]>('/tasks/assign-project', {
+        project_id: projectId,
+        tasks: items.map(({ id, version }) => ({ id, version })),
+      }),
+    onSuccess: async (updated) => {
+      await client.cancelQueries({ queryKey: ['tasks'] })
+      const updatedById = new Map(updated.map((task) => [task.id, task]))
+      client.setQueryData<Task[]>(['tasks'], (old) =>
+        old?.map((task) => {
+          const assigned = updatedById.get(task.id)
+          return assigned && assigned.version > task.version ? assigned : task
+        }),
+      )
+      setProjectSelection(null)
+    },
+    onError: (error) => {
+      setMessage(error.message)
+      void client.invalidateQueries({ queryKey: ['projects'] })
+    },
+    onSettled: () => client.invalidateQueries({ queryKey: ['tasks'] }),
+  })
   const all = tasks.data ?? []
   const active = all.filter((t) => !t.completed_at)
+  const searchTerm = search.toLowerCase()
+  const matchesSearch = (task: Task) =>
+    `${task.title} ${task.description}`.toLowerCase().includes(searchTerm)
   const matching = all.filter(
     (t) =>
       (view !== 'project' || t.project_id === currentProjectId) &&
-      `${t.title} ${t.description}`
-        .toLowerCase()
-        .includes(search.toLowerCase()),
+      matchesSearch(t),
   )
   const filtered = matching.filter((t) => !t.completed_at)
   const completed = matching
@@ -418,7 +443,70 @@ function App() {
       : view === 'completed'
         ? completed.length
         : filtered.length
-  const busy = mutation.isPending || reorder.isPending
+  const busy = mutation.isPending || reorder.isPending || assignment.isPending
+  const calendarTasks = isCalendarView
+    ? all.filter((task) => {
+        const id = task.project_id ?? ''
+        if (boardProjectIds) return boardProjectIds.has(id)
+        return !projectFiltered || !todayFilter.hidden.includes(id)
+      })
+    : []
+  const selectableTasks = isCalendarView
+    ? calendarTasks.filter(
+        (task) => task.scheduled_date === date && matchesSearch(task),
+      )
+    : view === 'active'
+      ? filtered
+      : view === 'completed'
+        ? completed
+        : view === 'project'
+          ? matching
+          : []
+  const selectionScope = JSON.stringify([
+    view,
+    currentBoard?.id,
+    currentProjectId,
+    isCalendarView ? date : null,
+  ])
+  const [projectSelection, setProjectSelection] = useState<{
+    scope: string
+    ids: Set<string>
+  } | null>(null)
+  const selection =
+    projectSelection?.scope === selectionScope ? projectSelection.ids : null
+  if (projectSelection && !selection) setProjectSelection(null)
+  const selectionActive = selection !== null
+  const chosenTasks = selection
+    ? selectableTasks.filter((task) => selection.has(task.id))
+    : []
+  function selectTasks(items: Task[], checked: boolean) {
+    setProjectSelection((current) => {
+      if (!current) return current
+      const ids = new Set(current.ids)
+      for (const task of items) {
+        if (checked) ids.add(task.id)
+        else ids.delete(task.id)
+      }
+      return { ...current, ids }
+    })
+  }
+  const selectionButton = (selectionActive ||
+    (projectList.length > 0 && selectableTasks.length > 0)) && (
+    <Button
+      variant="outline"
+      size="sm"
+      disabled={busy || dragging}
+      aria-expanded={selectionActive}
+      aria-controls={selectionActive ? 'task-project-assignment' : undefined}
+      onClick={() =>
+        setProjectSelection(
+          selectionActive ? null : { scope: selectionScope, ids: new Set() },
+        )
+      }
+    >
+      {selectionActive ? '取消多選' : '多選任務'}
+    </Button>
+  )
   function renderTask(
     task: Task,
     index: number,
@@ -436,8 +524,18 @@ function App() {
             : undefined
         }
         hideCompletion={hideCompletion}
-        sortableDisabled={sortableDisabled || visibleDrafts.length > 0}
+        sortableDisabled={
+          sortableDisabled || selectionActive || visibleDrafts.length > 0
+        }
         busy={busy}
+        selection={
+          selection && !hideCompletion
+            ? {
+                checked: selection.has(task.id),
+                onChange: (checked) => selectTasks([task], checked),
+              }
+            : undefined
+        }
         onSetDate={(date) => act(task, { op: 'update', scheduled_date: date })}
         onOpen={() => setSelected(task.id)}
         onComplete={() =>
@@ -605,6 +703,7 @@ function App() {
                 </h1>
               )}
               <DateNavigation date={date} onChange={setDate} />
+              {selectionButton}
               {searchField}
             </header>
           ) : (
@@ -613,6 +712,7 @@ function App() {
                 <h1>{listTitle}</h1>
                 <span className="list-count">{listCount}</span>
               </div>
+              {selectionButton}
               {searchField}
             </div>
           )}
@@ -624,15 +724,23 @@ function App() {
             onSubmit={capture.submit}
             announcement={capture.announcement}
           />
+          {selectionActive && (
+            <TaskProjectAssignment
+              projects={projectList}
+              selectedCount={chosenTasks.length}
+              taskCount={selectableTasks.length}
+              busy={busy}
+              onSelectAll={(checked) => selectTasks(selectableTasks, checked)}
+              onAssign={(projectId) =>
+                assignment.mutate({ projectId, items: chosenTasks })
+              }
+            />
+          )}
           {isCalendarView && (
             <CalendarPage
               date={date}
               key={`${currentBoard?.id ?? 'date'}/${date}`}
-              tasks={all.filter((task) => {
-                const id = task.project_id ?? ''
-                if (boardProjectIds) return boardProjectIds.has(id)
-                return !projectFiltered || !todayFilter.hidden.includes(id)
-              })}
+              tasks={calendarTasks}
               projectFiltered={projectFiltered || !!currentBoard}
               search={search}
               loading={!tasks.isSuccess}
@@ -855,6 +963,7 @@ function TaskRow({
   index,
   sortableDisabled = false,
   hideCompletion = false,
+  selection,
 }: {
   task: Task
   project?: Project
@@ -865,6 +974,7 @@ function TaskRow({
   index: number
   sortableDisabled?: boolean
   hideCompletion?: boolean
+  selection?: { checked: boolean; onChange: (checked: boolean) => void }
 }) {
   const completed = !!t.completed_at
   const title = t.title
@@ -877,6 +987,7 @@ function TaskRow({
     <li
       ref={ref}
       data-task-id={t.id}
+      data-project-selected={selection?.checked || undefined}
       className={`task-row ${completed ? 'is-completed' : ''} ${isDragging ? 'dragging' : ''}`}
     >
       <div className="todo-line">
@@ -889,13 +1000,22 @@ function TaskRow({
         >
           <GripVertical size={16} />
         </button>
-        {!hideCompletion && (
+        {selection ? (
           <Checkbox
-            checked={completed}
+            checked={selection.checked}
             disabled={busy}
-            aria-label={`${completed ? '恢復' : '完成'}任務：${title}`}
-            onCheckedChange={onComplete}
+            aria-label={`選取任務：${title}`}
+            onCheckedChange={(checked) => selection.onChange(checked === true)}
           />
+        ) : (
+          !hideCompletion && (
+            <Checkbox
+              checked={completed}
+              disabled={busy}
+              aria-label={`${completed ? '恢復' : '完成'}任務：${title}`}
+              onCheckedChange={onComplete}
+            />
+          )
         )}
         <TodoTitle task={t} title={title} onDeleted={() => {}} />
         <Links task={t} onOpen={onOpen} />

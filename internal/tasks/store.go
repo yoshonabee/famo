@@ -168,7 +168,7 @@ func (s *Store) Act(ctx context.Context, id string, a Action) (Task, error) {
 	projectToValidate := ""
 	if a.Op == "update" && a.ProjectID != nil {
 		projectToValidate = t.ProjectID
-		if err := s.validateProject(ctx, projectToValidate); err != nil {
+		if err := validateProject(ctx, s.db, projectToValidate); err != nil {
 			return Task{}, err
 		}
 	}

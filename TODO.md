@@ -25,7 +25,7 @@
 - [x] 可建立、命名 Project，並設定或變更任務所屬的 Project。
 - [x] 可依 Project 檢視任務，同時保留跨 Project 的全部任務檢視。
 - [x] Project 與日期可搭配使用，讓不同 Project 的任務都能安排到特定日期，並在「今日」頁面一起查看。
-- [ ] 可多選任務，批次指派到同一個 Project。
+- [x] 可多選任務，批次指派到同一個 Project。
 
 ## Board 功能
 
