@@ -9,7 +9,7 @@ import { type ThemeController } from '@/lib/theme'
 import { languages, useLanguage, type Locale } from '@/lib/i18n'
 import { footerNavigation, type FooterNavItem } from '@/lib/sidebar-preferences'
 
-type Section = 'appearance' | 'general' | 'agent'
+type Section = 'general' | 'appearance' | 'agent'
 
 export function PreferencesPage({
   appearance,
@@ -28,12 +28,6 @@ export function PreferencesPage({
   const [activeSection, setActiveSection] = useState<Section>('appearance')
   const heading = useRef<HTMLHeadingElement>(null)
   const sections = [
-    {
-      id: 'appearance',
-      label: t('appearance'),
-      icon: Palette,
-      content: <AppearancePreferences appearance={appearance} />,
-    },
     {
       id: 'general',
       label: t('general'),
@@ -97,6 +91,12 @@ export function PreferencesPage({
           </section>
         </div>
       ),
+    },
+    {
+      id: 'appearance',
+      label: t('appearance'),
+      icon: Palette,
+      content: <AppearancePreferences appearance={appearance} />,
     },
     {
       id: 'agent',

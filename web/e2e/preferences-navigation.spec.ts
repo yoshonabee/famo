@@ -6,6 +6,11 @@ test('手機可用鍵盤切換設定分類並保留兩處未儲存的草稿', as
   await page.getByRole('button', { name: '設定', exact: true }).click()
 
   const navigation = page.getByRole('navigation', { name: '設定分類' })
+  await expect(navigation.getByRole('button')).toHaveText([
+    '一般',
+    '外觀',
+    'Agents',
+  ])
   const appearance = navigation.getByRole('button', { name: '外觀' })
   const general = navigation.getByRole('button', { name: '一般', exact: true })
   const agent = navigation.getByRole('button', { name: 'Agents' })
