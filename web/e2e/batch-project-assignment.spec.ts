@@ -169,6 +169,41 @@ test('點擊清單旁的空白或按 Escape 可清除選取', async ({ page, req
   await expect(title).toHaveValue(task.title)
 })
 
+test('浮動操作列滑入，按 Escape 或關閉按鈕後滑出', async ({
+  page,
+  request,
+}) => {
+  await page.goto('/')
+  const date = (await page.locator('h1 time').getAttribute('datetime'))!
+  const task = await addTask(request, 'toolbar transition', date)
+  await page.reload()
+  const toolbar = page.locator('.task-project-assignment')
+  const title = taskRow(page, task.id).getByRole('textbox')
+  const transitions = await toolbar.evaluateHandle((element) => {
+    const states: string[] = []
+    element.addEventListener('transitionend', (event) => {
+      if (
+        event.target === element &&
+        (event as TransitionEvent).propertyName === 'transform'
+      )
+        states.push(element.dataset.open!)
+    })
+    return states
+  })
+  for (const dismiss of ['Escape', 'close']) {
+    await title.click({ modifiers: ['Meta'] })
+    await expect
+      .poll(() => transitions.evaluate((states) => states.at(-1)))
+      .toBe('true')
+    if (dismiss === 'Escape') await page.keyboard.press('Escape')
+    else await toolbar.getByRole('button', { name: '清除選取' }).click()
+    await expect
+      .poll(() => transitions.evaluate((states) => states.at(-1)))
+      .toBe('false')
+    await expect(toolbar).toBeHidden()
+  }
+})
+
 test.describe('手機上的任務多選', () => {
   test.use({
     hasTouch: true,
@@ -247,7 +282,7 @@ test('從浮動操作列批次指派和清除歸屬，版本衝突時整批保�
     .getByRole('textbox')
     .click({ modifiers: ['Meta'] })
   const assign = toolbar.getByRole('button', { name: '指派', exact: true })
-  const target = toolbar.getByRole('combobox', { name: '指派目標 Project' })
+  const target = toolbar.getByRole('button', { name: '指派目標 Project' })
   await expect(assign).toBeDisabled()
   await toolbar.getByRole('button', { name: '全選可見任務' }).click()
   await expect(toolbar.getByRole('status')).toHaveText('已選取 2 件任務')
@@ -255,7 +290,13 @@ test('從浮動操作列批次指派和清除歸屬，版本衝突時整批保�
     'data-batch-selected',
     'true',
   )
-  await target.selectOption(project.id)
+  await target.click()
+  await expect(toolbar.getByRole('listbox')).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(toolbar.getByRole('listbox')).toBeHidden()
+  await expect(target).toBeFocused()
+  await target.click()
+  await toolbar.getByRole('option', { name: projectName, exact: true }).click()
 
   const changed = await request.post(`/api/tasks/${second.id}/actions`, {
     data: {
@@ -287,7 +328,8 @@ test('從浮動操作列批次指派和清除歸屬，版本衝突時整批保�
     .getByRole('textbox')
     .click({ modifiers: ['Shift'] })
   await expect(toolbar.getByRole('status')).toHaveText('已選取 2 件任務')
-  await target.selectOption({ label: '未分類' })
+  await target.click()
+  await toolbar.getByRole('option', { name: '未分類', exact: true }).click()
   await assign.click()
   await expect(page.getByText('尚無任務', { exact: true })).toBeVisible()
   expect((await savedTask(first.id)).project_id).toBeUndefined()

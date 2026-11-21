@@ -1,10 +1,9 @@
 import { useState } from 'react'
 import { X } from 'lucide-react'
+import { ProjectPicker } from '@/components/project-picker'
 import { Button } from '@/components/ui/button'
 import type { Project } from '@/lib/api'
 import { useLanguage } from '@/lib/i18n'
-
-const unassigned = 'unassigned'
 
 export function TaskProjectAssignment({
   projects,
@@ -24,14 +23,17 @@ export function TaskProjectAssignment({
   onAssign: (projectId: string) => void
 }) {
   const { t } = useLanguage()
-  const [targetId, setTargetId] = useState('')
+  const [targetId, setTargetId] = useState<string>()
+  const open = selectedCount > 0
+  if (!open && targetId !== undefined) setTargetId(undefined)
   const targetAvailable =
-    targetId === unassigned ||
-    projects.some((project) => project.id === targetId)
+    targetId === '' || projects.some((project) => project.id === targetId)
 
   return (
     <section
       className="task-project-assignment"
+      data-open={open}
+      inert={!open}
       aria-label={t('batchTaskActions')}
     >
       <div className="task-selection-summary">
@@ -47,26 +49,18 @@ export function TaskProjectAssignment({
         </Button>
       </div>
       <div className="task-assignment-actions">
-        <select
-          aria-label={t('assignmentProject')}
-          value={targetAvailable ? targetId : ''}
-          disabled={busy}
-          onChange={(event) => setTargetId(event.target.value)}
-        >
-          <option value="" disabled>
-            {t('chooseProject')}
-          </option>
-          <option value={unassigned}>{t('unassigned')}</option>
-          {projects.map((project) => (
-            <option key={project.id} value={project.id}>
-              {project.name}
-            </option>
-          ))}
-        </select>
+        <ProjectPicker
+          key={String(open)}
+          projects={projects}
+          value={targetAvailable ? targetId : undefined}
+          label={t('assignmentProject')}
+          disabled={!open || busy}
+          onChange={setTargetId}
+        />
         <Button
           size="sm"
           disabled={busy || !targetAvailable}
-          onClick={() => onAssign(targetId === unassigned ? '' : targetId)}
+          onClick={() => targetId !== undefined && onAssign(targetId)}
         >
           {t('assignProject')}
         </Button>

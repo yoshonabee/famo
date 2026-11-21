@@ -427,6 +427,11 @@ export const messages = {
   saving: ['儲存中…', 'Saving…'],
   savingDraft: ['儲存中', 'Saving'],
   search: ['搜尋', 'Search'],
+  searchAllTasks: ['搜尋所有任務', 'Search all tasks'],
+  globalSearchHelp: [
+    '輸入標題或備註搜尋所有任務。',
+    'Search all tasks by title or notes.',
+  ],
   searchHelp: [
     '搜尋目前清單，按 Enter 返回',
     'Search the current list. Press Enter to return.',

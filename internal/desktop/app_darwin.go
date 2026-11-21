@@ -94,6 +94,7 @@ func Run(cfg Config) error {
 	editMenu := menu.FindByRole(application.EditMenu).GetSubmenu()
 	editMenu.AddSeparator()
 	addShortcut(editMenu, "搜尋任務…", "Search Tasks…", "f", "search")
+	addShortcut(editMenu, "搜尋所有任務…", "Search All Tasks…", "Shift+f", "global-search")
 	viewMenu := language.addSubmenu(menu, "顯示", "View")
 	addShortcut(viewMenu, "展開或收合側邊欄", "Toggle Sidebar", "d", "sidebar")
 	addShortcut(viewMenu, "返回今日", "Go to Today", "k", "today")

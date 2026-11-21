@@ -103,6 +103,7 @@ const shortcuts = new Map([
   ['t', 'capture'],
   ['k', 'today'],
   ['f', 'search'],
+  ['shift+f', 'global-search'],
 ])
 const defaultNavigation = ['date', 'active', 'completed']
 const initialBoardId = new URLSearchParams(window.location.search).get('board')
@@ -230,7 +231,9 @@ function App() {
   const projectFiltered = isToday && todayFilter.hidden.length > 0
   const [search, setSearch] = useState('')
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
-  const [palette, setPalette] = useState<'capture' | 'search' | null>(null)
+  const [palette, setPalette] = useState<
+    'capture' | 'search' | 'global-search' | null
+  >(null)
   const [paletteCaptureDate, setPaletteCaptureDate] = useState('')
   const [paletteCaptureProjectId, setPaletteCaptureProjectId] = useState('')
   const captureProjects = boardProjectIds
@@ -323,6 +326,9 @@ function App() {
       case 'today':
         goToToday()
         break
+      case 'global-search':
+        setPalette('global-search')
+        break
       case 'search':
         if (view === 'preferences') goToToday()
         setPalette('search')
@@ -356,11 +362,12 @@ function App() {
         event.isComposing ||
         event.keyCode === 229 ||
         event.metaKey === event.ctrlKey ||
-        event.altKey ||
-        event.shiftKey
+        event.altKey
       )
         return
-      const action = shortcuts.get(event.key.toLowerCase())
+      const action = shortcuts.get(
+        (event.shiftKey ? 'shift+' : '') + event.key.toLowerCase(),
+      )
       if (!action) return
       event.preventDefault()
       if (!event.repeat) runShortcut(action)
@@ -529,6 +536,13 @@ function App() {
           view !== 'project' && task.project_id
             ? projectsById.get(task.project_id)
             : undefined
+        }
+        dateKind={
+          isCalendarView
+            ? undefined
+            : view === 'completed'
+              ? 'completed'
+              : 'scheduled'
         }
         hideCompletion={hideCompletion}
         sortableDisabled={sortableDisabled || visibleDrafts.length > 0}
@@ -873,21 +887,19 @@ function App() {
               {search ? t('noMatchingTasks') : t('noCompletedTasks')}
             </div>
           )}
-          {chosenTasks.length > 0 && (
-            <TaskProjectAssignment
-              projects={projectList}
-              selectedCount={chosenTasks.length}
-              allSelected={chosenTasks.length === selectableTasks.length}
-              busy={busy}
-              onSelectAll={() =>
-                selection.selectAll(selectableTasks.map((task) => task.id))
-              }
-              onClear={selection.clear}
-              onAssign={(projectId) =>
-                assignment.mutate({ projectId, items: chosenTasks })
-              }
-            />
-          )}
+          <TaskProjectAssignment
+            projects={projectList}
+            selectedCount={chosenTasks.length}
+            allSelected={chosenTasks.length === selectableTasks.length}
+            busy={busy}
+            onSelectAll={() =>
+              selection.selectAll(selectableTasks.map((task) => task.id))
+            }
+            onClear={selection.clear}
+            onAssign={(projectId) =>
+              assignment.mutate({ projectId, items: chosenTasks })
+            }
+          />
         </div>
         {view === 'recently-deleted' && (
           <div className="main-content">
@@ -977,6 +989,13 @@ function App() {
       </Dialog>
       <TaskPalette
         mode={palette}
+        tasks={all}
+        tasksLoading={tasks.isPending}
+        tasksError={tasks.isError ? errorText(tasks.error) : ''}
+        onOpenTask={(id) => {
+          setPalette(null)
+          setSelected(id)
+        }}
         onClose={() => setPalette(null)}
         capture={capture}
         captureDate={paletteCaptureDate}
@@ -1008,6 +1027,7 @@ function App() {
 }
 function TaskRow({
   task,
+  dateKind,
   project,
   busy,
   onOpen,
@@ -1020,6 +1040,7 @@ function TaskRow({
 }: {
   task: Task
   project?: Project
+  dateKind?: 'scheduled' | 'completed'
   busy: boolean
   onOpen: () => void
   onComplete: () => void
@@ -1031,6 +1052,13 @@ function TaskRow({
 }) {
   const { t, locale } = useLanguage()
   const completed = !!task.completed_at
+  const rowDate =
+    dateKind === 'scheduled'
+      ? task.scheduled_date
+      : dateKind === 'completed' && task.completed_at
+        ? localDate(new Date(task.completed_at))
+        : ''
+  const displayDate = formatTaskDate(rowDate, locale)
   const title = task.title
   const { ref, handleRef, isDragging } = useSortable({
     id: task.id,
@@ -1078,6 +1106,18 @@ function TaskRow({
         <TodoTitle task={task} title={title} onDeleted={() => {}} />
         <Links task={task} onOpen={onOpen} />
         {project && <ProjectBadge project={project} />}
+        {rowDate && (
+          <time
+            className="task-row-date"
+            dateTime={rowDate}
+            title={t(
+              dateKind === 'completed' ? 'completedAt' : 'taskDateValue',
+              displayDate,
+            )}
+          >
+            {displayDate}
+          </time>
+        )}
         <DatePicker
           date={task.scheduled_date}
           onChange={onSetDate}

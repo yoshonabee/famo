@@ -1,9 +1,10 @@
-import { useState, type ReactNode } from 'react'
+import { type ReactNode } from 'react'
 import { DragDropProvider } from '@dnd-kit/react'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { type Task } from '@/lib/api'
 import { useLanguage } from '@/lib/i18n'
+import { useTaskSelection } from '@/lib/task-selection'
 import { formatTaskDate } from '@/lib/calendar'
 
 export function TaskMoveSection({
@@ -22,8 +23,9 @@ export function TaskMoveSection({
   renderTask: (task: Task, index: number) => ReactNode
 }) {
   const { t, locale } = useLanguage()
-  const [selected, setSelected] = useState<string[]>([])
-  const chosen = tasks.filter((task) => selected.includes(task.id))
+  const selection = useTaskSelection(kind, busy, 'data-move-task')
+  const selected = new Set(selection.ids)
+  const chosen = tasks.filter((task) => selected.has(task.id))
   const earlier = kind === 'earlier'
   const visibleIds = new Set(tasks.map((task) => task.id))
   const groups = new Map<string, Task[]>()
@@ -39,7 +41,7 @@ export function TaskMoveSection({
       for (const task of items) {
         try {
           await onMove(task)
-          setSelected((ids) => ids.filter((id) => id !== task.id))
+          selection.deselect(task.id)
         } catch {
           // The shared mutation shows errors and failed tasks stay selected.
         }
@@ -51,18 +53,23 @@ export function TaskMoveSection({
 
   function renderRows(items: Task[]) {
     return items.map((task, index) => (
-      <li className="task-move-row" key={task.id}>
+      <li
+        className="task-move-row"
+        key={task.id}
+        data-move-task={task.id}
+        data-batch-selected={selected.has(task.id) || undefined}
+        tabIndex={0}
+        aria-label={t(
+          selected.has(task.id) ? 'selectedTask' : 'selectTask',
+          task.title,
+        )}
+        aria-keyshortcuts="Space Shift+ArrowUp Shift+ArrowDown"
+      >
         <Checkbox
           aria-label={t('selectTask', task.title)}
-          checked={selected.includes(task.id)}
+          checked={selected.has(task.id)}
           disabled={busy}
-          onCheckedChange={(checked) =>
-            setSelected((ids) =>
-              checked
-                ? [...new Set([...ids, task.id])]
-                : ids.filter((id) => id !== task.id),
-            )
-          }
+          onCheckedChange={() => selection.toggle(task.id)}
         />
         <ul>{renderTask(task, index)}</ul>
         <Button
@@ -83,7 +90,7 @@ export function TaskMoveSection({
         {t(earlier ? 'earlierTasksCount' : 'undatedTasksCount', tasks.length)}
       </summary>
       {tasks.length ? (
-        <>
+        <div {...selection.handlers} onClick={selection.onBackgroundClick}>
           <div className="task-move-actions">
             <label>
               <Checkbox
@@ -99,10 +106,10 @@ export function TaskMoveSection({
                       : false
                 }
                 onCheckedChange={(checked) =>
-                  setSelected((ids) =>
+                  selection.selectAll(
                     checked
-                      ? [...new Set([...ids, ...visibleIds])]
-                      : ids.filter((id) => !visibleIds.has(id)),
+                      ? [...new Set([...selected, ...visibleIds])]
+                      : [...selected].filter((id) => !visibleIds.has(id)),
                   )
                 }
               />
@@ -146,7 +153,7 @@ export function TaskMoveSection({
               )}
             </ul>
           </DragDropProvider>
-        </>
+        </div>
       ) : (
         <p className="empty-list">
           {t(earlier ? 'noEarlierTasks' : 'noUndatedTasks')}
