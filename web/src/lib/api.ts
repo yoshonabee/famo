@@ -13,10 +13,11 @@ export type Project = {
 export type Board = {
   id: string
   name: string
+  icon: string
   project_ids: string[]
   version: number
 }
-export type BoardInput = Pick<Board, 'name' | 'project_ids'>
+export type BoardInput = Pick<Board, 'name' | 'icon' | 'project_ids'>
 export type Task = {
   id: string
   title: string
@@ -75,15 +76,20 @@ export async function request<T>(
   if (body !== undefined && path.startsWith('/tasks')) void notifyTasksChanged()
   return data as T
 }
-export function orderSubset(tasks: Task[], ids: string[]) {
+export function orderSubset<T extends { id: string }>(
+  items: T[],
+  ids: string[],
+) {
   const selected = new Map(
-    tasks.filter((t) => ids.includes(t.id)).map((t) => [t.id, t]),
+    items
+      .filter((item) => ids.includes(item.id))
+      .map((item) => [item.id, item]),
   )
   const ordered = ids
     .map((id) => selected.get(id))
-    .filter((t): t is Task => !!t)
+    .filter((item): item is T => !!item)
   let index = 0
-  return tasks.map((t) => (selected.has(t.id) ? ordered[index++] : t))
+  return items.map((item) => (selected.has(item.id) ? ordered[index++] : item))
 }
 function fractionalSecond(timestamp: string) {
   return Number(timestamp.match(/\.\d+/)?.[0] ?? 0)

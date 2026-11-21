@@ -35,6 +35,19 @@ func projectRoutes(r chi.Router, store *tasks.Store, settingsEditable bool) {
 		}
 		write(w, http.StatusCreated, project)
 	})
+	r.Post("/projects/reorder", func(w http.ResponseWriter, r *http.Request) {
+		var in struct {
+			ProjectIDs []string `json:"project_ids"`
+		}
+		if !decode(w, r, &in) {
+			return
+		}
+		if err := store.ReorderProjects(r.Context(), in.ProjectIDs); err != nil {
+			fail(w, err)
+			return
+		}
+		write(w, http.StatusOK, map[string]bool{"ok": true})
+	})
 	r.Post("/projects/{id}", func(w http.ResponseWriter, r *http.Request) {
 		var in struct {
 			tasks.ProjectInput

@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { CalendarDays, ChevronDown, Search } from 'lucide-react'
 import { DatePicker } from '@/components/date-picker'
-import { ProjectBadge } from '@/components/project-appearance'
+import { ProjectPicker } from '@/components/project-picker'
 import {
   CaptureAnnouncement,
   CaptureDraftRow,
@@ -57,8 +57,11 @@ export function TaskPalette({
   onClose,
   capture,
   captureDate,
-  captureProject,
+  captureProjects,
+  captureProjectId,
+  requireCaptureProject,
   onCaptureDateChange,
+  onCaptureProjectChange,
   search,
   onSearchChange,
 }: {
@@ -66,8 +69,11 @@ export function TaskPalette({
   onClose: () => void
   capture: ReturnType<typeof useQuickCapture>
   captureDate: string
-  captureProject?: Project
+  captureProjects: Project[]
+  captureProjectId: string
+  requireCaptureProject: boolean
   onCaptureDateChange: (date: string) => void
+  onCaptureProjectChange: (id: string) => void
   search: string
   onSearchChange: (value: string) => void
 }) {
@@ -92,7 +98,7 @@ export function TaskPalette({
           onEscapeKeyDown={(event) => {
             if (
               event.target instanceof Element &&
-              event.target.closest('.calendar-popover')
+              event.target.closest('.calendar-popover, .project-picker-popup')
             )
               event.preventDefault()
           }}
@@ -116,8 +122,12 @@ export function TaskPalette({
           {isCapture ? (
             <>
               <CaptureEntry
+                canSubmit={!requireCaptureProject || !!captureProjectId}
                 onSubmit={(title) =>
-                  capture.submit(title, { scheduledDate: captureDate })
+                  capture.submit(title, {
+                    scheduledDate: captureDate,
+                    projectId: captureProjectId,
+                  })
                 }
               />
               <DialogDescription className="sr-only">
@@ -143,7 +153,21 @@ export function TaskPalette({
                   {formatTaskDate(captureDate, locale)}
                   <ChevronDown size={12} />
                 </DatePicker>
-                {captureProject && <ProjectBadge project={captureProject} />}
+                {(captureProjects.length > 0 || requireCaptureProject) && (
+                  <ProjectPicker
+                    projects={captureProjects}
+                    value={captureProjectId}
+                    allowUnassigned={!requireCaptureProject}
+                    label={t('captureTaskProject')}
+                    buttonClassName="task-palette-date-button"
+                    onChange={(id) => {
+                      onCaptureProjectChange(id)
+                      content.current
+                        ?.querySelector('input')
+                        ?.focus({ preventScroll: true })
+                    }}
+                  />
+                )}
               </div>
             </>
           ) : (

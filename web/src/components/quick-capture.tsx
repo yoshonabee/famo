@@ -71,12 +71,15 @@ export function useQuickCapture(
       )
     }
   }
-  function submit(title: string, fromPalette?: { scheduledDate: string }) {
+  function submit(
+    title: string,
+    fromPalette?: { scheduledDate: string; projectId: string },
+  ) {
     const draft = {
       id: crypto.randomUUID(),
       title,
       scheduled_date: fromPalette?.scheduledDate ?? scheduledDate,
-      project_id: projectId,
+      project_id: fromPalette ? fromPalette.projectId || undefined : projectId,
       floating: !!fromPalette,
     }
     setDrafts((old) => [...old, draft])
@@ -159,15 +162,17 @@ export function CaptureAnnouncement({
 
 export function CaptureEntry({
   onSubmit,
+  canSubmit = true,
 }: {
   onSubmit: (title: string) => void
+  canSubmit?: boolean
 }) {
   const { t } = useLanguage()
   const input = useRef<HTMLInputElement>(null)
   const composing = useRef(false)
   const [draft, setDraft] = useState('')
   function submit() {
-    if (composing.current) return
+    if (!canSubmit || composing.current) return
     const title = taskTitle(draft)
     if (!title) return
     setDraft('')
@@ -209,7 +214,7 @@ export function CaptureEntry({
         size="icon"
         aria-label={t('addThisTask')}
         title={t('enterToAdd')}
-        disabled={!taskTitle(draft)}
+        disabled={!canSubmit || !taskTitle(draft)}
         onClick={submit}
       >
         <CornerDownLeft />

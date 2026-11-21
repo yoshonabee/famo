@@ -33,8 +33,17 @@ test('Project 新增、改名、指派和日期檢視', async ({ page }) => {
     page.getByRole('button', { name: `任務詳情：${title}` })
   await open('整理家裡文件').click()
   const details = page.getByRole('dialog', { name: '整理家裡文件' })
-  const project = details.getByRole('combobox', { name: 'Project' })
-  await expect(project.locator('option:checked')).toHaveText('生活雜事')
+  const project = details.getByRole('button', { name: 'Project', exact: true })
+  await expect(project).toHaveText('生活雜事')
+  expect((await project.boundingBox())?.height).toBe(
+    (await details.getByRole('button', { name: /^任務日期：/ }).boundingBox())
+      ?.height,
+  )
+  await project.press('Space')
+  await expect(details.getByRole('option', { name: '生活雜事' })).toBeFocused()
+  await page.keyboard.press('Escape')
+  await expect(details).toBeVisible()
+  await expect(project).toBeFocused()
   await setTaskDate(details, today!)
   await expect(
     details.getByRole('button', { name: `任務日期：${today}` }),
@@ -68,8 +77,9 @@ test('Project 新增、改名、指派和日期檢視', async ({ page }) => {
   ).toBeVisible()
 
   await open('整理家裡文件').click()
-  await project.selectOption({ label: '網站改版' })
-  await expect(project.locator('option:checked')).toHaveText('網站改版')
+  await project.click()
+  await details.getByRole('option', { name: '網站改版', exact: true }).click()
+  await expect(project).toHaveText('網站改版')
   await details.getByRole('button', { name: '關閉', exact: true }).click()
   await nav.getByRole('button', { name: '網站改版', exact: true }).click()
   await expect(open('整理家裡文件')).toBeVisible()
@@ -107,12 +117,56 @@ test('Project 新增、改名、指派和日期檢視', async ({ page }) => {
   await updatedProject.click()
   await expect(open('整理家裡文件')).toBeVisible()
   await open('整理家裡文件').click()
-  await project.selectOption({ label: '未分類' })
-  await expect(project).toHaveValue('')
+  await project.click()
+  await details.getByRole('option', { name: '未分類', exact: true }).click()
+  await expect(project).toHaveText('未分類')
   await details.getByRole('button', { name: '關閉', exact: true }).click()
   await expect(open('整理家裡文件')).toHaveCount(0)
   await page.getByRole('button', { name: '已完成', exact: true }).click()
   await expect(open('整理家裡文件')).toBeVisible()
+})
+
+test('側欄 Project 可拖曳與鍵盤排序，重載後保留順序', async ({
+  page,
+  request,
+}) => {
+  for (const suffix of ['A', 'B']) {
+    const response = await request.post('/api/projects', {
+      data: { name: `Sort Project ${suffix}` },
+    })
+    await expect(response).toBeOK()
+  }
+  await page.goto('/')
+  const nav = page.getByRole('region', { name: 'Project 導覽' })
+  const names = nav.getByText(/^Sort Project [AB]$/)
+  await expect(names).toHaveText(['Sort Project A', 'Sort Project B'])
+  const source = nav.getByRole('button', { name: '調整順序：Sort Project B' })
+  const destination = nav.getByRole('button', {
+    name: 'Sort Project A',
+    exact: true,
+  })
+  await destination.scrollIntoViewIfNeeded()
+  await source.scrollIntoViewIfNeeded()
+  const from = (await source.boundingBox())!
+  const to = (await destination.boundingBox())!
+  const save = page.waitForResponse('**/api/projects/reorder')
+  const x = from.x + from.width / 2
+  await page.mouse.move(x, from.y + from.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(x, to.y + to.height / 2 - 5, { steps: 15 })
+  await page.mouse.up()
+  expect((await save).ok()).toBeTruthy()
+  await expect(names).toHaveText(['Sort Project B', 'Sort Project A'])
+  await page.reload()
+  await expect(names).toHaveText(['Sort Project B', 'Sort Project A'])
+
+  const keyboardSave = page.waitForResponse('**/api/projects/reorder')
+  await source.focus()
+  await page.keyboard.press('Space')
+  await page.keyboard.press('ArrowDown')
+  await page.keyboard.press('Space')
+  expect((await keyboardSave).ok()).toBeTruthy()
+  await expect(names).toHaveText(['Sort Project A', 'Sort Project B'])
 })
 
 test('Project 工作區可儲存、編輯及清除，任務脈絡會套用設定', async ({

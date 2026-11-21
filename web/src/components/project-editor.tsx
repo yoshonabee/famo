@@ -51,10 +51,11 @@ export function ProjectEditor({
         : request<Project>('/projects', input),
     onSuccess: async (saved) => {
       await client.cancelQueries({ queryKey: ['projects'] })
-      client.setQueryData<Project[]>(['projects'], (old = []) => [
-        ...old.filter((item) => item.id !== saved.id),
-        saved,
-      ])
+      client.setQueryData<Project[]>(['projects'], (old = []) =>
+        old.some((item) => item.id === saved.id)
+          ? old.map((item) => (item.id === saved.id ? saved : item))
+          : [...old, saved],
+      )
       void client.invalidateQueries({ queryKey: ['projects'] })
       onSaved(saved)
     },

@@ -37,10 +37,16 @@ const errors = new Map([
   ['找不到 Project', 'Project not found'],
   ['找不到指定的 Project', 'The selected Project was not found'],
   ['Project 已被更新', 'The Project has changed'],
+  ['排序至少需要兩個 Project', 'Select at least two Projects to reorder'],
+  [
+    'Project 列表已變更，請重新讀取後再排序',
+    'The Project list has changed. Reload it and try again',
+  ],
   [
     'Board 名稱須為 1 到 80 個字元，且不可換行',
     'Board names must be 1–80 characters and fit on one line',
   ],
+  ['請選擇支援的 Board 圖示', 'Choose a supported Board icon'],
   ['Project ID 不可空白或重複', 'Project IDs must be unique and nonempty'],
   ['已有同名的 Board', 'A Board with that name already exists'],
   ['找不到 Board', 'Board not found'],

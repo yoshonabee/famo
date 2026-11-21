@@ -7,7 +7,7 @@
 ## 每日操作
 
 - 預設開啟瀏覽器當地的「今日」。側欄的主要導覽包含今日、任務列表、完成紀錄和各個 Board，可拖曳列左側把手調整順序。使用鍵盤時，聚焦把手後用空白鍵開始排序、方向鍵移動，再按空白鍵放下。
-- 新增統一使用清單上方的一行輸入，支援 `- [ ] 任務`，Enter 後接著輸入下一件事。中文選字不誤送出，儲存失敗的列保留內容並可重試。
+- 可在清單上方或快速新增浮窗輸入任務，支援 `- [ ] 任務`，Enter 後接著輸入下一件事。中文選字不誤送出，儲存失敗的列保留內容並可重試。
 - 今日／日期頁新增時，任務使用正在查看的日期；跨日期的任務列表新增時，任務不指定日期。
 - 點列表文字直接修改標題，Enter 或離開欄位儲存，Escape 取消。清空後再按一次 Backspace 才刪除該列；刪除採軟刪除。
 - 側欄底部的「最近刪除」位於「設定」上方，按刪除時間顯示最近 7 天的任務，可搜尋並還原。還原會保留原日期、完成狀態和排序位置。7 天後會從此檢視移除，軟刪除紀錄會留在 SQLite 直到手動清理。
@@ -24,27 +24,29 @@
 | ⌘K | 返回本機今日。隱藏預設「今日」後，會回到目前或排序最前的 Board 的今日日期 |
 | ⌘F | 開啟搜尋浮窗，即時篩選目前清單，按 Enter 返回清單 |
 
-浮窗會在視窗中央開啟，按 Escape 或點擊浮窗外可關閉。快速新增浮窗預設使用目前日期頁的日期，從其他頁面開啟時預設今天，點擊浮窗中的日期即可改選。從設定頁啟動搜尋會先返回今日。
+浮窗會在視窗中央開啟，按 Escape 或點擊浮窗外可關閉。快速新增浮窗預設使用目前日期頁的日期，從其他頁面開啟時預設今天。可用浮窗中的日期與 Project 選單調整任務的日期和分類。從設定頁啟動搜尋會先返回今日。
 
 任務每 30 秒及視窗重新聚焦時同步。
 
 ## Projects
 
-從側欄的「Projects」按 + 建立分類，點選名稱即可查看該 Project 的待辦及已完成任務。點選側欄中 Project 右側的編輯按鈕，可修改名稱和顏色，或確認後永久刪除該 Project。任務會保留並改為未分類，包含最近刪除中仍可還原的任務。相關 Board 會移除這個 Project 的篩選。新建時預設從 9 款顏色隨機挑選，可改選色票、使用調色盤或輸入 `#RRGGBB` 色碼。在 Project 頁面的清單或快速新增浮窗建立的任務會直接歸入目前的 Project。
+從側欄的「Projects」按 + 建立分類，點選名稱即可查看該 Project 的待辦及已完成任務。點選側欄中 Project 右側的編輯按鈕，可修改名稱和顏色，或確認後永久刪除該 Project。任務會保留並改為未分類，包含最近刪除中仍可還原的任務。相關 Board 會移除這個 Project 的篩選。新建時預設從 9 款顏色隨機挑選，可改選色票、使用調色盤或輸入 `#RRGGBB` 色碼。在 Project 頁面新增時，任務預設歸入目前的 Project，也可在快速新增浮窗改選分類。
 
-在任務詳情的「Project」欄位可指派或變更分類，選擇「未分類」可清除歸屬。任務可同時有日期與 Project。「今日」和其他日期會一起顯示當天各 Project 的任務，原有「任務」與「已完成」仍跨 Project 檢視。
+拖曳側欄 Project 左側的把手可調整順序。也可用鍵盤聚焦把手，按空白鍵開始排序、用方向鍵移動，再按空白鍵放下。手動順序儲存在 SQLite，之後建立的 Project 會排在最後。
 
-在任務、已完成、Project、日期或 Board 清單，可從任務列向上或向下拖曳來選取一段任務。按住 Shift 點選可選取範圍，按住 ⌘（其他平台用 Ctrl）點選或在觸控裝置上長按，可增減個別任務。鍵盤聚焦任務列時，按空白鍵可切換選取，Shift 搭配方向鍵可延伸範圍。選取後可在下方浮動操作列全選目前清單、指派 Project 或清除選取。選擇「未分類」可批次清除歸屬。批次指派會一併檢查每件任務的版本，有衝突時會更新清單並保留仍可見的選取項目供重試。
+在任務詳情開啟「Project」選單可指派或變更分類，選擇「未分類」可清除歸屬。任務可同時有日期與 Project。「今日」和其他日期會一起顯示當天各 Project 的任務，原有「任務」與「已完成」仍跨 Project 檢視。
+
+在任務、已完成、Project、日期或 Board 清單，可從任務列向上或向下拖曳來選取一段任務。按住 Shift 點選可選取範圍，按住 ⌘（其他平台用 Ctrl）點選或在觸控裝置上長按，可增減個別任務。鍵盤聚焦任務列時，按空白鍵可切換選取，Shift 搭配方向鍵可延伸範圍。選取後可在下方浮動操作列全選目前清單、指派 Project 或清除選取。點擊清單旁的空白處或按 Escape 也可清除選取。選擇「未分類」可批次清除歸屬。批次指派會一併檢查每件任務的版本，有衝突時會更新清單並保留仍可見的選取項目供重試。
 
 「今日」上方的「篩選 Project」可複選要顯示的分類與未分類任務。今日進度、已完成、先前未完成與未指定日期區段都會套用篩選。選擇會記在目前的瀏覽器或桌面 WebView，按「顯示全部」即可重設。
 
 ## Boards
 
-在側欄的主要導覽按「新增 Board」，輸入名稱並選取要顯示的 Projects。Board 與「今日」共用日期導覽，可用前後一天、日期選單和「今日」按鈕選擇要查看的日期。切換 Board 時會保留目前選取的日期。當日任務、完成進度、先前未完成和今日的未指定日期區段都會套用此 Board 的 Project 篩選。點選側欄中 Board 右側的編輯按鈕，可修改名稱與篩選，或確認後永久刪除 Board。刪除後任務和 Projects 會保留。Board 設定儲存在本機 SQLite。零個 Project 的 Board 會顯示空清單。
+在側欄的主要導覽按「新增 Board」，輸入名稱並選取要顯示的 Projects。點一下名稱左側的圖示即可開啟圖示選單。也可在 Board 頁面直接點標題左側的圖示，選取後立即儲存。預設使用格狀圖示，側欄及 macOS 選單列浮動面板都會顯示所選圖示。Board 與「今日」共用日期導覽，可用前後一天、日期選單和「今日」按鈕選擇要查看的日期。切換 Board 時會保留目前選取的日期。當日任務、完成進度、先前未完成和今日的未指定日期區段都會套用此 Board 的 Project 篩選。點選側欄中 Board 右側的編輯按鈕，可修改名稱、圖示與篩選，或確認後永久刪除 Board。刪除後任務和 Projects 會保留。Board 設定儲存在本機 SQLite。零個 Project 的 Board 會顯示空清單。
 
-只選取一個 Project 的 Board 可直接在選取的日期快速新增任務，任務會歸入該 Project。要替多 Project 的 Board 新增任務，可從對應的 Project 開啟快速新增浮窗。
+只選取一個 Project 的 Board 可直接在清單上方新增任務，任務會歸入該 Project 和目前日期。顯示多個 Project 的 Board 可按「新增任務」或 ⌘T 開啟快速新增浮窗，選擇該 Board 中的 Project 後送出。
 
-在「設定」的「側邊欄」可關掉「顯示預設的『今日』分頁」。隱藏後，開啟 Famo 時會進入排序最前的 Board，沒有 Board 時會進入任務列表。主要導覽的順序與分頁顯示偏好會記在目前的瀏覽器或桌面 WebView。
+在「設定 → 一般」的「側邊欄」可關掉「顯示預設的『今日』分頁」。隱藏後，開啟 Famo 時會進入排序最前的 Board，沒有 Board 時會進入任務列表。主要導覽的順序與分頁顯示偏好會記在目前的瀏覽器或桌面 WebView。
 
 使用滑鼠時，將游標移到側欄的 Board 或 Project 列即可顯示右側的編輯按鈕。用鍵盤聚焦按鈕時也會顯示，觸控裝置可直接點選。
 
@@ -58,9 +60,11 @@
 
 ## 外觀與偏好設定
 
-從側欄底部開啟「設定」，可切換「外觀」、「語言」、「側邊欄」、「本機 Agent」與「本機資料」。切換分類會保留尚未儲存的主題和 Agent 工作區草稿。
+從側欄底部開啟「設定」，分類依序為「一般」、「外觀」與「Agents」。「一般」包含「語言」、「側邊欄」與「本機資料」。切換分類會保留尚未儲存的主題和 Agent 工作區草稿。
 
-在「設定 → 語言」可在繁體中文（預設）與 English 之間切換。語言會立即套用到主視窗、選單列面板和 Famo 的 macOS 選單項目，並記在目前的瀏覽器或桌面版。你輸入的任務名稱、備註、Project、Board 和自訂主題名稱會保留原文。
+在「設定 → 一般」的「語言」裡，可在繁體中文（預設）與 English 之間切換。語言會立即套用到主視窗、選單列面板和 Famo 的 macOS 選單項目，並記在目前的瀏覽器或桌面版。你輸入的任務名稱、備註、Project、Board 和自訂主題名稱會保留原文。
+
+拖曳側欄右邊界可調整寬度，也可聚焦邊界後按左右方向鍵。寬度會記在目前的瀏覽器或桌面版。「今日」與「任務」預設在側欄上方。「設定 → 一般」的「側邊欄」可隱藏「今日」，也可將「任務」或「已完成」移到側欄底部的「最近刪除」上方。
 
 在「外觀」可預覽並選擇 12 款內建主題：淺色的苔綠（預設）、亞麻、海鹽、薰衣草、玫瑰、沙丘，以及深色的午夜、石墨、夜森、極光、暮紫、摩卡。「跟隨系統」會隨系統外觀即時切換苔綠與午夜。macOS 桌面版也可使用 Famo 選單中的「偏好設定⋯」或 ⌘, 開啟設定頁。
 
@@ -72,7 +76,7 @@
 
 ## 清理已刪除的任務
 
-在「設定 → 本機資料」按「清理資料」，確認後會從本機 SQLite 永久移除刪除滿 7 天的任務及其排序資料。完成後會顯示清理筆數，已清理的任務無法在 Famo 中還原。
+在「設定 → 一般」的「本機資料」裡按「清理資料」，確認後會從本機 SQLite 永久移除刪除滿 7 天的任務及其排序資料。完成後會顯示清理筆數，已清理的任務無法在 Famo 中還原。
 
 ## 日期與跨日整理
 
@@ -153,7 +157,7 @@ open bin/Famo.app --args -db /absolute/path/to/existing/famo.db
 
 Agent 應先讀取這個檔案，再呼叫 `url` 下的 `/health`，確認狀態為 `ok`，且回應的 `X-Famo-Instance-ID` header 與檔案的 `instance_id` 相同，然後使用相同的 `/api/tasks` 等路徑。這個識別碼用於核對執行個體，不是存取憑證。App 每次啟動都會重新分配 port 並更新檔案；連線失敗或識別碼不符時，應重新讀取檔案，避免使用異常結束前留下的位址。正常結束會清除所屬位址檔案、關閉資料庫並釋放埠。
 
-「設定 → 本機 Agent」可即時開啟或停用桌面版的 Agent API，選擇會儲存在 SQLite。停用時會清除該執行個體的位址檔案，桌面介面可繼續使用。`-addr 127.0.0.1:8789` 可指定固定 port，`-addr ''` 會在本次啟動時停用 API。未指定 `-addr` 時採用儲存的偏好。`-api-info /absolute/path/agent-api.json` 可為隔離測試指定其他位址檔案，`-db` 不會改變預設位址檔案的位置。
+「設定 → Agents」可即時開啟或停用桌面版的 Agent API，選擇會儲存在 SQLite。停用時會清除該執行個體的位址檔案，桌面介面可繼續使用。`-addr 127.0.0.1:8789` 可指定固定 port，`-addr ''` 會在本次啟動時停用 API。未指定 `-addr` 時採用儲存的偏好。`-api-info /absolute/path/agent-api.json` 可為隔離測試指定其他位址檔案，`-db` 不會改變預設位址檔案的位置。
 
 目前產物使用本機 ad-hoc 簽章，供本機建置與試用；Developer ID 簽署、公證與自動更新尚未提供。原始碼已保留其他平台可共用的核心，這一版僅支援及驗證 macOS 桌面打包。
 
@@ -213,13 +217,14 @@ npm run format:check
 | --- | --- |
 | `GET /health` | 健康檢查 |
 | `GET /agent/workspace` | 預設工作區路徑 `dir` 和選填指引 `prompt` |
-| `GET /projects` | 所有 Project，包含 `id`、`name`、`color`、`workspace_dir`、`workspace_prompt` 與 `version` |
+| `GET /projects` | 依側欄順序回傳所有 Project，包含 `id`、`name`、`color`、`workspace_dir`、`workspace_prompt` 與 `version` |
 | `POST /projects` | 以 `{"name":"工作"}` 建立 Project。可選填 `#RRGGBB` 格式的 `color`，省略則隨機指定。工作區欄位可選填 |
+| `POST /projects/reorder` | 以 `{"project_ids":["id-1","id-2"]}` 儲存完整的 Project 順序，回傳 `{"ok":true}`。列表已變更時回傳 `409`，排序不影響 Project 版本 |
 | `POST /projects/{id}` | 帶目前的 `version` 和 `name` 更新 Project。省略 `color` 或工作區欄位時保留原值，工作區欄位傳空字串可清除 |
 | `POST /projects/{id}/delete` | 以 `{"version":1}` 刪除 Project。任務保留並改為未分類，相關 Board 會移除此 Project 的篩選 |
-| `GET /boards` | 所有 Board，包含 `id`、`name`、`project_ids` 與 `version` |
-| `POST /boards` | 以 `{"name":"工作 Board","project_ids":["project-id"]}` 建立 Board。空陣列表示顯示零個 Project |
-| `POST /boards/{id}` | 以 `{"name":"新名稱","project_ids":["project-id"],"version":1}` 更新 Board 名稱及整組 Project 篩選 |
+| `GET /boards` | 所有 Board，包含 `id`、`name`、`icon`、`project_ids` 與 `version` |
+| `POST /boards` | 以 `{"name":"工作 Board","icon":"briefcase","project_ids":["project-id"]}` 建立 Board。省略 `icon` 時使用 `layout-grid`，空陣列表示顯示零個 Project |
+| `POST /boards/{id}` | 以 `{"name":"新名稱","icon":"layout-grid","project_ids":["project-id"],"version":1}` 更新 Board 名稱、圖示及整組 Project 篩選。省略 `icon` 時保留目前圖示 |
 | `POST /boards/{id}/delete` | 以 `{"version":1}` 刪除 Board，保留其 Projects 與任務 |
 | `GET /tasks` | 全部未刪除任務，含已完成任務 |
 | `POST /tasks` | 建立任務 |
@@ -230,6 +235,8 @@ npm run format:check
 | `GET /tasks/{id}/context` | 完整任務及適用的 `workspace` 物件，含 `dir` 和 `prompt` |
 | `POST /tasks/{id}/actions` | 具版本檢查的任務操作 |
 | `POST /tasks/{id}/restore` | 以 `{"version":3}` 還原最近刪除的任務，回傳完整任務及新版本 |
+
+Board 的 `icon` 可選用 `layout-grid`、`briefcase`、`house`、`code`、`shopping-cart`、`music`、`book-open`、`heart`、`dumbbell`、`target`、`calendar-days` 或 `star`。
 
 建立任務只需標題，可同時指定備註、日期、Project 或連結。
 
@@ -279,7 +286,7 @@ curl http://127.0.0.1:8787/tasks/TASK_ID/actions \
 
 ## Agent CLI 與 Skill
 
-macOS 桌面版在「設定 → 本機 Agent」可安裝、更新或移除 CLI，並複製 Skill 安裝指令。CLI 安裝到 `~/.local/bin/famo-agent`。若該資料夾未加到 `PATH`，可用完整路徑執行。在同一頁設定本機工作區的絕對路徑，並選擇性填寫指引，例如先查哪份文件或怎麼跑測試。Famo 提供路徑和指引，由本機 Agent 直接讀取工作區檔案。
+macOS 桌面版在「設定 → Agents」可安裝、更新或移除 CLI，並複製 Skill 安裝指令。CLI 安裝到 `~/.local/bin/famo-agent`。若該資料夾未加到 `PATH`，可用完整路徑執行。在同一頁設定本機工作區的絕對路徑，並選擇性填寫指引，例如先查哪份文件或怎麼跑測試。Famo 提供路徑和指引，由本機 Agent 直接讀取工作區檔案。
 
 在側欄開啟個別 Project 的編輯視窗，展開「Agent 工作區」可設定該 Project 的目錄和選填指引。`famo-agent context` 依任務所屬 Project 回傳工作區，即使該 Project 的欄位留空。未分類的任務使用設定頁的預設工作區。`famo-agent today` 列出跨 Project 的今日任務並回傳預設工作區，處理個別任務前請先讀取該任務的脈絡。桌面版請從 App 內編輯 Project 工作區。
 

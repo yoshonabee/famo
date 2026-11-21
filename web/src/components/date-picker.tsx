@@ -3,6 +3,7 @@ import { ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { adjacentDate, formatTaskDate, localDate } from '@/lib/calendar'
 import { useLanguage } from '@/lib/i18n'
+import { usePopupPosition } from '@/lib/popup-position'
 
 type Alignment = 'start' | 'end'
 type View = 'days' | 'months' | 'years'
@@ -36,32 +37,7 @@ function Calendar({
   last.setMonth(last.getMonth() + 1, 0)
   const lastYear = Math.min(firstYear + yearsPerPage - 1, 9999)
 
-  useLayoutEffect(() => {
-    const popup = calendar.current
-    if (!popup || !anchor) return
-    function place() {
-      if (!popup || !anchor) return
-      const bounds = anchor.getBoundingClientRect()
-      const { offsetWidth: width, offsetHeight: height } = popup
-      const below = bounds.bottom + 8
-      const above = bounds.top - height - 8
-      const top =
-        below + height > window.innerHeight - 12 && above >= 12 ? above : below
-      popup.style.top = `${Math.max(12, Math.min(top, window.innerHeight - height - 12))}px`
-      const left = align === 'start' ? bounds.left : bounds.right - width
-      popup.style.left = `${Math.max(12, Math.min(left, window.innerWidth - width - 12))}px`
-    }
-    place()
-    const observer = new ResizeObserver(place)
-    observer.observe(popup)
-    window.addEventListener('resize', place)
-    window.addEventListener('scroll', place, true)
-    return () => {
-      observer.disconnect()
-      window.removeEventListener('resize', place)
-      window.removeEventListener('scroll', place, true)
-    }
-  }, [align, anchor])
+  usePopupPosition(calendar, anchor, align)
 
   useLayoutEffect(() => {
     const selector =
