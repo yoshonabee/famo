@@ -5,7 +5,7 @@ import { TaskSearch } from '@/components/task-palette'
 import { Button } from '@/components/ui/button'
 import { ApiError, dateTime, request, type Task } from '@/lib/api'
 import { useLanguage } from '@/lib/i18n'
-import { formatTaskDate } from '@/lib/calendar'
+import { formatListDate } from '@/lib/calendar'
 
 const queryKey = ['tasks', 'recently-deleted']
 
@@ -107,7 +107,7 @@ export function RecentlyDeletedPage({
                       {task.scheduled_date &&
                         t(
                           'deletedTaskDate',
-                          formatTaskDate(task.scheduled_date, locale),
+                          formatListDate(task.scheduled_date, locale),
                         )}
                       {task.completed_at && t('deletedTaskCompleted')}
                     </div>

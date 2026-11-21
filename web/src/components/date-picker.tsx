@@ -83,6 +83,15 @@ function Calendar({
   return (
     <div
       className="calendar-popover"
+      onMouseDown={(event) => {
+        // WebKit can focus the enclosing task row before a button receives its click.
+        const button =
+          event.target instanceof Element && event.target.closest('button')
+        if (event.button === 0 && button) {
+          event.preventDefault()
+          button.focus({ preventScroll: true })
+        }
+      }}
       ref={calendar}
       id={id}
       role="dialog"
@@ -100,10 +109,7 @@ function Calendar({
                 ? year === 1
                 : firstYear === 1
           }
-          onClick={(event) => {
-            event.currentTarget.focus({ preventScroll: true })
-            navigate(-1)
-          }}
+          onClick={() => navigate(-1)}
         >
           <ChevronLeft />
         </Button>
@@ -133,10 +139,7 @@ function Calendar({
                 ? year === 9999
                 : lastYear === 9999
           }
-          onClick={(event) => {
-            event.currentTarget.focus({ preventScroll: true })
-            navigate(1)
-          }}
+          onClick={() => navigate(1)}
         >
           <ChevronRight />
         </Button>

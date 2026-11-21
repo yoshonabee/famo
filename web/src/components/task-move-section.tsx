@@ -5,7 +5,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { type Task } from '@/lib/api'
 import { useLanguage } from '@/lib/i18n'
 import { useTaskSelection } from '@/lib/task-selection'
-import { formatTaskDate } from '@/lib/calendar'
+import { formatListDate, formatTaskDate, localDate } from '@/lib/calendar'
 
 export function TaskMoveSection({
   kind,
@@ -26,6 +26,7 @@ export function TaskMoveSection({
   const selection = useTaskSelection(kind, busy, 'data-move-task')
   const selected = new Set(selection.ids)
   const chosen = tasks.filter((task) => selected.has(task.id))
+  const today = localDate()
   const earlier = kind === 'earlier'
   const visibleIds = new Set(tasks.map((task) => task.id))
   const groups = new Map<string, Task[]>()
@@ -133,8 +134,14 @@ export function TaskMoveSection({
                 scheduledDate ? (
                   <li className="task-move-date-group" key={scheduledDate}>
                     <h3>
-                      <time dateTime={scheduledDate}>
-                        {formatTaskDate(scheduledDate, locale)}
+                      <time
+                        dateTime={scheduledDate}
+                        title={formatTaskDate(scheduledDate, locale)}
+                        className={
+                          scheduledDate < today ? 'overdue-date' : undefined
+                        }
+                      >
+                        {formatListDate(scheduledDate, locale, today)}
                       </time>
                     </h3>
                     <ul
