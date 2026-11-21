@@ -210,7 +210,7 @@ test('主要導覽可混合排序 Board 和預設分頁，並記住隱藏今日'
   await page.getByRole('button', { name: '設定', exact: true }).click()
   await page
     .getByRole('navigation', { name: '設定分類' })
-    .getByRole('button', { name: 'General', exact: true })
+    .getByRole('button', { name: '一般', exact: true })
     .click()
   const showToday = page.getByRole('checkbox', {
     name: '顯示預設的「今日」分頁',
@@ -227,7 +227,7 @@ test('主要導覽可混合排序 Board 和預設分頁，並記住隱藏今日'
   await page.getByRole('button', { name: '設定', exact: true }).click()
   await page
     .getByRole('navigation', { name: '設定分類' })
-    .getByRole('button', { name: 'General', exact: true })
+    .getByRole('button', { name: '一般', exact: true })
     .click()
   await showToday.check()
   await expect(today).toBeVisible()

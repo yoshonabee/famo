@@ -26,6 +26,7 @@ import {
   Trash2,
 } from 'lucide-react'
 import { BoardEditor } from '@/components/board-editor'
+import { BoardHeading } from '@/components/board-heading'
 import { getBoardIcon } from '@/components/board-icons'
 import { PreferencesPage } from '@/components/preferences-page'
 import {
@@ -712,12 +713,11 @@ function App() {
           {isCalendarView ? (
             <header className="calendar-heading">
               {currentBoard ? (
-                <div className="board-heading">
-                  <h1>{currentBoard.name}</h1>
-                  <p className="board-date">
-                    <CalendarDate date={date} />
-                  </p>
-                </div>
+                <BoardHeading
+                  key={currentBoard.id}
+                  board={currentBoard}
+                  date={date}
+                />
               ) : (
                 <h1>
                   <CalendarDate date={date} />

@@ -1,6 +1,6 @@
 import { useId, useRef, useState, type FormEvent } from 'react'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { boardIcons, defaultBoardIcon } from '@/components/board-icons'
+import { BoardIconPicker } from '@/components/board-icon-picker'
+import { defaultBoardIcon } from '@/components/board-icons'
 import { DeleteCollectionButton } from '@/components/delete-collection-button'
 import { ProjectColorDot } from '@/components/project-appearance'
 import { Button } from '@/components/ui/button'
@@ -10,13 +10,8 @@ import {
   DialogDescription,
   DialogTitle,
 } from '@/components/ui/dialog'
-import {
-  ApiError,
-  request,
-  type Board,
-  type BoardInput,
-  type Project,
-} from '@/lib/api'
+import { ApiError, type Board, type Project } from '@/lib/api'
+import { useSaveBoard } from '@/lib/board-mutations'
 import { useLanguage } from '@/lib/i18n'
 
 export function BoardEditor({
@@ -35,57 +30,42 @@ export function BoardEditor({
   onDeleted: (id: string) => void
 }) {
   const { t, errorText } = useLanguage()
-  const client = useQueryClient()
   const [name, setName] = useState(board?.name ?? '')
   const [icon, setIcon] = useState(board?.icon ?? defaultBoardIcon)
-  const iconGroup = useId()
-  const [version] = useState(board?.version)
+  const nameId = useId()
+  const nameInput = useRef<HTMLInputElement>(null)
+  const [originalBoard] = useState(board)
   const [selected, setSelected] = useState(board?.project_ids ?? [])
   const returnFocus = useRef<HTMLElement | null>(null)
-  const save = useMutation({
-    mutationFn: (input: BoardInput) =>
-      board
-        ? request<Board>(`/boards/${board.id}`, {
-            ...input,
-            version,
-          })
-        : request<Board>('/boards', input),
-    onSuccess: async (saved) => {
-      await client.cancelQueries({ queryKey: ['boards'] })
-      client.setQueryData<Board[]>(['boards'], (previous = []) =>
-        previous.some(({ id }) => id === saved.id)
-          ? previous.map((item) => (item.id === saved.id ? saved : item))
-          : [...previous, saved],
-      )
-      void client.invalidateQueries({ queryKey: ['boards'] })
-      onSaved(saved)
-    },
-    onError: (error) => {
-      if (error instanceof ApiError && error.status === 409)
-        return client.invalidateQueries({ queryKey: ['boards'] })
-    },
-  })
+  const save = useSaveBoard(originalBoard)
   const conflict = save.error instanceof ApiError && save.error.status === 409
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!save.isPending && !conflict && name.trim() && projects)
-      save.mutate({ name, icon, project_ids: selected })
+      save.mutate({ name, icon, project_ids: selected }, { onSuccess: onSaved })
   }
 
   return (
     <DialogContent
-      className="max-w-md"
+      className="board-editor-dialog max-w-md"
       showCloseButton={!save.isPending}
       onEscapeKeyDown={(event) => {
-        if (save.isPending) event.preventDefault()
+        if (
+          save.isPending ||
+          (event.target instanceof Element &&
+            event.target.closest('.board-icon-popup'))
+        )
+          event.preventDefault()
       }}
       onInteractOutside={(event) => {
         if (save.isPending) event.preventDefault()
       }}
-      onOpenAutoFocus={() => {
+      onOpenAutoFocus={(event) => {
         if (document.activeElement instanceof HTMLElement)
           returnFocus.current = document.activeElement
+        event.preventDefault()
+        nameInput.current?.focus({ preventScroll: true })
       }}
       onCloseAutoFocus={(event) => {
         event.preventDefault()
@@ -99,32 +79,24 @@ export function BoardEditor({
         {t('boardEditorDescription')}
       </DialogDescription>
       <form className="grid gap-3" onSubmit={submit}>
-        <label className="field">
-          <span>{t('boardName')}</span>
-          <input
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            readOnly={save.isPending}
-            required
-          />
-        </label>
-        <fieldset className="min-w-0" disabled={save.isPending}>
-          <legend className="mb-2 text-sm">{t('boardIcon')}</legend>
-          <div className="grid grid-cols-6 gap-1.5 sm:grid-cols-12 sm:gap-1">
-            {boardIcons.map(({ value, label, Icon }) => (
-              <label key={value} className="board-icon-option" title={t(label)}>
-                <input
-                  type="radio"
-                  name={iconGroup}
-                  aria-label={t(label)}
-                  checked={icon === value}
-                  onChange={() => setIcon(value)}
-                />
-                <Icon size={17} aria-hidden="true" />
-              </label>
-            ))}
+        <div className="field board-name-field">
+          <label htmlFor={nameId}>{t('boardName')}</label>
+          <div className="board-name-row">
+            <BoardIconPicker
+              value={icon}
+              onChange={setIcon}
+              disabled={save.isPending}
+            />
+            <input
+              ref={nameInput}
+              id={nameId}
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              readOnly={save.isPending}
+              required
+            />
           </div>
-        </fieldset>
+        </div>
         <fieldset className="min-w-0" disabled={save.isPending}>
           <legend className="mb-2 text-sm">{t('displayedProjects')}</legend>
           {projects === undefined ? (

@@ -2,7 +2,7 @@ import { expect, test, type Page } from '@playwright/test'
 
 async function showLanguageSettings(page: Page) {
   await page.getByRole('button', { name: /^(設定|Settings)$/ }).click()
-  await page.getByRole('button', { name: 'General', exact: true }).click()
+  await page.getByRole('button', { name: /^(一般|General)$/ }).click()
   return page.getByRole('combobox', { name: /^(顯示語言|Display language)$/ })
 }
 
@@ -38,6 +38,12 @@ test('switches language immediately across the main and menu bar windows and sav
   await expect(page.locator('html')).toHaveAttribute('lang', 'en')
   await expect(page).toHaveTitle('Famo · Personal task workspace')
   await expect(language).toHaveValue('en')
+  await expect(
+    page.getByRole('button', { name: 'General', exact: true }),
+  ).toBeVisible()
+  await expect(
+    page.getByRole('button', { name: 'Agents', exact: true }),
+  ).toBeVisible()
   await expect(panel).toHaveTitle("Famo · Today's tasks")
   await expect(panel.locator('html')).toHaveAttribute('lang', 'en')
   await expect(
@@ -76,6 +82,12 @@ test('switches language immediately across the main and menu bar windows and sav
   await page.getByRole('button', { name: 'General', exact: true }).click()
   await savedLanguage.selectOption('zh-TW')
   await expect(page.locator('html')).toHaveAttribute('lang', 'zh-TW')
+  await expect(
+    page.getByRole('button', { name: '一般', exact: true }),
+  ).toBeVisible()
+  await expect(
+    page.getByRole('button', { name: 'Agents', exact: true }),
+  ).toBeVisible()
   await expect(panel.getByRole('heading', { name: '今日任務' })).toBeVisible()
   await expect(
     panel.getByRole('checkbox', { name: `完成任務：${taskName}` }),
