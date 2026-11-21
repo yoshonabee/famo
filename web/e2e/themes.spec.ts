@@ -17,6 +17,7 @@ test('設定提供 12 款主題，切換立即生效並在重開後保留', asyn
   await expect(
     page.getByRole('textbox', { name: '快速新增任務名稱' }),
   ).toBeHidden()
+  const dangerColors = new Set<string>()
   const backgrounds = new Set<string>()
   for (const name of [
     '苔綠',
@@ -36,12 +37,20 @@ test('設定提供 12 款主題，切換立即生效並在重開後保留', asyn
     await expect(page.getByRole('main').getByRole('status')).toHaveText(
       `目前主題：${name}`,
     )
+    dangerColors.add(
+      await page
+        .locator('html')
+        .evaluate((el) =>
+          getComputedStyle(el).getPropertyValue('--danger').trim(),
+        ),
+    )
     backgrounds.add(
       await page
         .locator('html')
         .evaluate((el) => getComputedStyle(el).backgroundColor),
     )
   }
+  expect(dangerColors.size).toBe(12)
   expect(backgrounds.size).toBe(12)
   await page.getByRole('radio', { name: '海鹽', exact: true }).check()
   await expect(page.locator('html')).toHaveCSS(

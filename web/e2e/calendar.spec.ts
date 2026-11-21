@@ -698,6 +698,15 @@ test('任務列表用相對日期開啟月曆，可跨年切換月份並重新�
   const trigger = page.getByRole('button', {
     name: '設定日期：跨年計畫 2025-12-31',
   })
+  const overdueDate = trigger.locator('time')
+  await expect(overdueDate).toHaveCSS('font-weight', '700')
+  await expect(overdueDate).toHaveCSS('color', 'rgb(160, 63, 50)')
+  await page.getByRole('button', { name: '設定', exact: true }).click()
+  await page.getByRole('radio', { name: '午夜', exact: true }).check()
+  await page.getByRole('button', { name: '任務列表', exact: true }).click()
+  await page.getByLabel('搜尋任務').fill('跨年計畫')
+  await expect(overdueDate).toHaveCSS('color', 'rgb(255, 156, 174)')
+  await page.screenshot({ path: '/private/tmp/famo-overdue-midnight.png' })
   await trigger.click()
   const calendar = page.getByRole('dialog', { name: '選擇日期' })
   await calendar.getByRole('button', { name: '下一個月' }).click()

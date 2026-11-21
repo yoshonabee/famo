@@ -94,6 +94,7 @@ test('調色盤預覽、新增、重開、編輯及刪除自訂主題', async ({
   await editor.getByLabel('基礎主題', { exact: true }).selectOption('midnight')
   await editor.getByLabel('頁面背景色碼').fill('#182822')
   await editor.getByLabel('強調色調色盤', { exact: true }).fill('#8ee0ba')
+  await editor.getByLabel('危險提示色色碼').fill('#ff8888')
   const preview = editor.locator('.palette-preview')
   await expect(preview).toHaveAttribute('inert', '')
   await expect(preview).toHaveCSS('background-color', 'rgb(24, 40, 34)')
@@ -136,6 +137,7 @@ test('調色盤預覽、新增、重開、編輯及刪除自訂主題', async ({
     'background-color',
     'rgb(24, 40, 34)',
   )
+  await expect(page.locator('html')).toHaveCSS('--danger', '#ff8888')
   await expect(page.locator('html')).toHaveCSS('color-scheme', 'dark')
   const id = await page.locator('html').getAttribute('data-theme')
   await page.reload()
@@ -185,7 +187,7 @@ test('內建與自訂主題可匯出、匯入，重名保留兩份，整包可�
   expect(exported.version).toBe(1)
   expect(exported.themes).toHaveLength(1)
   expect(exported.themes[0].name).toBe('玫瑰')
-  expect(Object.keys(exported.themes[0].colors)).toHaveLength(9)
+  expect(Object.keys(exported.themes[0].colors)).toHaveLength(10)
   await importJSON(page, exported)
   await expect(
     page.getByRole('radio', { name: '玫瑰 (2)', exact: true }),
