@@ -19,3 +19,18 @@ export function formatTaskDate(value: string, locale: Locale) {
       })
     : value
 }
+
+export function formatListDate(
+  value: string,
+  locale: Locale,
+  today = localDate(),
+) {
+  for (const offset of [0, -1, 1]) {
+    if (value === adjacentDate(today, offset))
+      return new Intl.RelativeTimeFormat(locale, { numeric: 'auto' }).format(
+        offset,
+        'day',
+      )
+  }
+  return formatTaskDate(value, locale)
+}

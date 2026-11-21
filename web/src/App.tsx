@@ -54,7 +54,7 @@ import {
 import { DatePicker } from '@/components/date-picker'
 import { CalendarDate, DateNavigation } from '@/components/date-navigation'
 import { CalendarPage } from '@/components/calendar-page'
-import { formatTaskDate, localDate } from '@/lib/calendar'
+import { formatListDate, formatTaskDate, localDate } from '@/lib/calendar'
 import { linkLabel } from '@/lib/links'
 import {
   orderSidebarItems,
@@ -1058,7 +1058,8 @@ function TaskRow({
       : dateKind === 'completed' && task.completed_at
         ? localDate(new Date(task.completed_at))
         : ''
-  const displayDate = formatTaskDate(rowDate, locale)
+  const today = localDate()
+  const overdue = !!rowDate && !completed && rowDate < today
   const title = task.title
   const { ref, handleRef, isDragging } = useSortable({
     id: task.id,
@@ -1106,18 +1107,6 @@ function TaskRow({
         <TodoTitle task={task} title={title} onDeleted={() => {}} />
         <Links task={task} onOpen={onOpen} />
         {project && <ProjectBadge project={project} />}
-        {rowDate && (
-          <time
-            className="task-row-date"
-            dateTime={rowDate}
-            title={t(
-              dateKind === 'completed' ? 'completedAt' : 'taskDateValue',
-              displayDate,
-            )}
-          >
-            {displayDate}
-          </time>
-        )}
         <DatePicker
           date={task.scheduled_date}
           onChange={onSetDate}
@@ -1127,11 +1116,26 @@ function TaskRow({
               ? t('taskDateValue', formatTaskDate(task.scheduled_date, locale))
               : t('setDate')
           }
-          buttonClassName="row-action-button"
+          buttonClassName={
+            rowDate ? 'row-action-button task-row-date' : 'row-action-button'
+          }
           clearable
           disabled={busy}
         >
-          <CalendarDays size={15} />
+          {rowDate ? (
+            <time
+              className={overdue ? 'overdue-date' : undefined}
+              dateTime={rowDate}
+              title={t(
+                dateKind === 'completed' ? 'completedAt' : 'taskDateValue',
+                formatTaskDate(rowDate, locale),
+              )}
+            >
+              {formatListDate(rowDate, locale, today)}
+            </time>
+          ) : (
+            <CalendarDays size={15} />
+          )}
         </DatePicker>
         <button
           className="row-action-button row-detail-button"

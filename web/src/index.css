@@ -716,11 +716,15 @@ pre {
   position: relative;
   background: var(--canvas);
 }
-.task-row-date {
-  color: var(--muted-foreground);
+.row-action-button.task-row-date {
+  width: auto;
+  padding-inline: 4px;
   font-size: 12px;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+}
+.overdue-date {
+  color: var(--danger);
 }
 .task-row:last-child {
   border-bottom-color: transparent;
@@ -2043,7 +2047,7 @@ input.todo-title {
   }
   .todo-line {
     display: grid;
-    grid-template-columns: 18px 18px minmax(0, 1fr) 25px 25px;
+    grid-template-columns: 18px 18px minmax(0, 1fr) auto 25px;
     column-gap: 8px;
     row-gap: 4px;
     padding: 6px 2px;
@@ -2075,9 +2079,6 @@ input.todo-title {
   }
   .todo-line > .link-list + .task-project {
     grid-row: 3;
-  }
-  .todo-line > .task-row-date {
-    grid-column: 3 / -1;
   }
   .todo-line > .date-picker {
     grid-column: 4;

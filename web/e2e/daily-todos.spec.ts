@@ -162,15 +162,15 @@ test('任務與 Project 列出安排日期，已完成列出當地完成日期�
   await expect(row).toBeVisible()
   await expect(date).toHaveCount(0)
   await nav.getByRole('button', { name: '任務列表', exact: true }).click()
-  await expect(date).toHaveText(scheduledDate)
+  await expect(date).toHaveText('今天')
   await page
     .getByRole('region', { name: 'Project 導覽' })
     .getByRole('button', { name: project.name, exact: true })
     .click()
-  await expect(date).toHaveText(scheduledDate)
+  await expect(date).toHaveText('今天')
   await row.getByRole('checkbox').click()
   await expect(row.getByRole('checkbox')).toBeChecked()
-  await expect(date).toHaveText(scheduledDate)
+  await expect(date).toHaveText('今天')
   const saved = await (await request.get(`/api/tasks/${task.id}`)).json()
   const completedDate = new Date(saved.completed_at).toLocaleDateString(
     'sv-SE',
