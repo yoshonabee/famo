@@ -16,6 +16,7 @@ export const themeColorFields = [
   { key: 'muted-foreground', label: 'mutedForegroundColor' },
   { key: 'border', label: 'borderColor' },
   { key: 'accent', label: 'selectionColor' },
+  { key: 'danger', label: 'dangerColor' },
 ] as const
 
 export type ThemeColors = Record<
@@ -47,6 +48,7 @@ const builtinThemes = [
       'muted-foreground': '#69735f',
       border: '#d6ddce',
       accent: '#e7ecdf',
+      danger: '#a03f32',
     },
   },
   {
@@ -64,6 +66,7 @@ const builtinThemes = [
       'muted-foreground': '#7b6b59',
       border: '#e0d5c6',
       accent: '#ede1d1',
+      danger: '#964322',
     },
   },
   {
@@ -81,6 +84,7 @@ const builtinThemes = [
       'muted-foreground': '#5c7388',
       border: '#ccdae6',
       accent: '#dcebf6',
+      danger: '#a13648',
     },
   },
   {
@@ -98,6 +102,7 @@ const builtinThemes = [
       'muted-foreground': '#796587',
       border: '#ddcee8',
       accent: '#eaddf3',
+      danger: '#973264',
     },
   },
   {
@@ -115,6 +120,7 @@ const builtinThemes = [
       'muted-foreground': '#8b626f',
       border: '#e9cfd6',
       accent: '#f4dfe5',
+      danger: '#9b2446',
     },
   },
   {
@@ -132,6 +138,7 @@ const builtinThemes = [
       'muted-foreground': '#7b6d50',
       border: '#e3d6b9',
       accent: '#f0e3c7',
+      danger: '#914116',
     },
   },
   {
@@ -149,6 +156,7 @@ const builtinThemes = [
       'muted-foreground': '#a0afc5',
       border: '#39485d',
       accent: '#2a3b55',
+      danger: '#ff9cae',
     },
   },
   {
@@ -166,6 +174,7 @@ const builtinThemes = [
       'muted-foreground': '#aaabb4',
       border: '#46474f',
       accent: '#383a43',
+      danger: '#ffaaa0',
     },
   },
   {
@@ -183,6 +192,7 @@ const builtinThemes = [
       'muted-foreground': '#a0b5a6',
       border: '#3a5143',
       accent: '#2c4435',
+      danger: '#ffad90',
     },
   },
   {
@@ -200,6 +210,7 @@ const builtinThemes = [
       'muted-foreground': '#b0bdce',
       border: '#536175',
       accent: '#405566',
+      danger: '#ffb1bd',
     },
   },
   {
@@ -217,6 +228,7 @@ const builtinThemes = [
       'muted-foreground': '#b9a5ca',
       border: '#564365',
       accent: '#483455',
+      danger: '#f9a1c6',
     },
   },
   {
@@ -234,6 +246,7 @@ const builtinThemes = [
       'muted-foreground': '#bda998',
       border: '#58483b',
       accent: '#4b392b',
+      danger: '#ffad85',
     },
   },
 ] as const
@@ -288,7 +301,12 @@ function parseDefinition(value: unknown): ThemeDraft {
     throw new LocalizedError((t) => t('missingThemeColors'))
   const colors = {} as ThemeColors
   for (const { key, label } of themeColorFields) {
-    const color = source[key]
+    // Version 1 palettes saved before danger was editable lack this field.
+    const color =
+      key === 'danger' && source.danger === undefined
+        ? builtinThemes.find((theme) => theme.mode === value.mode)!.colors
+            .danger
+        : source[key]
     if (typeof color !== 'string' || !/^#[0-9a-f]{6}$/i.test(color))
       throw new LocalizedError((t) => t('invalidThemeColor', t(label)))
     colors[key] = color.toLowerCase()

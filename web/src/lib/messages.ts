@@ -444,6 +444,7 @@ export const messages = {
   ],
   selectAllUndated: ['全選未指定日期任務', 'Select all undated tasks'],
   selectAllVisible: ['全選可見任務', 'Select all visible tasks'],
+  dangerColor: ['危險提示色', 'Danger color'],
   selectionColor: ['選取背景', 'Selection background'],
   selectTask: ['選取任務：{1}', 'Select task: {1}'],
   selectedTask: ['已選取任務：{1}', 'Selected task: {1}'],

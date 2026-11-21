@@ -267,7 +267,7 @@
     var(--background)
   );
   --warning-border: color-mix(in srgb, var(--warning) 40%, var(--border));
-  --danger: color-mix(in srgb, #c55776 65%, var(--foreground));
+  --danger: #a03f32;
   --danger-background: color-mix(in srgb, var(--danger) 10%, var(--background));
   --shadow: #0002;
   font-family:
@@ -724,6 +724,7 @@ pre {
   white-space: nowrap;
 }
 .overdue-date {
+  font-weight: 500;
   color: var(--danger);
 }
 .task-row:last-child {
