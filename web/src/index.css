@@ -724,7 +724,7 @@ pre {
   white-space: nowrap;
 }
 .overdue-date {
-  font-weight: 700;
+  font-weight: 500;
   color: var(--danger);
 }
 .task-row:last-child {

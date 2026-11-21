@@ -699,7 +699,7 @@ test('任務列表用相對日期開啟月曆，可跨年切換月份並重新�
     name: '設定日期：跨年計畫 2025-12-31',
   })
   const overdueDate = trigger.locator('time')
-  await expect(overdueDate).toHaveCSS('font-weight', '700')
+  await expect(overdueDate).toHaveCSS('font-weight', '500')
   await expect(overdueDate).toHaveCSS('color', 'rgb(160, 63, 50)')
   await page.getByRole('button', { name: '設定', exact: true }).click()
   await page.getByRole('radio', { name: '午夜', exact: true }).check()
