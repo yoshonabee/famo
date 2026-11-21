@@ -49,13 +49,13 @@ func TestBoardRoutes(t *testing.T) {
 	if err := json.Unmarshal(body, &first); err != nil {
 		t.Fatal(err)
 	}
-	if first.ID == "" || !reflect.DeepEqual(first.ProjectIDs, []string{project.ID}) {
+	if first.ID == "" || first.Icon != "layout-grid" || !reflect.DeepEqual(first.ProjectIDs, []string{project.ID}) {
 		t.Fatalf("invalid Board response: %s", body)
 	}
 
-	update := fmt.Sprintf(`{"name":"New Work","project_ids":[],"version":%d}`, first.Version)
+	update := fmt.Sprintf(`{"name":"New Work","icon":"briefcase","project_ids":[],"version":%d}`, first.Version)
 	body = call(http.MethodPost, path+"/"+first.ID, update, http.StatusOK)
-	want := tasks.Board{ID: first.ID, Name: "New Work", ProjectIDs: []string{}, Version: first.Version + 1}
+	want := tasks.Board{ID: first.ID, Name: "New Work", Icon: "briefcase", ProjectIDs: []string{}, Version: first.Version + 1}
 	var updated tasks.Board
 	if err := json.Unmarshal(body, &updated); err != nil || !reflect.DeepEqual(updated, want) {
 		t.Fatalf("invalid updated Board response: %s, %v", body, err)
@@ -63,6 +63,12 @@ func TestBoardRoutes(t *testing.T) {
 	call(http.MethodPost, path+"/"+first.ID, update, http.StatusConflict)
 	call(http.MethodPost, path+"/missing", update, http.StatusNotFound)
 	call(http.MethodPost, path, `{"name":"Missing Project","project_ids":["missing"]}`, http.StatusBadRequest)
+	call(http.MethodPost, path, `{"name":"Invalid Icon","icon":"unsupported"}`, http.StatusBadRequest)
+
+	legacyUpdate := fmt.Sprintf(`{"name":"Legacy rename","project_ids":[],"version":%d}`, want.Version)
+	call(http.MethodPost, path+"/"+first.ID, legacyUpdate, http.StatusOK)
+	want.Name = "Legacy rename"
+	want.Version++
 
 	body = call(http.MethodGet, path, "", http.StatusOK)
 	var list []tasks.Board

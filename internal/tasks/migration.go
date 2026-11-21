@@ -42,10 +42,13 @@ CREATE TRIGGER IF NOT EXISTS tasks_order_insert AFTER INSERT ON tasks BEGIN
 END;
 `
 
+const boardIconColumn = "icon TEXT NOT NULL DEFAULT '" + defaultBoardIcon + "'"
+
 const boardSchema = `
 CREATE TABLE IF NOT EXISTS boards (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL COLLATE NOCASE UNIQUE,
+    ` + boardIconColumn + `,
     version INTEGER NOT NULL
 );
 CREATE TABLE IF NOT EXISTS board_projects (
@@ -104,7 +107,17 @@ func migrateSchema(ctx context.Context, tx *sql.Tx) error {
 		return err
 	}
 	// Boards are additive and leave the v7 task and Project schema readable by older builds.
-	_, err := tx.ExecContext(ctx, boardSchema)
+	if _, err := tx.ExecContext(ctx, boardSchema); err != nil {
+		return err
+	}
+	var hasIcon bool
+	if err := tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM pragma_table_info('boards') WHERE name='icon')`).Scan(&hasIcon); err != nil {
+		return err
+	}
+	if hasIcon {
+		return nil
+	}
+	_, err := tx.ExecContext(ctx, "ALTER TABLE boards ADD COLUMN "+boardIconColumn)
 	return err
 }
 
@@ -163,7 +176,8 @@ CREATE TABLE projects (
     color TEXT NOT NULL DEFAULT '`+defaultProjectColor+`',
     workspace_dir TEXT NOT NULL DEFAULT '',
     workspace_prompt TEXT NOT NULL DEFAULT '',
-    version INTEGER NOT NULL
+    version INTEGER NOT NULL,
+    position INTEGER
 );
 `+fmt.Sprintf("PRAGMA user_version=%d;", schemaVersion))
 	return err
@@ -171,17 +185,18 @@ CREATE TABLE projects (
 
 // Earlier v7 builds use explicit Project columns, so additive columns keep their writes compatible.
 func ensureProjectColumns(ctx context.Context, tx *sql.Tx) error {
-	for _, column := range []struct{ name, defaultValue string }{
-		{"color", defaultProjectColor},
-		{"workspace_dir", ""},
-		{"workspace_prompt", ""},
+	for _, column := range []struct{ name, declaration string }{
+		{"color", "TEXT NOT NULL DEFAULT '" + defaultProjectColor + "'"},
+		{"workspace_dir", "TEXT NOT NULL DEFAULT ''"},
+		{"workspace_prompt", "TEXT NOT NULL DEFAULT ''"},
+		{"position", "INTEGER"},
 	} {
 		var exists bool
 		if err := tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM pragma_table_info('projects') WHERE name=?)`, column.name).Scan(&exists); err != nil {
 			return err
 		}
 		if !exists {
-			if _, err := tx.ExecContext(ctx, "ALTER TABLE projects ADD COLUMN "+column.name+" TEXT NOT NULL DEFAULT '"+column.defaultValue+"'"); err != nil {
+			if _, err := tx.ExecContext(ctx, "ALTER TABLE projects ADD COLUMN "+column.name+" "+column.declaration); err != nil {
 				return err
 			}
 		}

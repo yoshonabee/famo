@@ -1,5 +1,6 @@
 import { useId, useLayoutEffect, useRef, useState } from 'react'
 import { Check, ChevronDown } from 'lucide-react'
+import { getBoardIcon } from '@/components/board-icons'
 import type { Board } from '@/lib/api'
 import { useLanguage } from '@/lib/i18n'
 
@@ -22,7 +23,10 @@ export function MenuBarBoardPicker({
   const menuId = useId()
   const selectedId = board?.id ?? ''
   const name = board?.name ?? t('today')
-  const choices = showToday ? [{ id: '', name: t('today') }, ...boards] : boards
+  const BoardIcon = board && getBoardIcon(board.icon)
+  const choices = showToday
+    ? [{ id: '', name: t('today'), icon: '' }, ...boards]
+    : boards
 
   useLayoutEffect(() => {
     if (!open) return
@@ -65,9 +69,17 @@ export function MenuBarBoardPicker({
           }
         }}
       >
-        <span className="brand-mark" aria-hidden="true" />
+        {BoardIcon ? (
+          <BoardIcon size={20} aria-hidden="true" />
+        ) : (
+          <span className="brand-mark" aria-hidden="true" />
+        )}
         <span className="menu-bar-board-name">{name}</span>
-        <ChevronDown size={15} aria-hidden="true" />
+        <ChevronDown
+          className="menu-bar-board-chevron"
+          size={15}
+          aria-hidden="true"
+        />
       </button>
       {open && (
         <div
@@ -103,22 +115,32 @@ export function MenuBarBoardPicker({
             }
           }}
         >
-          {choices.map(({ id, name }) => (
-            <button
-              key={id}
-              type="button"
-              role="menuitemradio"
-              aria-checked={selectedId === id}
-              tabIndex={-1}
-              onClick={() => {
-                onChange(id)
-                close()
-              }}
-            >
-              <span>{name}</span>
-              {selectedId === id && <Check size={15} aria-hidden="true" />}
-            </button>
-          ))}
+          {choices.map(({ id, name, icon }) => {
+            const Icon = getBoardIcon(icon)
+            return (
+              <button
+                key={id}
+                type="button"
+                role="menuitemradio"
+                aria-checked={selectedId === id}
+                tabIndex={-1}
+                onClick={() => {
+                  onChange(id)
+                  close()
+                }}
+              >
+                <span className="menu-bar-board-option-label">
+                  {id ? (
+                    <Icon size={16} aria-hidden="true" />
+                  ) : (
+                    <span className="brand-mark" aria-hidden="true" />
+                  )}
+                  <span>{name}</span>
+                </span>
+                {selectedId === id && <Check size={15} aria-hidden="true" />}
+              </button>
+            )
+          })}
         </div>
       )}
     </div>

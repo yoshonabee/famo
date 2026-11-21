@@ -3,6 +3,7 @@ import {
   useEffectEvent,
   useRef,
   useState,
+  type CSSProperties,
   type FormEvent,
 } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -16,7 +17,6 @@ import {
   ExternalLink,
   GripVertical,
   Inbox,
-  LayoutGrid,
   LoaderCircle,
   PanelLeftClose,
   PanelLeftOpen,
@@ -26,15 +26,19 @@ import {
   Trash2,
 } from 'lucide-react'
 import { BoardEditor } from '@/components/board-editor'
+import { getBoardIcon } from '@/components/board-icons'
 import { PreferencesPage } from '@/components/preferences-page'
 import {
+  NavigationButton,
   PrimaryNavigation,
   type PrimaryNavItem,
 } from '@/components/primary-navigation'
 import { ProjectBadge } from '@/components/project-appearance'
 import { ProjectEditor } from '@/components/project-editor'
+import { ProjectPicker } from '@/components/project-picker'
 import { RecentlyDeletedPage } from '@/components/recently-deleted-page'
 import { ProjectNavigation } from '@/components/sidebar-collection'
+import { SidebarResizeHandle } from '@/components/sidebar-resize-handle'
 import {
   TodayProjectFilter,
   useTodayProjectFilter,
@@ -136,7 +140,7 @@ function Links({ task, onOpen }: { task: Task; onOpen: () => void }) {
   )
 }
 function App() {
-  const { t, errorText } = useLanguage()
+  const { t, errorText, locale } = useLanguage()
   const client = useQueryClient()
   const theme = useTheme()
   const [dragging, setDragging] = useState(false)
@@ -170,7 +174,9 @@ function App() {
   })
   const boardList = boards.data ?? []
   const sidebar = useSidebarPreferences()
-  const { showToday, order } = sidebar.preferences
+  const { showToday, order, footerItems, width } = sidebar.preferences
+  const [resizingWidth, setResizingWidth] = useState<number | null>(null)
+  const sidebarWidth = resizingWidth ?? width ?? (locale === 'en' ? 192 : 168)
   const boardsByNavId = new Map(
     boardList.map((board) => [`board:${board.id}`, board]),
   )
@@ -225,14 +231,25 @@ function App() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [palette, setPalette] = useState<'capture' | 'search' | null>(null)
   const [paletteCaptureDate, setPaletteCaptureDate] = useState('')
-  const captureProjectId =
+  const [paletteCaptureProjectId, setPaletteCaptureProjectId] = useState('')
+  const captureProjects = boardProjectIds
+    ? projectList.filter((project) => boardProjectIds.has(project.id))
+    : projectList
+  const selectedCaptureProjectId = captureProjects.some(
+    (project) => project.id === paletteCaptureProjectId,
+  )
+    ? paletteCaptureProjectId
+    : ''
+  const requireCaptureProject = !!boardProjectIds?.size
+  const multiProjectBoard = (boardProjectIds?.size ?? 0) > 1
+  const defaultCaptureProjectId =
     currentBoard?.project_ids.length === 1
       ? currentBoard.project_ids[0]
       : currentProjectId
   const capture = useQuickCapture(
     () => setSearch(''),
     isCalendarView ? date : '',
-    captureProjectId,
+    defaultCaptureProjectId,
   )
   const visibleDrafts = capture.drafts.filter((draft) => {
     if (boardProjectIds)
@@ -245,6 +262,15 @@ function App() {
     return true
   })
   const [selected, setSelected] = useState<string | null>(null)
+  function openCapture() {
+    if (currentBoard && !requireCaptureProject)
+      setView(showToday ? 'date' : 'active')
+    if (palette !== 'capture') {
+      setPaletteCaptureDate(isCalendarView ? date : today)
+      setPaletteCaptureProjectId(defaultCaptureProjectId ?? '')
+    }
+    setPalette('capture')
+  }
   function goToBoard(id: string) {
     setBoardId(id)
     setView('board')
@@ -291,11 +317,7 @@ function App() {
         setSidebarCollapsed((collapsed) => !collapsed)
         break
       case 'capture':
-        if (currentBoard && !captureProjectId)
-          setView(showToday ? 'date' : 'active')
-        if (palette !== 'capture')
-          setPaletteCaptureDate(isCalendarView ? date : today)
-        setPalette('capture')
+        openCapture()
         break
       case 'today':
         goToToday()
@@ -353,6 +375,12 @@ function App() {
     error: string
     reorder?: boolean
   } | null>(null)
+  const projectOrder = useMutation({
+    mutationFn: (ids: string[]) =>
+      request('/projects/reorder', { project_ids: ids }),
+    onError: (error) => setMessage({ error: error.message, reorder: true }),
+    onSettled: () => client.invalidateQueries({ queryKey: ['projects'] }),
+  })
   const reorder = useMutation({
     mutationFn: (ids: string[]) =>
       request<Task[]>('/tasks/reorder', { task_ids: ids }),
@@ -563,36 +591,39 @@ function App() {
     navItems.set(id, {
       id,
       label: board.name,
-      icon: LayoutGrid,
+      icon: getBoardIcon(board.icon),
       current: currentBoard?.id === board.id,
       onSelect: () => goToBoard(board.id),
       onEdit: () => setBoardEditor(board),
     })
   }
-  const visibleNavIds = showToday
-    ? orderedNavIds
-    : orderedNavIds.filter((id) => id !== 'date')
+  const footerNavIds = new Set<string>(footerItems)
+  const visibleNavIds = orderedNavIds.filter(
+    (id) => (showToday || id !== 'date') && !footerNavIds.has(id),
+  )
   const visibleNavItems = visibleNavIds.map((id) => navItems.get(id)!)
   function reorderNavigation(ids: string[]) {
     if (currentBoard && requestedView === 'date') {
       setBoardId(currentBoard.id)
       setView('board')
     }
+    const visible = new Set(visibleNavIds)
     let index = 0
     sidebar.save({
-      showToday,
-      order: orderedNavIds.map((id) =>
-        !showToday && id === 'date' ? id : ids[index++],
-      ),
+      order: orderedNavIds.map((id) => (visible.has(id) ? ids[index++] : id)),
     })
   }
   return (
     <div
       className={sidebarCollapsed ? 'app-shell sidebar-collapsed' : 'app-shell'}
       data-has-batch-selection={chosenTasks.length > 0 || undefined}
+      data-resizing-sidebar={resizingWidth !== null || undefined}
+      style={
+        { '--expanded-sidebar-width': `${sidebarWidth}px` } as CSSProperties
+      }
     >
       <div className="window-titlebar" aria-hidden="true" />
-      <aside className="sidebar">
+      <aside className="sidebar" id="app-sidebar">
         <div className="sidebar-heading">
           <a className="brand" href="/" aria-label="Famo">
             <span className="brand-mark" aria-hidden="true" />
@@ -620,17 +651,33 @@ function App() {
           onRetry={() => void boards.refetch()}
         />
         <ProjectNavigation
-          projects={projectList}
+          projects={
+            projectOrder.isPending
+              ? orderSubset(projectList, projectOrder.variables)
+              : projectList
+          }
           current={currentProjectId}
           collapsed={sidebarCollapsed}
+          reordering={projectOrder.isPending}
           error={errorText(projects.error)}
           onSelect={goToProject}
           onExpand={() => setSidebarCollapsed(false)}
           onCreate={() => setProjectEditor('new')}
           onEdit={(id) => setProjectEditor(projectsById.get(id) ?? null)}
+          onReorder={(ids) => projectOrder.mutate(ids)}
           onRetry={() => void projects.refetch()}
         />
+        <SidebarResizeHandle
+          width={sidebarWidth}
+          onResize={setResizingWidth}
+          onSave={(width) => sidebar.save({ width })}
+        />
         <div className="sidebar-footer">
+          {orderedNavIds
+            .filter((id) => footerNavIds.has(id))
+            .map((id) => (
+              <NavigationButton key={id} item={navItems.get(id)!} />
+            ))}
           <button
             className={
               view === 'recently-deleted' ? 'nav-item active' : 'nav-item'
@@ -655,7 +702,7 @@ function App() {
           </button>
         </div>
       </aside>
-      <main>
+      <main onClick={selection.onBackgroundClick}>
         <div
           className="main-content"
           data-has-batch-selection={chosenTasks.length > 0 || undefined}
@@ -692,10 +739,23 @@ function App() {
             <TodayProjectFilter projects={projectList} filter={todayFilter} />
           )}
           <QuickCapture
-            hidden={!isActiveList && view !== 'date' && !captureProjectId}
+            hidden={
+              !isActiveList && view !== 'date' && !defaultCaptureProjectId
+            }
             onSubmit={capture.submit}
             announcement={capture.announcement}
           />
+          {multiProjectBoard && (
+            <button
+              type="button"
+              className="capture-entry board-capture-button"
+              aria-keyshortcuts="Meta+T Control+T"
+              onClick={openCapture}
+            >
+              <Plus size={17} aria-hidden="true" />
+              {t('addTask')}
+            </button>
+          )}
           {isCalendarView && (
             <CalendarPage
               date={date}
@@ -838,9 +898,15 @@ function App() {
           <PreferencesPage
             appearance={theme}
             showToday={showToday}
-            onShowTodayChange={(showToday) =>
-              sidebar.save({ showToday, order })
-            }
+            footerItems={footerItems}
+            onShowTodayChange={(showToday) => sidebar.save({ showToday })}
+            onFooterChange={(id, move) => {
+              sidebar.save({
+                footerItems: move
+                  ? [...footerItems, id]
+                  : footerItems.filter((item) => item !== id),
+              })
+            }}
           />
         </div>
       </main>
@@ -914,10 +980,11 @@ function App() {
         onClose={() => setPalette(null)}
         capture={capture}
         captureDate={paletteCaptureDate}
-        captureProject={
-          captureProjectId ? projectsById.get(captureProjectId) : undefined
-        }
+        captureProjects={captureProjects}
+        captureProjectId={selectedCaptureProjectId}
+        requireCaptureProject={requireCaptureProject}
         onCaptureDateChange={setPaletteCaptureDate}
+        onCaptureProjectChange={setPaletteCaptureProjectId}
         search={search}
         onSearchChange={setSearch}
       />
@@ -1096,7 +1163,7 @@ function Detail({
       onEscapeKeyDown={(event) => {
         if (
           (event.target as Element)?.closest(
-            '.inline-content-editor, .calendar-popover',
+            '.inline-content-editor, .calendar-popover, .project-picker-popup',
           )
         )
           event.preventDefault()
@@ -1126,29 +1193,22 @@ function Detail({
         <TaskDate task={task} busy={busy} />
         {projects && projects.length > 0 && (
           <div className="task-project-field">
-            <label>
-              <span className="task-date-label">Project</span>
-              <select
-                value={task.project_id ?? ''}
-                disabled={busy}
-                onChange={(event) => {
-                  setProjectError('')
-                  act(
-                    task,
-                    { op: 'update', project_id: event.target.value },
-                    undefined,
-                    setProjectError,
-                  )
-                }}
-              >
-                <option value="">{t('unassigned')}</option>
-                {projects.map((project) => (
-                  <option key={project.id} value={project.id}>
-                    {project.name}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <span className="task-date-label">Project</span>
+            <ProjectPicker
+              label="Project"
+              projects={projects}
+              value={task.project_id ?? ''}
+              disabled={busy}
+              onChange={(projectId) => {
+                setProjectError('')
+                act(
+                  task,
+                  { op: 'update', project_id: projectId },
+                  undefined,
+                  setProjectError,
+                )
+              }}
+            />
             {projectError && (
               <p className="inline-edit-error" role="alert">
                 {errorText(projectError)}

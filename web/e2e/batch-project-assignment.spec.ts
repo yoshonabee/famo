@@ -135,6 +135,40 @@ test('拖曳到畫面底部時會捲動並延伸任務選取', async ({ page, re
   await expect(page.locator('[data-drag-selecting]')).toHaveCount(0)
 })
 
+test('點擊清單旁的空白或按 Escape 可清除選取', async ({ page, request }) => {
+  await page.goto('/')
+  const date = (await page.locator('h1 time').getAttribute('datetime'))!
+  const task = await addTask(request, 'selection dismissal task', date)
+  await page.reload()
+  const search = page.getByRole('textbox', { name: '搜尋任務' })
+  await search.fill(task.title)
+  const row = taskRow(page, task.id)
+  const title = row.getByRole('textbox')
+  const toolbar = page.getByRole('region', { name: '任務批次操作' })
+  const select = async () => {
+    await title.click({ modifiers: ['Meta'] })
+    await expect(toolbar).toBeVisible()
+  }
+
+  await select()
+  const main = (await page.getByRole('main').boundingBox())!
+  const bounds = (await row.boundingBox())!
+  await page.mouse.click(main.x + 5, bounds.y + bounds.height / 2)
+  await expect(toolbar).toBeHidden()
+
+  await select()
+  await search.focus()
+  await page.keyboard.press('Escape')
+  await expect(toolbar).toBeHidden()
+  await expect(search).toHaveValue(task.title)
+
+  await select()
+  await title.fill('Unsaved title edit')
+  await title.press('Escape')
+  await expect(toolbar).toBeHidden()
+  await expect(title).toHaveValue(task.title)
+})
+
 test.describe('手機上的任務多選', () => {
   test.use({
     hasTouch: true,

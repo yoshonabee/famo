@@ -105,10 +105,30 @@ export function useTaskSelection(scope: string, disabled: boolean) {
     )
   }
 
-  function clear() {
+  const clear = useCallback(() => {
     stopDrag()
     setState(null)
-  }
+  }, [stopDrag])
+
+  const hasSelection = !!selection?.ids.length
+  useEffect(() => {
+    if (!hasSelection) return
+    function onEscape(event: globalThis.KeyboardEvent) {
+      const target = event.target instanceof Element ? event.target : null
+      if (
+        event.key !== 'Escape' ||
+        event.isComposing ||
+        event.keyCode === 229 ||
+        target?.closest('[role="dialog"], [role="alertdialog"]') ||
+        (event.defaultPrevented && !target?.matches('.todo-title'))
+      )
+        return
+      event.preventDefault()
+      clear()
+    }
+    window.addEventListener('keydown', onEscape)
+    return () => window.removeEventListener('keydown', onEscape)
+  }, [clear, hasSelection])
 
   function updateDrag(active: Gesture) {
     const row = taskRow(
@@ -144,6 +164,18 @@ export function useTaskSelection(scope: string, disabled: boolean) {
   return {
     ids: selection?.ids ?? [],
     clear,
+    onBackgroundClick(event: MouseEvent<HTMLElement>) {
+      const target = event.target
+      if (
+        selection &&
+        target instanceof Element &&
+        event.currentTarget.contains(target) &&
+        !target.closest(
+          `${rowSelector}, ${rowControls}, summary, label, .task-project-assignment`,
+        )
+      )
+        clear()
+    },
     selectAll: (ids: string[]) => save(ids, null),
     handlers: {
       'data-drag-selecting': dragScope === scope && !disabled ? '' : undefined,
@@ -263,17 +295,6 @@ export function useTaskSelection(scope: string, disabled: boolean) {
         if (disabled || event.defaultPrevented || event.nativeEvent.isComposing)
           return
         const row = taskRow(event.target, event.currentTarget)
-        if (
-          event.key === 'Escape' &&
-          selection?.ids.length &&
-          !(
-            event.target instanceof Element &&
-            event.target.closest('input, textarea, select, [role="dialog"]')
-          )
-        ) {
-          event.preventDefault()
-          clear()
-        }
         if (!row || event.target !== row) return
         const id = rowID(row)
         if (event.key === ' ') {

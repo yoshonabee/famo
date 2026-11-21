@@ -41,7 +41,8 @@ var projectColors = [...]string{
 }
 
 func (s *Store) ListProjects(ctx context.Context) ([]Project, error) {
-	rows, err := s.db.QueryContext(ctx, "SELECT id,name,color,workspace_dir,workspace_prompt,version FROM projects ORDER BY name,id")
+	rows, err := s.db.QueryContext(ctx, `SELECT id,name,color,workspace_dir,workspace_prompt,version
+		FROM projects ORDER BY position IS NULL,position,name,id`)
 	if err != nil {
 		return nil, err
 	}
@@ -55,6 +56,48 @@ func (s *Store) ListProjects(ctx context.Context) ([]Project, error) {
 		out = append(out, p)
 	}
 	return out, rows.Err()
+}
+
+// ReorderProjects saves the complete Project order without changing content versions.
+func (s *Store) ReorderProjects(ctx context.Context, ids []string) error {
+	if len(ids) < 2 {
+		return fmt.Errorf("%w：排序至少需要兩個 Project", ErrInvalid)
+	}
+	seen := make(map[string]bool, len(ids))
+	for _, id := range ids {
+		if id == "" || seen[id] {
+			return fmt.Errorf("%w：Project ID 不可空白或重複", ErrInvalid)
+		}
+		seen[id] = true
+	}
+
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	conflict := fmt.Errorf("%w：Project 列表已變更，請重新讀取後再排序", ErrConflict)
+	var count int
+	if err := tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM projects").Scan(&count); err != nil {
+		return err
+	}
+	if count != len(ids) {
+		return conflict
+	}
+	for position, id := range ids {
+		result, err := tx.ExecContext(ctx, "UPDATE projects SET position=? WHERE id=?", position, id)
+		if err != nil {
+			return err
+		}
+		updated, err := result.RowsAffected()
+		if err != nil {
+			return err
+		}
+		if updated == 0 {
+			return conflict
+		}
+	}
+	return tx.Commit()
 }
 
 func validateProjectInput(in ProjectInput) (ProjectInput, error) {
@@ -111,7 +154,9 @@ func (s *Store) CreateProject(ctx context.Context, in ProjectInput) (Project, er
 	if in.WorkspacePrompt != nil {
 		p.WorkspacePrompt = *in.WorkspacePrompt
 	}
-	if _, err := s.db.ExecContext(ctx, `INSERT INTO projects(id,name,color,workspace_dir,workspace_prompt,version) VALUES(?,?,?,?,?,?)`,
+	// Keep alphabetical order until the user explicitly sorts the Projects.
+	if _, err := s.db.ExecContext(ctx, `INSERT INTO projects(id,name,color,workspace_dir,workspace_prompt,version,position)
+		SELECT ?,?,?,?,?,?,MAX(position)+1 FROM projects`,
 		p.ID, p.Name, p.Color, p.WorkspaceDir, p.WorkspacePrompt, p.Version); err != nil {
 		return Project{}, projectWriteError(err)
 	}

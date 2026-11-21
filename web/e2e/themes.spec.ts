@@ -84,6 +84,8 @@ test('設定提供 12 款主題，切換立即生效並在重開後保留', asyn
   expect((await request.get('/api/settings')).status()).toBe(404)
   expect(await (await request.get('/api/tasks')).json()).toEqual(tasks)
   await page.goto('/menu-bar.html')
+  await page.getByRole('button', { name: /^選擇 Board/ }).click()
+  await page.getByRole('menuitemradio', { name: '今日', exact: true }).click()
   await expect(page.locator('.menu-bar-board-trigger .brand-mark')).toHaveCSS(
     'background-color',
     iconColor,

@@ -82,6 +82,58 @@ func TestDeleteProjectPreservesTasksAndClearsBoardSelections(t *testing.T) {
 	}
 }
 
+func TestReorderProjectsPersistsAndPreservesVersions(t *testing.T) {
+	ctx := t.Context()
+	path := filepath.Join(t.TempDir(), "project-order.db")
+	store, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	create := func(name string) Project {
+		t.Helper()
+		project, err := store.CreateProject(ctx, ProjectInput{Name: name})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return project
+	}
+	check := func(want ...Project) {
+		t.Helper()
+		got, err := store.ListProjects(ctx)
+		if err != nil || !slices.Equal(got, want) {
+			t.Fatalf("Project order: %+v, %v; want %+v", got, err, want)
+		}
+	}
+	b, c, a := create("Beta"), create("Gamma"), create("Alpha")
+	check(a, b, c)
+	if err := store.ReorderProjects(ctx, []string{c.ID, a.ID, b.ID}); err != nil {
+		t.Fatal(err)
+	}
+	check(c, a, b)
+	if err := store.ReorderProjects(ctx, []string{b.ID, a.ID, "missing"}); !errors.Is(err, ErrConflict) {
+		t.Fatalf("stale Project order: %v", err)
+	}
+	if err := store.ReorderProjects(ctx, []string{a.ID, b.ID, a.ID}); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("duplicate Project ID: %v", err)
+	}
+	check(c, a, b)
+	if err := store.Close(); err != nil {
+		t.Fatal(err)
+	}
+	store, err = Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	d := create("Aardvark")
+	check(c, a, b, d)
+	if err := store.ReorderProjects(ctx, []string{c.ID, a.ID, b.ID}); !errors.Is(err, ErrConflict) {
+		t.Fatalf("order missing new Project: %v", err)
+	}
+	check(c, a, b, d)
+}
+
 func TestProjectAssignmentsAndVersionChecks(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "famo.db")
 	store, err := Open(path)

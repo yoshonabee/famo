@@ -1,4 +1,6 @@
-import { Folder, Plus } from 'lucide-react'
+import { DragDropProvider } from '@dnd-kit/react'
+import { isSortable, useSortable } from '@dnd-kit/react/sortable'
+import { Folder, GripVertical, Plus } from 'lucide-react'
 import { SidebarEditButton } from '@/components/primary-navigation'
 import { ProjectColorDot } from '@/components/project-appearance'
 import { Button } from '@/components/ui/button'
@@ -9,21 +11,25 @@ export function ProjectNavigation({
   projects,
   current,
   collapsed,
+  reordering,
   error,
   onSelect,
   onExpand,
   onCreate,
   onEdit,
+  onReorder,
   onRetry,
 }: {
   projects: Project[]
   current?: string
   collapsed: boolean
+  reordering: boolean
   error?: string
   onSelect: (id: string) => void
   onExpand: () => void
   onCreate: () => void
   onEdit: (id: string) => void
+  onReorder: (ids: string[]) => void
   onRetry: () => void
 }) {
   const { t } = useLanguage()
@@ -68,35 +74,90 @@ export function ProjectNavigation({
         </div>
       )}
       {projects.length > 0 && (
-        <ul className="sidebar-collection-list">
-          {projects.map((item) => (
-            <li
-              key={item.id}
-              className={
-                current === item.id
-                  ? 'sidebar-nav-row is-current'
-                  : 'sidebar-nav-row'
-              }
-            >
-              <button
-                type="button"
-                className={current === item.id ? 'nav-item active' : 'nav-item'}
-                aria-current={current === item.id ? 'page' : undefined}
-                onClick={() => onSelect(item.id)}
-                title={item.name}
-              >
-                <ProjectColorDot color={item.color} />
-                <span className="nav-label">{item.name}</span>
-              </button>
-              <SidebarEditButton
-                name={item.name}
-                kind="Project"
+        <DragDropProvider
+          onDragEnd={(event) => {
+            if (
+              reordering ||
+              event.canceled ||
+              !isSortable(event.operation.source)
+            )
+              return
+            const { id, index } = event.operation.source
+            const ids = projects.map((project) => project.id)
+            const from = ids.findIndex((projectId) => projectId === id)
+            if (from < 0 || from === index || index < 0 || index >= ids.length)
+              return
+            const [moved] = ids.splice(from, 1)
+            ids.splice(index, 0, moved)
+            onReorder(ids)
+          }}
+        >
+          <ul className="sidebar-collection-list">
+            {projects.map((item, index) => (
+              <ProjectNavigationRow
+                key={item.id}
+                project={item}
+                index={index}
+                current={current === item.id}
+                reorderDisabled={reordering || projects.length < 2}
+                onSelect={() => onSelect(item.id)}
                 onEdit={() => onEdit(item.id)}
               />
-            </li>
-          ))}
-        </ul>
+            ))}
+          </ul>
+        </DragDropProvider>
       )}
     </section>
+  )
+}
+
+function ProjectNavigationRow({
+  project,
+  index,
+  current,
+  reorderDisabled,
+  onSelect,
+  onEdit,
+}: {
+  project: Project
+  index: number
+  current: boolean
+  reorderDisabled: boolean
+  onSelect: () => void
+  onEdit: () => void
+}) {
+  const { t } = useLanguage()
+  const { ref, handleRef, isDragging } = useSortable({
+    id: project.id,
+    index,
+    disabled: reorderDisabled,
+  })
+  return (
+    <li
+      ref={ref}
+      className={`sidebar-nav-row ${current ? 'is-current' : ''} ${isDragging ? 'sidebar-nav-dragging' : ''}`}
+    >
+      <button
+        ref={handleRef}
+        type="button"
+        className="sidebar-row-action sidebar-sort-handle"
+        aria-label={t('reorderNavigation', project.name)}
+        title={t('dragToReorder')}
+        aria-disabled={reorderDisabled}
+      >
+        <GripVertical size={13} aria-hidden="true" />
+      </button>
+      <button
+        type="button"
+        className={current ? 'nav-item active' : 'nav-item'}
+        aria-current={current ? 'page' : undefined}
+        onClick={onSelect}
+        title={project.name}
+      >
+        <ProjectColorDot color={project.color} />
+        <span className="nav-label">{project.name}</span>
+      </button>
+      <SidebarEditButton name={project.name} kind="Project" onEdit={onEdit} />
+    </li>
   )
 }

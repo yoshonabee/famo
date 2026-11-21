@@ -1,8 +1,23 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
-type Preferences = { showToday: boolean; order: string[] }
+export const footerNavigation = ['active', 'completed'] as const
+export type FooterNavItem = (typeof footerNavigation)[number]
+
+type Preferences = {
+  showToday: boolean
+  order: string[]
+  footerItems: FooterNavItem[]
+  width?: number
+}
 const storageKey = 'famo.sidebar'
-const defaults: Preferences = { showToday: true, order: [] }
+const defaults: Preferences = { showToday: true, order: [], footerItems: [] }
+
+export const sidebarMinWidth = 144
+export const sidebarMaxWidth = 360
+
+export function clampSidebarWidth(width: number) {
+  return Math.min(sidebarMaxWidth, Math.max(sidebarMinWidth, Math.round(width)))
+}
 
 function parsePreferences(raw: string | null): Preferences {
   try {
@@ -12,6 +27,13 @@ function parsePreferences(raw: string | null): Preferences {
       order: Array.isArray(value?.order)
         ? value.order.filter((id) => typeof id === 'string')
         : [],
+      footerItems: Array.isArray(value?.footerItems)
+        ? footerNavigation.filter((id) => value.footerItems?.includes(id))
+        : [],
+      width:
+        typeof value?.width === 'number' && Number.isFinite(value.width)
+          ? clampSidebarWidth(value.width)
+          : undefined,
     }
   } catch {
     return defaults
@@ -26,17 +48,26 @@ export function useSidebarPreferences() {
       return defaults
     }
   })
+  const saved = useRef(preferences)
 
   useEffect(() => {
     const sync = (event: StorageEvent) => {
-      if (event.key === storageKey)
-        setPreferences(parsePreferences(event.newValue))
+      if (
+        event.storageArea !== localStorage ||
+        (event.key !== storageKey && event.key !== null)
+      )
+        return
+      const next = parsePreferences(event.newValue)
+      saved.current = next
+      setPreferences(next)
     }
     window.addEventListener('storage', sync)
     return () => window.removeEventListener('storage', sync)
   }, [])
 
-  function save(next: Preferences) {
+  function save(changes: Partial<Preferences>) {
+    const next = { ...saved.current, ...changes }
+    saved.current = next
     setPreferences(next)
     try {
       localStorage.setItem(storageKey, JSON.stringify(next))

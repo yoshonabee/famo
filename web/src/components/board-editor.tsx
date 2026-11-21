@@ -1,5 +1,6 @@
-import { useRef, useState, type FormEvent } from 'react'
+import { useId, useRef, useState, type FormEvent } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { boardIcons, defaultBoardIcon } from '@/components/board-icons'
 import { DeleteCollectionButton } from '@/components/delete-collection-button'
 import { ProjectColorDot } from '@/components/project-appearance'
 import { Button } from '@/components/ui/button'
@@ -36,6 +37,8 @@ export function BoardEditor({
   const { t, errorText } = useLanguage()
   const client = useQueryClient()
   const [name, setName] = useState(board?.name ?? '')
+  const [icon, setIcon] = useState(board?.icon ?? defaultBoardIcon)
+  const iconGroup = useId()
   const [version] = useState(board?.version)
   const [selected, setSelected] = useState(board?.project_ids ?? [])
   const returnFocus = useRef<HTMLElement | null>(null)
@@ -67,7 +70,7 @@ export function BoardEditor({
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!save.isPending && !conflict && name.trim() && projects)
-      save.mutate({ name, project_ids: selected })
+      save.mutate({ name, icon, project_ids: selected })
   }
 
   return (
@@ -105,6 +108,23 @@ export function BoardEditor({
             required
           />
         </label>
+        <fieldset className="min-w-0" disabled={save.isPending}>
+          <legend className="mb-2 text-sm">{t('boardIcon')}</legend>
+          <div className="grid grid-cols-6 gap-1.5 sm:grid-cols-12 sm:gap-1">
+            {boardIcons.map(({ value, label, Icon }) => (
+              <label key={value} className="board-icon-option" title={t(label)}>
+                <input
+                  type="radio"
+                  name={iconGroup}
+                  aria-label={t(label)}
+                  checked={icon === value}
+                  onChange={() => setIcon(value)}
+                />
+                <Icon size={17} aria-hidden="true" />
+              </label>
+            ))}
+          </div>
+        </fieldset>
         <fieldset className="min-w-0" disabled={save.isPending}>
           <legend className="mb-2 text-sm">{t('displayedProjects')}</legend>
           {projects === undefined ? (

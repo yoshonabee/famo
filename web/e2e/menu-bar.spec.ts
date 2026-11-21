@@ -145,7 +145,7 @@ test('panel switches today’s tasks and progress by Board and remembers the sel
   await expect(choice('今日')).toBeFocused()
   await expect(choice('今日')).toHaveAttribute('aria-checked', 'true')
   await expect(choice('今日')).toHaveCSS('font-size', '16px')
-  await expect(choice('今日').locator('span')).toHaveCSS(
+  await expect(choice('今日').getByText('今日', { exact: true })).toHaveCSS(
     'text-decoration-line',
     'none',
   )
@@ -404,7 +404,7 @@ test('panel uses sidebar order, follows Today visibility, and opens the selected
   await main.getByRole('button', { name: '設定', exact: true }).click()
   await main
     .getByRole('navigation', { name: '設定分類' })
-    .getByRole('button', { name: '側邊欄', exact: true })
+    .getByRole('button', { name: 'General', exact: true })
     .click()
   await main.getByRole('checkbox', { name: '顯示預設的「今日」分頁' }).uncheck()
   await page.bringToFront()

@@ -2,7 +2,7 @@ import { expect, test, type Page } from '@playwright/test'
 
 async function showLanguageSettings(page: Page) {
   await page.getByRole('button', { name: /^(設定|Settings)$/ }).click()
-  await page.getByRole('button', { name: /^(語言|Language)$/ }).click()
+  await page.getByRole('button', { name: 'General', exact: true }).click()
   return page.getByRole('combobox', { name: /^(顯示語言|Display language)$/ })
 }
 
@@ -73,7 +73,7 @@ test('switches language immediately across the main and menu bar windows and sav
     fullPage: true,
   })
 
-  await page.getByRole('button', { name: 'Language', exact: true }).click()
+  await page.getByRole('button', { name: 'General', exact: true }).click()
   await savedLanguage.selectOption('zh-TW')
   await expect(page.locator('html')).toHaveAttribute('lang', 'zh-TW')
   await expect(panel.getByRole('heading', { name: '今日任務' })).toBeVisible()

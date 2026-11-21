@@ -95,7 +95,6 @@ function NavigationRow({
     index,
     disabled: collapsed,
   })
-  const Icon = item.icon
   return (
     <li
       ref={collapsed ? undefined : ref}
@@ -112,21 +111,7 @@ function NavigationRow({
           <GripVertical size={13} aria-hidden="true" />
         </button>
       )}
-      <button
-        type="button"
-        className={item.current ? 'nav-item active' : 'nav-item'}
-        aria-label={item.ariaLabel ?? item.label}
-        aria-current={item.current ? 'page' : undefined}
-        aria-keyshortcuts={item.shortcut}
-        title={item.label}
-        onClick={item.onSelect}
-      >
-        <Icon size={17} aria-hidden="true" />
-        <span className="nav-label">{item.label}</span>
-        {item.count !== undefined && (
-          <span className="nav-count">{item.count}</span>
-        )}
-      </button>
+      <NavigationButton item={item} />
       {item.onEdit && !collapsed && (
         <SidebarEditButton
           name={item.label}
@@ -135,6 +120,27 @@ function NavigationRow({
         />
       )}
     </li>
+  )
+}
+
+export function NavigationButton({ item }: { item: PrimaryNavItem }) {
+  const Icon = item.icon
+  return (
+    <button
+      type="button"
+      className={item.current ? 'nav-item active' : 'nav-item'}
+      aria-label={item.ariaLabel ?? item.label}
+      aria-current={item.current ? 'page' : undefined}
+      aria-keyshortcuts={item.shortcut}
+      title={item.label}
+      onClick={item.onSelect}
+    >
+      <Icon size={17} aria-hidden="true" />
+      <span className="nav-label">{item.label}</span>
+      {item.count !== undefined && (
+        <span className="nav-count">{item.count}</span>
+      )}
+    </button>
   )
 }
 

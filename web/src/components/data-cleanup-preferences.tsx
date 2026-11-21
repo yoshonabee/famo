@@ -24,7 +24,7 @@ export function DataCleanupPreferences() {
 
   return (
     <div className="preferences-card">
-      <h3>{t('purgeDeletedTasks')}</h3>
+      <h4>{t('purgeDeletedTasks')}</h4>
       <p id="data-cleanup-description" className="preferences-description">
         {t('purgeDescription')}
       </p>

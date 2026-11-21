@@ -53,3 +53,42 @@ test('桌面標題列隨側欄和主題調整，保留上方控制項的操作�
   await expect(sidebar).toHaveCSS('padding-top', '42px')
   await expect(titlebar).toHaveCSS('background-color', dark.sidebar)
 })
+
+test('側邊欄可拖曳或用鍵盤調整寬度，並保留調整結果', async ({ page }) => {
+  await page.setViewportSize({ width: 1100, height: 780 })
+  await page.goto('/')
+  const titlebar = page.locator('.window-titlebar')
+  const sidebar = page.locator('.sidebar')
+  const main = page.locator('.app-shell > main')
+  const handle = page.getByRole('separator', { name: '調整側邊欄寬度' })
+  const originalWidth = 168
+  const dx = 68
+  const newWidth = originalWidth + dx
+  await expect(handle).toHaveAttribute('aria-valuenow', String(originalWidth))
+  const bounds = (await handle.boundingBox())!
+  const x = bounds.x + bounds.width / 2
+  const y = bounds.y + 120
+  await page.mouse.move(x, y)
+  await page.mouse.down()
+  await page.mouse.move(x + dx, y)
+  await expect(sidebar).toHaveCSS('width', `${newWidth}px`)
+  await expect(main).toHaveCSS('margin-left', `${newWidth}px`)
+  expect(
+    await titlebar.evaluate(
+      (element) => getComputedStyle(element, '::before').width,
+    ),
+  ).toBe(`${newWidth}px`)
+  await page.mouse.up()
+
+  await page.reload()
+  await expect(sidebar).toHaveCSS('width', `${newWidth}px`)
+  await handle.press('ArrowRight')
+  await expect(handle).toHaveAttribute('aria-valuenow', String(newWidth + 12))
+  await page.getByRole('button', { name: '收合側邊欄' }).click()
+  await expect(handle).toBeHidden()
+  await page.getByRole('button', { name: '展開側邊欄' }).click()
+  await expect(sidebar).toHaveCSS('width', `${newWidth + 12}px`)
+  await page.setViewportSize({ width: 620, height: 500 })
+  await expect(handle).toBeHidden()
+  await expect(main).toHaveCSS('margin-left', '0px')
+})

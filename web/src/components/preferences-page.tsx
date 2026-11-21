@@ -1,4 +1,4 @@
-import { Bot, Database, Languages, Palette, PanelLeft } from 'lucide-react'
+import { Bot, Palette, Settings2 } from 'lucide-react'
 import { useRef, useState } from 'react'
 import { AgentPreferences } from '@/components/agent-preferences'
 import { AppearancePreferences } from '@/components/appearance-preferences'
@@ -7,17 +7,22 @@ import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { type ThemeController } from '@/lib/theme'
 import { languages, useLanguage, type Locale } from '@/lib/i18n'
+import { footerNavigation, type FooterNavItem } from '@/lib/sidebar-preferences'
 
-type Section = 'appearance' | 'sidebar' | 'agent' | 'data' | 'language'
+type Section = 'appearance' | 'general' | 'agent'
 
 export function PreferencesPage({
   appearance,
   showToday,
+  footerItems,
   onShowTodayChange,
+  onFooterChange,
 }: {
   appearance: ThemeController
   showToday: boolean
+  footerItems: FooterNavItem[]
   onShowTodayChange: (show: boolean) => void
+  onFooterChange: (id: FooterNavItem, move: boolean) => void
 }) {
   const { t, locale, setLocale, storageFailed } = useLanguage()
   const [activeSection, setActiveSection] = useState<Section>('appearance')
@@ -30,55 +35,74 @@ export function PreferencesPage({
       content: <AppearancePreferences appearance={appearance} />,
     },
     {
-      id: 'language',
-      label: t('language'),
-      icon: Languages,
+      id: 'general',
+      label: t('general'),
+      icon: Settings2,
       content: (
-        <div className="preferences-card">
-          <label className="field">
-            <span>{t('displayLanguage')}</span>
-            <select
-              value={locale}
-              onChange={(event) => setLocale(event.target.value as Locale)}
-            >
-              {languages.map(({ code, label }) => (
-                <option key={code} lang={code} value={code}>
-                  {label}
-                </option>
+        <div className="preferences-general">
+          <section aria-labelledby="preferences-language-heading">
+            <h3 id="preferences-language-heading">{t('language')}</h3>
+            <div className="preferences-card">
+              <label className="field">
+                <span>{t('displayLanguage')}</span>
+                <select
+                  value={locale}
+                  onChange={(event) => setLocale(event.target.value as Locale)}
+                >
+                  {languages.map(({ code, label }) => (
+                    <option key={code} lang={code} value={code}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {storageFailed && (
+                <p role="alert">{t('languageStorageFailed')}</p>
+              )}
+            </div>
+          </section>
+          <section aria-labelledby="preferences-sidebar-heading">
+            <h3 id="preferences-sidebar-heading">{t('sidebar')}</h3>
+            <div className="preferences-card">
+              <label className="preferences-checkbox">
+                <Checkbox
+                  checked={showToday}
+                  onCheckedChange={(checked) =>
+                    onShowTodayChange(checked === true)
+                  }
+                />
+                <span>{t('showTodayTab')}</span>
+              </label>
+              {footerNavigation.map((id) => (
+                <label className="preferences-checkbox" key={id}>
+                  <Checkbox
+                    checked={footerItems.includes(id)}
+                    onCheckedChange={(checked) =>
+                      onFooterChange(id, checked === true)
+                    }
+                  />
+                  <span>
+                    {t(
+                      'moveAboveRecentlyDeleted',
+                      t(id === 'active' ? 'tasks' : 'completed'),
+                    )}
+                  </span>
+                </label>
               ))}
-            </select>
-          </label>
-          {storageFailed && <p role="alert">{t('languageStorageFailed')}</p>}
-        </div>
-      ),
-    },
-    {
-      id: 'sidebar',
-      label: t('sidebar'),
-      icon: PanelLeft,
-      content: (
-        <div className="preferences-card">
-          <label className="preferences-checkbox">
-            <Checkbox
-              checked={showToday}
-              onCheckedChange={(checked) => onShowTodayChange(checked === true)}
-            />
-            <span>{t('showTodayTab')}</span>
-          </label>
+            </div>
+          </section>
+          <section aria-labelledby="preferences-local-data-heading">
+            <h3 id="preferences-local-data-heading">{t('localData')}</h3>
+            <DataCleanupPreferences />
+          </section>
         </div>
       ),
     },
     {
       id: 'agent',
-      label: t('localAgent'),
+      label: t('agents'),
       icon: Bot,
       content: <AgentPreferences />,
-    },
-    {
-      id: 'data',
-      label: t('localData'),
-      icon: Database,
-      content: <DataCleanupPreferences />,
     },
   ] as const
 
