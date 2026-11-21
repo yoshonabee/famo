@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { CalendarDays, ChevronDown, Search } from 'lucide-react'
 import { DatePicker } from '@/components/date-picker'
 import { ProjectPicker } from '@/components/project-picker'
@@ -14,7 +14,7 @@ import {
   DialogDescription,
   DialogTitle,
 } from '@/components/ui/dialog'
-import type { Project } from '@/lib/api'
+import type { Project, Task } from '@/lib/api'
 import { useLanguage } from '@/lib/i18n'
 import { formatTaskDate } from '@/lib/calendar'
 
@@ -54,6 +54,10 @@ export function TaskSearch({
 
 export function TaskPalette({
   mode,
+  tasks,
+  tasksLoading,
+  tasksError,
+  onOpenTask,
   onClose,
   capture,
   captureDate,
@@ -65,7 +69,11 @@ export function TaskPalette({
   search,
   onSearchChange,
 }: {
-  mode: 'capture' | 'search' | null
+  mode: 'capture' | 'search' | 'global-search' | null
+  tasks: Task[]
+  tasksLoading: boolean
+  tasksError: string
+  onOpenTask: (id: string) => void
   onClose: () => void
   capture: ReturnType<typeof useQuickCapture>
   captureDate: string
@@ -85,7 +93,7 @@ export function TaskPalette({
   useEffect(() => {
     const input = content.current?.querySelector('input')
     input?.focus({ preventScroll: true })
-    if (mode === 'search') input?.select()
+    if (mode !== 'capture') input?.select()
   }, [mode])
 
   return (
@@ -117,7 +125,11 @@ export function TaskPalette({
           }}
         >
           <DialogTitle className="sr-only">
-            {isCapture ? t('quickCapture') : t('searchTasks')}
+            {isCapture
+              ? t('quickCapture')
+              : mode === 'global-search'
+                ? t('searchAllTasks')
+                : t('searchTasks')}
           </DialogTitle>
           {isCapture ? (
             <>
@@ -170,6 +182,13 @@ export function TaskPalette({
                 )}
               </div>
             </>
+          ) : mode === 'global-search' ? (
+            <GlobalTaskSearch
+              tasks={tasks}
+              loading={tasksLoading}
+              error={tasksError}
+              onOpenTask={onOpenTask}
+            />
           ) : (
             <>
               <TaskSearch
@@ -199,5 +218,59 @@ export function TaskPalette({
         </DialogContent>
       )}
     </Dialog>
+  )
+}
+
+function GlobalTaskSearch({
+  tasks,
+  loading,
+  error,
+  onOpenTask,
+}: {
+  tasks: Task[]
+  loading: boolean
+  error: string
+  onOpenTask: (id: string) => void
+}) {
+  const { t } = useLanguage()
+  const [query, setQuery] = useState('')
+  const term = query.trim().toLowerCase()
+  const matches = term
+    ? tasks.filter((task) =>
+        `${task.title} ${task.description}`.toLowerCase().includes(term),
+      )
+    : []
+  return (
+    <>
+      <TaskSearch
+        value={query}
+        onChange={setQuery}
+        onDone={() => matches[0] && onOpenTask(matches[0].id)}
+      />
+      <DialogDescription className="task-palette-hint">
+        {t('globalSearchHelp')}
+      </DialogDescription>
+      {term && !matches.length && (
+        <p role="status" className="task-palette-hint">
+          {error
+            ? t('loadTasksError', error)
+            : loading
+              ? t('loading')
+              : t('noMatches')}
+        </p>
+      )}
+      {matches.length > 0 && (
+        <ul className="global-search-results">
+          {matches.map((task) => (
+            <li key={task.id}>
+              <button type="button" onClick={() => onOpenTask(task.id)}>
+                <span>{task.title}</span>
+                {task.completed_at && <small>{t('completed')}</small>}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </>
   )
 }

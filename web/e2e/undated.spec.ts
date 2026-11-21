@@ -219,3 +219,51 @@ test('詳細頁日期自動儲存與清除，失敗保留選擇並可重試，�
   expect(latest.scheduled_date).toBe('')
   expect(latest.completed_at).not.toBeNull()
 })
+
+for (const sectionKind of ['earlier', 'undated'] as const) {
+  test(`手勢選取 ${sectionKind} 任務後可批次移到今日`, async ({
+    page,
+    request,
+  }) => {
+    await page.clock.install({ time: new Date('2026-11-03T16:30:00Z') })
+    const prefix = `move gesture ${sectionKind}`
+    for (const [index, date] of [
+      '2026-11-01',
+      '2026-11-02',
+      '2026-11-03',
+    ].entries())
+      await request.post('/api/tasks', {
+        data: {
+          title: `${prefix} ${index}`,
+          scheduled_date: sectionKind === 'earlier' ? date : '',
+        },
+      })
+    await page.goto('/')
+    await page.getByLabel('搜尋任務').fill(prefix)
+    const section = page.locator(`details.${sectionKind}-tasks`)
+    await section.locator('summary').click()
+    const rows = section.locator('.task-move-row')
+    const titles = rows.getByRole('textbox')
+    await titles.last().scrollIntoViewIfNeeded()
+    const start = (await titles.first().boundingBox())!
+    const end = (await titles.last().boundingBox())!
+    await page.mouse.move(start.x + 10, start.y + start.height / 2)
+    await page.mouse.down()
+    await page.mouse.move(end.x + 10, end.y + end.height / 2, { steps: 10 })
+    await page.mouse.up()
+    await expect(
+      rows.locator('[role="checkbox"][aria-checked="true"]'),
+    ).toHaveCount(3)
+    await titles.nth(1).click({ modifiers: ['Meta'] })
+    await expect(rows.nth(1).getByRole('checkbox')).not.toBeChecked()
+    await section
+      .getByRole('button', { name: '將選取任務移到這天（2）' })
+      .click()
+    await expect(rows).toHaveCount(1)
+    await expect(
+      page
+        .getByRole('list', { name: '當日未完成任務', exact: true })
+        .locator('[data-task-id]'),
+    ).toHaveCount(2)
+  })
+}

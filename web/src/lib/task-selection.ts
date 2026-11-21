@@ -8,7 +8,6 @@ import {
   type PointerEvent,
 } from 'react'
 
-const rowSelector = '[data-selectable-task]'
 const rowControls =
   'button, a, input, textarea, select, [contenteditable], [role="dialog"]'
 const selectThreshold = 5
@@ -28,21 +27,29 @@ type Gesture = {
   y: number
 }
 
-function taskRow(target: EventTarget | null, root: HTMLDivElement) {
-  const row =
-    target instanceof Element ? target.closest<HTMLElement>(rowSelector) : null
-  return row && root.contains(row) ? row : null
-}
+export function useTaskSelection(
+  scope: string,
+  disabled: boolean,
+  rowAttribute:
+    'data-selectable-task' | 'data-move-task' = 'data-selectable-task',
+) {
+  const rowSelector = `[${rowAttribute}]`
+  function taskRow(target: EventTarget | null, root: HTMLDivElement) {
+    const row =
+      target instanceof Element
+        ? target.closest<HTMLElement>(rowSelector)
+        : null
+    return row && root.contains(row) ? row : null
+  }
 
-function rowsIn(root: HTMLDivElement) {
-  return Array.from(root.querySelectorAll<HTMLElement>(rowSelector))
-}
+  function rowsIn(root: HTMLDivElement) {
+    return Array.from(root.querySelectorAll<HTMLElement>(rowSelector))
+  }
 
-function rowID(row: HTMLElement) {
-  return row.dataset.selectableTask!
-}
+  function rowID(row: HTMLElement) {
+    return row.getAttribute(rowAttribute)!
+  }
 
-export function useTaskSelection(scope: string, disabled: boolean) {
   const [state, setState] = useState<Selection | null>(null)
   const [dragScope, setDragScope] = useState<string | null>(null)
   const gesture = useRef<Gesture | null>(null)
@@ -164,6 +171,17 @@ export function useTaskSelection(scope: string, disabled: boolean) {
   return {
     ids: selection?.ids ?? [],
     clear,
+    toggle,
+    deselect(id: string) {
+      setState((current) =>
+        current?.scope === scope
+          ? {
+              ...current,
+              ids: current.ids.filter((selected) => selected !== id),
+            }
+          : current,
+      )
+    },
     onBackgroundClick(event: MouseEvent<HTMLElement>) {
       const target = event.target
       if (

@@ -15,7 +15,7 @@ export function ProjectPicker({
   disabled,
 }: {
   projects: Project[]
-  value: string
+  value: string | undefined
   onChange: (projectId: string) => void
   label: string
   allowUnassigned?: boolean
