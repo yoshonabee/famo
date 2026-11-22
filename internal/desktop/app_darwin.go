@@ -109,6 +109,12 @@ func Run(cfg Config) error {
 		// Wails injects CSS as a JavaScript string literal on macOS.
 		CSS: ":root { --window-titlebar-height: 30px; --window-controls-width: 78px; }",
 	})
+	if backend.stopSync != nil {
+		app.Event.On("famo:sync-activity", func(*application.CustomEvent) { backend.syncActivity.Interacted() })
+		mainWindow.OnWindowEvent(events.Mac.WindowDidBecomeKey, func(*application.WindowEvent) {
+			backend.syncActivity.RequestSync()
+		})
+	}
 	mainWindow.RegisterHook(events.Common.WindowClosing, func(event *application.WindowEvent) {
 		event.Cancel()
 		mainWindow.Hide()

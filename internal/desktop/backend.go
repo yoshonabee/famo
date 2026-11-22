@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -18,6 +19,8 @@ import (
 	"famo/internal/server"
 	"famo/internal/syncclient"
 	"famo/internal/tasks"
+
+	"github.com/go-chi/chi/v5/middleware"
 )
 
 const DefaultAPIAddr = "127.0.0.1:0"
@@ -43,11 +46,12 @@ func DefaultDatabasePath() (string, error) {
 func DefaultAPIInfoPath() (string, error) { return agent.DefaultAPIInfoPath() }
 
 type Backend struct {
-	handler     http.Handler
-	external    http.Handler
-	store       *tasks.Store
-	apiAddr     string
-	apiInfoPath string
+	handler      http.Handler
+	external     http.Handler
+	store        *tasks.Store
+	apiAddr      string
+	apiInfoPath  string
+	syncActivity *syncclient.Activity
 
 	mu       sync.Mutex
 	api      *runningAPI
@@ -103,9 +107,11 @@ func Start(cfg Config, assets fs.FS) (*Backend, error) {
 		return nil, err
 	}
 	b := &Backend{
-		store: store, handler: server.NewEmbedded(store, assets), external: server.NewDesktopAPI(store, assets),
+		store: store, syncActivity: syncclient.NewActivity(5 * time.Minute),
 		apiAddr: cfg.APIAddr, apiInfoPath: cfg.APIInfoPath,
 	}
+	b.handler = b.observeSyncWrites(server.NewEmbedded(store, assets))
+	b.external = b.observeSyncWrites(server.NewDesktopAPI(store, assets))
 	if b.apiAddr == "" {
 		b.apiAddr = DefaultAPIAddr
 	}
@@ -167,13 +173,31 @@ func (b *Backend) startSync(cfg Config) error {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		runner.Run(ctx, func(err error) { log.Printf("Sync: %v", err) })
+		runner.RunWhileActive(ctx, b.syncActivity, func(err error) { log.Printf("Sync: %v", err) })
 	}()
 	b.stopSync = func() {
 		cancel()
 		<-done
 	}
 	return nil
+}
+
+// Both the embedded window and the Agent API write through these handlers.
+func (b *Backend) observeSyncWrites(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path := strings.TrimPrefix(r.URL.Path, "/api/")
+		path = strings.TrimPrefix(path, "/")
+		first, _, _ := strings.Cut(path, "/")
+		if r.Method != http.MethodPost || (first != "tasks" && first != "projects" && first != "boards") {
+			next.ServeHTTP(w, r)
+			return
+		}
+		response := middleware.NewWrapResponseWriter(w, r.ProtoMajor)
+		next.ServeHTTP(response, r)
+		if status := response.Status(); status >= 200 && status < 300 {
+			b.syncActivity.RequestSync()
+		}
+	})
 }
 
 func listenAPI(addr string) (net.Listener, error) {

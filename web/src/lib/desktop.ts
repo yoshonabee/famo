@@ -14,6 +14,21 @@ export async function initializeDesktop(onTasksChanged: () => void) {
   }
   const { Browser, Events } = await import('@wailsio/runtime')
   Events.On(tasksChangedEvent, onTasksChanged)
+  let lastActivity = -Infinity
+  const trackActivity = (event: Event) => {
+    const now = performance.now()
+    if (!event.isTrusted || now - lastActivity < 1000) return
+    lastActivity = now
+    void Events.Emit('famo:sync-activity').catch((error: unknown) =>
+      console.error('無法通知桌面同步活動', error),
+    )
+  }
+  for (const event of ['pointerdown', 'keydown', 'wheel']) {
+    document.addEventListener(event, trackActivity, {
+      capture: true,
+      passive: true,
+    })
+  }
   Events.On(openSettingsEvent, () => {
     window.dispatchEvent(new Event(openSettingsEvent))
   })

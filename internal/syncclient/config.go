@@ -60,7 +60,7 @@ func (c Config) validate() (*url.URL, time.Duration, error) {
 	}
 	interval := time.Duration(c.IntervalSeconds) * time.Second
 	if interval == 0 {
-		interval = 5 * time.Second
+		interval = 30 * time.Second
 	}
 	return endpoint, interval, nil
 }

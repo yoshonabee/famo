@@ -53,24 +53,22 @@ func New(ctx context.Context, store *tasks.Store, cfg Config, onTasksChanged fun
 	}, nil
 }
 
-// Run retries on the polling interval and can be canceled before the Store closes.
+// Run polls continuously for headless callers.
 func (r *Runner) Run(ctx context.Context, report func(error)) {
-	ticker := time.NewTicker(r.interval)
-	defer ticker.Stop()
+	r.RunWhileActive(ctx, nil, report)
+}
+
+// RunWhileActive pauses polling while the desktop is idle.
+func (r *Runner) RunWhileActive(ctx context.Context, activity *Activity, report func(error)) {
 	var previous string
-	for ctx.Err() == nil {
+	runPolling(ctx, r.interval, activity, func() {
 		if err := r.Sync(ctx); err != nil && err.Error() != previous && ctx.Err() == nil {
 			report(err)
 			previous = err.Error()
 		} else if err == nil {
 			previous = ""
 		}
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-		}
-	}
+	})
 }
 
 func (r *Runner) credentials(ctx context.Context) (credentials, error) {

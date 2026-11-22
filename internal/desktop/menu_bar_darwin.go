@@ -79,6 +79,11 @@ func setupMenuBar(app *application.App, backend *Backend, menuBar *MenuBar, lang
 				application.MacWindowCollectionBehaviorFullScreenAuxiliary,
 		},
 	})
+	if backend.stopSync != nil {
+		panel.OnWindowEvent(events.Mac.WindowShow, func(*application.WindowEvent) {
+			backend.syncActivity.RequestSync()
+		})
+	}
 	panel.RegisterHook(events.Common.WindowClosing, func(event *application.WindowEvent) {
 		event.Cancel()
 		panel.Hide()

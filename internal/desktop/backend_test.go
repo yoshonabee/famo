@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 	"testing/fstest"
+	"time"
 
 	"famo/internal/tasks"
 )
@@ -182,4 +183,97 @@ func TestInvalidDefaultSyncConfigKeepsLocalDesktopAvailable(t *testing.T) {
 	if _, err := Start(Config{DBPath: dbPath, SyncConfigPath: configPath}, assets); err == nil {
 		t.Fatal("explicit invalid sync configuration should fail")
 	}
+}
+
+func TestSyncWakesAfterDesktopAndAgentWrites(t *testing.T) {
+	const token = "test-loopback-token"
+	t.Setenv("FAMO_SYNC_LOCAL_TOKEN", token)
+	pulls := make(chan struct{}, 4)
+	pushes := make(chan string, 4)
+	worker := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Authorization") != "Bearer "+token {
+			w.WriteHeader(http.StatusForbidden)
+			return
+		}
+		w.Header().Set("X-Famo-Sync-Account", "personal")
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/api/sync/pull":
+			io.WriteString(w, `{"changes":[],"cursor":0,"has_more":false}`)
+			pulls <- struct{}{}
+		case "/api/sync/push":
+			var op tasks.SyncOperation
+			if err := json.NewDecoder(r.Body).Decode(&op); err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			json.NewEncoder(w).Encode(map[string]any{
+				"change": tasks.SyncChange{Sequence: 1, Task: op.Task},
+			})
+			pushes <- op.Task.Title
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer worker.Close()
+
+	dir := t.TempDir()
+	config := filepath.Join(dir, "famo-sync.json")
+	raw, err := json.Marshal(map[string]any{
+		"url": worker.URL, "account": "personal", "interval_seconds": 3600,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(config, raw, 0600); err != nil {
+		t.Fatal(err)
+	}
+	backend, err := Start(Config{
+		DBPath: filepath.Join(dir, "famo.db"), APIAddr: DefaultAPIAddr, SyncConfigPath: config,
+	}, fstest.MapFS{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer backend.Close()
+
+	waitForPull := func() {
+		t.Helper()
+		select {
+		case <-pulls:
+		case <-time.After(5 * time.Second):
+			t.Fatal("timed out waiting for sync")
+		}
+	}
+	expectPush := func(want string) {
+		t.Helper()
+		select {
+		case got := <-pushes:
+			if got != want {
+				t.Fatalf("pushed %q, want %q", got, want)
+			}
+		case <-time.After(5 * time.Second):
+			t.Fatal("local write did not trigger sync")
+		}
+		waitForPull()
+	}
+	waitForPull()
+
+	request := httptest.NewRequest(http.MethodPost, "wails://localhost/api/tasks", strings.NewReader(`{"title":"Desktop write"}`))
+	request.Header.Set("Content-Type", "application/json")
+	recorder := httptest.NewRecorder()
+	backend.Handler().ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusCreated {
+		t.Fatalf("embedded task create returned %d: %s", recorder.Code, recorder.Body)
+	}
+	expectPush("Desktop write")
+
+	response, err := http.Post(backend.APIURL()+"/tasks", "application/json", strings.NewReader(`{"title":"Agent write"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusCreated {
+		t.Fatalf("Agent task create returned %d", response.StatusCode)
+	}
+	expectPush("Agent write")
 }
