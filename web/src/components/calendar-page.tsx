@@ -5,10 +5,12 @@ import { isSortable } from '@dnd-kit/react/sortable'
 import { TaskMoveSection } from '@/components/task-move-section'
 import { localDate } from '@/lib/calendar'
 import { compareCompletionTime, type Task } from '@/lib/api'
+import { useLanguage } from '@/lib/i18n'
 
 type Props = {
   date: string
   tasks: Task[]
+  projectFiltered: boolean
   search: string
   loading: boolean
   busy: boolean
@@ -27,6 +29,7 @@ type Props = {
 export function CalendarPage({
   date,
   tasks,
+  projectFiltered,
   search,
   loading,
   busy,
@@ -36,6 +39,7 @@ export function CalendarPage({
   renderTask,
   drafts,
 }: Props) {
+  const { t } = useLanguage()
   const client = useQueryClient()
   const [moving, setMoving] = useState(false)
   const disabled = busy || moving
@@ -65,12 +69,15 @@ export function CalendarPage({
       renderTask(task, index, true, true),
   }
   return (
-    <section className="calendar-page" aria-label="日期任務">
+    <section className="calendar-page" aria-label={t('datedTasks')}>
       {!loading && (
         <>
           <p className="daily-progress">
-            已完成 {daily.filter((task) => task.completed_at).length} /{' '}
-            {daily.length}
+            {t(
+              'dailyProgress',
+              daily.filter((task) => task.completed_at).length,
+              daily.length,
+            )}
           </p>
           <DragDropProvider
             onDragStart={() => {
@@ -88,21 +95,24 @@ export function CalendarPage({
               onReorder(next.map((task) => task.id))
             }}
           >
-            <ul className="task-list" aria-label="當日未完成任務">
+            <ul className="task-list" aria-label={t('dailyOpenTasks')}>
               {active.map((task, index) => renderTask(task, index, disabled))}
               {drafts}
             </ul>
           </DragDropProvider>
           {!active.length && !completed.length && !drafts.length && (
             <div className="empty-list">
-              {search ? '沒有符合的任務' : '這天尚無任務'}
+              {search || projectFiltered ? t('noMatches') : t('noTasksForDate')}
             </div>
           )}
           {completed.length > 0 && (
-            <section className="daily-completed" aria-label="當日已完成">
-              <h2>已完成</h2>
+            <section
+              className="daily-completed"
+              aria-label={t('dailyCompleted')}
+            >
+              <h2>{t('completed')}</h2>
               <DragDropProvider>
-                <ul className="task-list" aria-label="當日已完成任務">
+                <ul className="task-list" aria-label={t('dailyCompletedTasks')}>
                   {completed.map((task, index) =>
                     renderTask(task, index, true),
                   )}

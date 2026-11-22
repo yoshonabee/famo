@@ -16,7 +16,9 @@ import (
 
 func Run(cfg Config) error {
 	var backend *Backend
-	agentTools := &AgentTools{}
+	language := &DisplayLanguage{}
+	agentTools := &AgentTools{language: language}
+	menuBar := &MenuBar{refresh: make(chan struct{}, 1)}
 	driveBackup := &DriveBackup{dbPath: cfg.DBPath, client: googleDriveClient()}
 	assets := application.BundledAssetFileServer(web.Assets())
 	app := application.New(application.Options{
@@ -34,9 +36,10 @@ func Run(cfg Config) error {
 		},
 		Mac: application.MacOptions{ApplicationShouldTerminateAfterLastWindowClosed: false},
 		Services: []application.Service{
-			application.NewService(&ThemeFiles{}),
-			application.NewService(&MenuBar{}),
+			application.NewService(&ThemeFiles{language: language}),
+			application.NewService(menuBar),
 			application.NewService(agentTools),
+			application.NewService(language),
 			application.NewService(driveBackup),
 		},
 		SingleInstance: &application.SingleInstanceOptions{
@@ -62,7 +65,7 @@ func Run(cfg Config) error {
 	appMenu := menu.AddSubmenu("Famo")
 	appMenu.AddRole(application.About)
 	appMenu.AddSeparator()
-	appMenu.Add("偏好設定…").SetAccelerator("CmdOrCtrl+,").OnClick(func(*application.Context) {
+	language.addItem(appMenu, "偏好設定…", "Settings…").SetAccelerator("CmdOrCtrl+,").OnClick(func(*application.Context) {
 		if window, ok := app.Window.GetByName("famo"); ok {
 			window.Show()
 			window.Focus()
@@ -77,40 +80,44 @@ func Run(cfg Config) error {
 	appMenu.AddRole(application.UnHide)
 	appMenu.AddSeparator()
 	appMenu.AddRole(application.Quit)
-	addShortcut := func(menu *application.Menu, title, key, action string) {
-		menu.Add(title).SetAccelerator("CmdOrCtrl+" + key).OnClick(func(*application.Context) {
+	addShortcut := func(menu *application.Menu, chinese, english, key, action string) {
+		language.addItem(menu, chinese, english).SetAccelerator("CmdOrCtrl+" + key).OnClick(func(*application.Context) {
 			if window, ok := app.Window.GetByName("famo"); ok {
-				(&MenuBar{}).OpenFamo()
+				showFamo()
 				window.EmitEvent("famo:shortcut", action)
 			}
 		})
 	}
-	fileMenu := menu.AddSubmenu("File")
-	addShortcut(fileMenu, "新增任務…", "t", "capture")
+	fileMenu := language.addSubmenu(menu, "檔案", "File")
+	addShortcut(fileMenu, "新增任務…", "New Task…", "t", "capture")
 	fileMenu.AddSeparator()
 	fileMenu.AddRole(application.CloseWindow)
 	menu.AddRole(application.EditMenu)
 	editMenu := menu.FindByRole(application.EditMenu).GetSubmenu()
 	editMenu.AddSeparator()
-	addShortcut(editMenu, "搜尋任務…", "f", "search")
-	viewMenu := menu.AddSubmenu("View")
-	addShortcut(viewMenu, "展開或收合側邊欄", "d", "sidebar")
-	addShortcut(viewMenu, "返回今日", "k", "today")
+	addShortcut(editMenu, "搜尋任務…", "Search Tasks…", "f", "search")
+	addShortcut(editMenu, "搜尋所有任務…", "Search All Tasks…", "Shift+f", "global-search")
+	viewMenu := language.addSubmenu(menu, "顯示", "View")
+	addShortcut(viewMenu, "展開或收合側邊欄", "Toggle Sidebar", "d", "sidebar")
+	addShortcut(viewMenu, "返回今日", "Go to Today", "k", "today")
 	menu.AddRole(application.WindowMenu)
 	app.Menu.Set(menu)
 	mainWindow := app.Window.NewWithOptions(application.WebviewWindowOptions{
 		Name: "famo", Title: "Famo", URL: "/",
 		Width: 1100, Height: 780, MinWidth: 620, MinHeight: 480,
 		BackgroundColour: application.NewRGB(248, 247, 244),
+		Mac:              application.MacWindow{TitleBar: application.MacTitleBarHidden},
+		// Wails injects CSS as a JavaScript string literal on macOS.
+		CSS: ":root { --window-titlebar-height: 30px; --window-controls-width: 78px; }",
 	})
 	mainWindow.RegisterHook(events.Common.WindowClosing, func(event *application.WindowEvent) {
 		event.Cancel()
 		mainWindow.Hide()
 	})
 	app.Event.OnApplicationEvent(events.Mac.ApplicationShouldHandleReopen, func(*application.ApplicationEvent) {
-		(&MenuBar{}).OpenFamo()
+		showFamo()
 	})
-	setupMenuBar(app, backend)
+	setupMenuBar(app, backend, menuBar, language)
 	app.OnShutdown(func() {
 		if err := backend.Close(); err != nil {
 			log.Printf("關閉 Famo：%v", err)

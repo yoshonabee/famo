@@ -83,6 +83,46 @@ func TestTaskCommandsUseWorkspaceAndVersions(t *testing.T) {
 	if len(daily.Tasks) != 0 {
 		t.Fatalf("completed task still in today: %+v", daily)
 	}
+
+	projectDir, projectPrompt := t.TempDir(), "Read the Project README"
+	project, err := db.CreateProject(t.Context(), tasks.ProjectInput{
+		Name: "Project with workspace", WorkspaceDir: &projectDir, WorkspacePrompt: &projectPrompt,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	assigned, err := db.Create(t.Context(), tasks.CreateInput{Title: "Assigned", ProjectID: project.ID, ScheduledDate: date})
+	if err != nil {
+		t.Fatal(err)
+	}
+	read(call(0, "today", "--date", date), &daily)
+	if daily.Workspace != workspace || len(daily.Tasks) != 1 || daily.Tasks[0].ProjectID != project.ID {
+		t.Fatalf("unexpected today result for assigned task: %+v", daily)
+	}
+	read(call(0, "context", assigned.ID), &context)
+	if context.Workspace != (agent.Workspace{Dir: projectDir, Prompt: projectPrompt}) || context.Task.ID != assigned.ID {
+		t.Fatalf("unexpected context for assigned task: %+v", context)
+	}
+
+	unconfigured, err := db.CreateProject(t.Context(), tasks.ProjectInput{Name: "Project with empty workspace"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Act(t.Context(), assigned.ID, tasks.Action{Version: assigned.Version, Op: "update", ProjectID: &unconfigured.ID}); err != nil {
+		t.Fatal(err)
+	}
+	read(call(0, "context", assigned.ID), &context)
+	if context.Workspace != (agent.Workspace{}) || context.Task.ProjectID != unconfigured.ID {
+		t.Fatalf("unexpected context for an unconfigured Project: %+v", context)
+	}
+	if err := db.DeleteProject(t.Context(), unconfigured.ID, unconfigured.Version); err != nil {
+		t.Fatal(err)
+	}
+	context.Task = task{}
+	read(call(0, "context", assigned.ID), &context)
+	if context.Workspace != workspace || context.Task.ProjectID != "" {
+		t.Fatalf("unexpected context after Project deletion: %+v", context)
+	}
 }
 
 func TestSkillInstallationWorksWithoutAPI(t *testing.T) {

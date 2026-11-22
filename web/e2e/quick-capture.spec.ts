@@ -91,7 +91,7 @@ test('Enter 連續新增，不等待上一列儲存，名稱以外皆可留白',
   await dialog.getByRole('button', { name: '關閉', exact: true }).click()
   await checkbox.click()
   await expect(row).not.toBeVisible()
-  await page.getByRole('button', { name: '已完成' }).click()
+  await page.getByRole('button', { name: '已完成', exact: true }).click()
   await expect(capture).toBeHidden()
   await page.getByRole('button', { name: '今日任務', exact: true }).click()
   await expect(input).toHaveValue('第三件先保留草稿')
@@ -178,4 +178,117 @@ test('中文選字與空白 Enter 不送出；失敗保留原列，手機可重�
     path: '/private/tmp/famo-quick-capture-mobile.png',
     fullPage: true,
   })
+})
+
+test('⌘T 可選擇其他 Project，重新開啟沿用目前 Project', async ({
+  page,
+  request,
+}) => {
+  const source = await request.post('/api/projects', {
+    data: { name: '浮窗預設 Project' },
+  })
+  const target = await request.post('/api/projects', {
+    data: { name: '浮窗指定 Project' },
+  })
+  expect(source.ok() && target.ok()).toBe(true)
+  const { id: targetId } = await target.json()
+
+  await page.goto('/')
+  await page
+    .getByRole('button', { name: '浮窗預設 Project', exact: true })
+    .click()
+  await page.keyboard.press('Meta+t')
+  const dialog = page.getByRole('dialog', { name: '快速新增任務' })
+  const picker = dialog.getByRole('button', { name: '任務 Project' })
+  const projects = dialog.getByRole('listbox', { name: '任務 Project' })
+  await expect(picker).toHaveText('浮窗預設 Project')
+  await picker.press('ArrowDown')
+  await expect(projects.getByRole('option', { selected: true })).toBeFocused()
+  await page.keyboard.press('Escape')
+  await expect(projects).toBeHidden()
+  await expect(picker).toBeFocused()
+  await expect(dialog).toBeVisible()
+
+  await picker.click()
+  await projects.getByRole('option', { name: '浮窗指定 Project' }).click()
+  const input = dialog.getByRole('textbox', { name: '快速新增任務名稱' })
+  await expect(input).toBeFocused()
+  await input.fill('浮窗指定任務分類')
+  const saved = page.waitForResponse(
+    (response) =>
+      response.url().endsWith('/api/tasks') &&
+      response.request().method() === 'POST' &&
+      response.ok(),
+  )
+  await input.press('Enter')
+  expect(await (await saved).json()).toMatchObject({
+    title: '浮窗指定任務分類',
+    project_id: targetId,
+  })
+  await page.keyboard.press('Escape')
+  await page.keyboard.press('Meta+t')
+  await expect(picker).toHaveText('浮窗預設 Project')
+})
+
+test('多 Project Board 可選擇其中一個 Project 來新增任務', async ({
+  page,
+  request,
+}) => {
+  const names = [
+    '新增用採買 Project',
+    '新增用生活 Project',
+    'Board 以外的 Project',
+  ]
+  const ids: string[] = []
+  for (const name of names) {
+    const project = await request.post('/api/projects', { data: { name } })
+    expect(project.ok()).toBe(true)
+    ids.push((await project.json()).id)
+  }
+  const boardName = '多 Project 新增測試 Board'
+  const board = await request.post('/api/boards', {
+    data: { name: boardName, project_ids: ids.slice(0, 2) },
+  })
+  expect(board.ok()).toBe(true)
+
+  await page.goto('/')
+  await page.getByRole('button', { name: boardName, exact: true }).click()
+  await page.getByRole('button', { name: '前一天' }).click()
+  const date = await page.locator('.board-date time').getAttribute('datetime')
+  const add = page.getByRole('button', { name: '新增任務', exact: true })
+  await add.click()
+  const dialog = page.getByRole('dialog', { name: '快速新增任務' })
+  const input = dialog.getByRole('textbox', { name: '快速新增任務名稱' })
+  const picker = dialog.getByRole('button', { name: '任務 Project' })
+  const projects = dialog.getByRole('listbox', { name: '任務 Project' })
+  const title = '從多 Project Board 新增的任務'
+  await input.fill(title)
+  await input.press('Enter')
+  await expect(input).toHaveValue(title)
+  await expect(
+    dialog.getByRole('button', { name: '新增這一列' }),
+  ).toBeDisabled()
+  await picker.click()
+  await expect(projects.getByRole('option')).toHaveCount(2)
+  await projects.getByRole('option', { name: names[1] }).click()
+  const saved = page.waitForResponse(
+    (response) =>
+      response.url().endsWith('/api/tasks') &&
+      response.request().method() === 'POST' &&
+      response.ok(),
+  )
+  await input.press('Enter')
+  expect(await (await saved).json()).toMatchObject({
+    title,
+    scheduled_date: date,
+    project_id: ids[1],
+  })
+  await page.keyboard.press('Escape')
+  await expect(page.getByRole('heading', { name: boardName })).toBeVisible()
+  await expect(page.getByLabel(`編輯任務標題：${title}`)).toBeVisible()
+  await page.keyboard.press('Meta+t')
+  await expect(picker).toHaveText('選擇 Project')
+  await expect(
+    dialog.getByRole('button', { name: `任務日期 ${date}` }),
+  ).toBeVisible()
 })

@@ -1,8 +1,11 @@
-import { useState, type ReactNode } from 'react'
+import { type ReactNode } from 'react'
 import { DragDropProvider } from '@dnd-kit/react'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { type Task } from '@/lib/api'
+import { useLanguage } from '@/lib/i18n'
+import { useTaskSelection } from '@/lib/task-selection'
+import { formatListDate, formatTaskDate, localDate } from '@/lib/calendar'
 
 export function TaskMoveSection({
   kind,
@@ -19,9 +22,12 @@ export function TaskMoveSection({
   onMove: (task: Task) => Promise<void>
   renderTask: (task: Task, index: number) => ReactNode
 }) {
-  const [selected, setSelected] = useState<string[]>([])
-  const chosen = tasks.filter((task) => selected.includes(task.id))
-  const heading = kind === 'earlier' ? '先前未完成' : '未指定日期'
+  const { t, locale } = useLanguage()
+  const selection = useTaskSelection(kind, busy, 'data-move-task')
+  const selected = new Set(selection.ids)
+  const chosen = tasks.filter((task) => selected.has(task.id))
+  const today = localDate()
+  const earlier = kind === 'earlier'
   const visibleIds = new Set(tasks.map((task) => task.id))
   const groups = new Map<string, Task[]>()
   for (const task of tasks) {
@@ -36,7 +42,7 @@ export function TaskMoveSection({
       for (const task of items) {
         try {
           await onMove(task)
-          setSelected((ids) => ids.filter((id) => id !== task.id))
+          selection.deselect(task.id)
         } catch {
           // The shared mutation shows errors and failed tasks stay selected.
         }
@@ -48,18 +54,23 @@ export function TaskMoveSection({
 
   function renderRows(items: Task[]) {
     return items.map((task, index) => (
-      <li className="task-move-row" key={task.id}>
+      <li
+        className="task-move-row"
+        key={task.id}
+        data-move-task={task.id}
+        data-batch-selected={selected.has(task.id) || undefined}
+        tabIndex={0}
+        aria-label={t(
+          selected.has(task.id) ? 'selectedTask' : 'selectTask',
+          task.title,
+        )}
+        aria-keyshortcuts="Space Shift+ArrowUp Shift+ArrowDown"
+      >
         <Checkbox
-          aria-label={`選取任務：${task.title}`}
-          checked={selected.includes(task.id)}
+          aria-label={t('selectTask', task.title)}
+          checked={selected.has(task.id)}
           disabled={busy}
-          onCheckedChange={(checked) =>
-            setSelected((ids) =>
-              checked
-                ? [...new Set([...ids, task.id])]
-                : ids.filter((id) => id !== task.id),
-            )
-          }
+          onCheckedChange={() => selection.toggle(task.id)}
         />
         <ul>{renderTask(task, index)}</ul>
         <Button
@@ -68,7 +79,7 @@ export function TaskMoveSection({
           disabled={busy}
           onClick={() => void moveTasks([task])}
         >
-          移到這天
+          {t('moveToDate')}
         </Button>
       </li>
     ))
@@ -77,14 +88,16 @@ export function TaskMoveSection({
   return (
     <details className={`task-move-section ${kind}-tasks`}>
       <summary>
-        {heading}（{tasks.length}）
+        {t(earlier ? 'earlierTasksCount' : 'undatedTasksCount', tasks.length)}
       </summary>
       {tasks.length ? (
-        <>
+        <div {...selection.handlers} onClick={selection.onBackgroundClick}>
           <div className="task-move-actions">
             <label>
               <Checkbox
-                aria-label={`全選${heading}任務`}
+                aria-label={t(
+                  earlier ? 'selectAllEarlier' : 'selectAllUndated',
+                )}
                 disabled={busy}
                 checked={
                   chosen.length === tasks.length
@@ -94,14 +107,14 @@ export function TaskMoveSection({
                       : false
                 }
                 onCheckedChange={(checked) =>
-                  setSelected((ids) =>
+                  selection.selectAll(
                     checked
-                      ? [...new Set([...ids, ...visibleIds])]
-                      : ids.filter((id) => !visibleIds.has(id)),
+                      ? [...new Set([...selected, ...visibleIds])]
+                      : [...selected].filter((id) => !visibleIds.has(id)),
                   )
                 }
               />
-              全選
+              {t('selectAll')}
             </label>
             <Button
               variant="outline"
@@ -109,20 +122,34 @@ export function TaskMoveSection({
               disabled={busy || !chosen.length}
               onClick={() => void moveTasks(chosen)}
             >
-              將選取任務移到這天（{chosen.length}）
+              {t('moveSelectedTasks', chosen.length)}
             </Button>
           </div>
           <DragDropProvider>
-            <ul className="task-list" aria-label={`${heading}任務`}>
+            <ul
+              className="task-list"
+              aria-label={t(earlier ? 'earlierTaskList' : 'undatedTaskList')}
+            >
               {Array.from(groups, ([scheduledDate, items]) =>
                 scheduledDate ? (
                   <li className="task-move-date-group" key={scheduledDate}>
                     <h3>
-                      <time dateTime={scheduledDate}>{scheduledDate}</time>
+                      <time
+                        dateTime={scheduledDate}
+                        title={formatTaskDate(scheduledDate, locale)}
+                        className={
+                          scheduledDate < today ? 'overdue-date' : undefined
+                        }
+                      >
+                        {formatListDate(scheduledDate, locale, today)}
+                      </time>
                     </h3>
                     <ul
                       className="task-list"
-                      aria-label={`${scheduledDate} 未完成任務`}
+                      aria-label={t(
+                        'incompleteTasksForDate',
+                        formatTaskDate(scheduledDate, locale),
+                      )}
                     >
                       {renderRows(items)}
                     </ul>
@@ -133,9 +160,11 @@ export function TaskMoveSection({
               )}
             </ul>
           </DragDropProvider>
-        </>
+        </div>
       ) : (
-        <p className="empty-list">沒有{heading}的任務</p>
+        <p className="empty-list">
+          {t(earlier ? 'noEarlierTasks' : 'noUndatedTasks')}
+        </p>
       )}
     </details>
   )

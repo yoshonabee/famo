@@ -61,7 +61,7 @@ func ApplyCleanup(ctx context.Context, path, backupPath string) (CleanupReport, 
 		return report, fmt.Errorf("建立備份：%w", err)
 	}
 	report.Backup = backup
-	if err := migrateTasks(ctx, tx); err != nil {
+	if err := migrateSchema(ctx, tx); err != nil {
 		return report, err
 	}
 	if _, err := tx.ExecContext(ctx, `
@@ -95,7 +95,7 @@ func cleanupReport(ctx context.Context, db schemaReader) (CleanupReport, error) 
 	}
 	report := CleanupReport{SchemaVersion: version, LegacyTables: []string{}}
 	prefix := ""
-	if version == schemaVersion {
+	if version >= activeTaskSchemaVersion {
 		prefix = "famo_legacy_"
 	}
 	for _, entry := range []struct {

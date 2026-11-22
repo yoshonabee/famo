@@ -4,11 +4,13 @@ import { CornerDownLeft, LoaderCircle, Square } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { request, type Task } from '@/lib/api'
+import { useLanguage } from '@/lib/i18n'
 
 type Draft = {
   id: string
   title: string
   scheduled_date: string
+  project_id?: string
   floating?: boolean
   error?: string
 }
@@ -20,7 +22,12 @@ function taskTitle(value: string) {
     .trim()
 }
 
-export function useQuickCapture(onCapture: () => void, scheduledDate = '') {
+export function useQuickCapture(
+  onCapture: () => void,
+  scheduledDate = '',
+  projectId?: string,
+) {
+  const { t } = useLanguage()
   const client = useQueryClient()
   const [drafts, setDrafts] = useState<Draft[]>([])
   const [announcement, setAnnouncement] = useState('')
@@ -29,6 +36,7 @@ export function useQuickCapture(onCapture: () => void, scheduledDate = '') {
       request<Task>('/tasks', {
         title: draft.title,
         scheduled_date: draft.scheduled_date,
+        project_id: draft.project_id,
       }),
     retry: false,
     onSuccess: async (task) => {
@@ -49,26 +57,29 @@ export function useQuickCapture(onCapture: () => void, scheduledDate = '') {
     try {
       const task = await create.mutateAsync(draft)
       setDrafts((old) => old.filter((item) => item.id !== draft.id))
-      setAnnouncement(`已新增：${task.title}`)
+      setAnnouncement(t('taskAdded', task.title))
     } catch (error) {
       setDrafts((old) =>
         old.map((item) =>
           item.id === draft.id
             ? {
                 ...item,
-                error:
-                  error instanceof Error ? error.message : '無法儲存，請重試',
+                error: error instanceof Error ? error.message : t('saveFailed'),
               }
             : item,
         ),
       )
     }
   }
-  function submit(title: string, fromPalette?: { scheduledDate: string }) {
+  function submit(
+    title: string,
+    fromPalette?: { scheduledDate: string; projectId: string },
+  ) {
     const draft = {
       id: crypto.randomUUID(),
       title,
       scheduled_date: fromPalette?.scheduledDate ?? scheduledDate,
+      project_id: fromPalette ? fromPalette.projectId || undefined : projectId,
       floating: !!fromPalette,
     }
     setDrafts((old) => [...old, draft])
@@ -85,29 +96,30 @@ export function CaptureDraftRow({
   draft: Draft
   retry: (draft: Draft) => void
 }) {
+  const { t, errorText } = useLanguage()
   return (
     <li className="task-row draft-row">
       <div className="todo-line">
         <Checkbox
           checked={false}
           disabled
-          aria-label={`正在新增任務：${draft.title}`}
+          aria-label={t('addingNamedTask', draft.title)}
         />
         <span className="todo-title">{draft.title}</span>
         {draft.error ? (
           <Button variant="ghost" size="sm" onClick={() => retry(draft)}>
-            重試
+            {t('retry')}
           </Button>
         ) : (
           <span className="task-chip saving">
             <LoaderCircle size={12} className="animate-spin" />
-            儲存中
+            {t('savingDraft')}
           </span>
         )}
       </div>
       {draft.error && (
         <p className="capture-error" role="alert">
-          未能確認儲存：{draft.error}。內容已保留，請確認任務列表後重試。
+          {t('captureDraftError', errorText(draft.error))}
         </p>
       )}
     </li>
@@ -123,10 +135,11 @@ export function QuickCapture({
   onSubmit: (title: string) => void
   announcement: string
 }) {
+  const { t } = useLanguage()
   return (
     <section
       className="quick-capture"
-      aria-label="快速新增任務"
+      aria-label={t('quickCapture')}
       hidden={hidden}
     >
       <CaptureEntry onSubmit={onSubmit} />
@@ -149,14 +162,17 @@ export function CaptureAnnouncement({
 
 export function CaptureEntry({
   onSubmit,
+  canSubmit = true,
 }: {
   onSubmit: (title: string) => void
+  canSubmit?: boolean
 }) {
+  const { t } = useLanguage()
   const input = useRef<HTMLInputElement>(null)
   const composing = useRef(false)
   const [draft, setDraft] = useState('')
   function submit() {
-    if (composing.current) return
+    if (!canSubmit || composing.current) return
     const title = taskTitle(draft)
     if (!title) return
     setDraft('')
@@ -168,10 +184,11 @@ export function CaptureEntry({
       <Square className="capture-marker" size={17} aria-hidden="true" />
       <input
         ref={input}
-        aria-label="快速新增任務名稱"
+        aria-label={t('quickCaptureName')}
+        data-capture-entry
         value={draft}
         maxLength={200}
-        placeholder="新增任務…"
+        placeholder={t('addTaskPlaceholder')}
         onChange={(e) => setDraft(e.target.value)}
         onCompositionStart={() => {
           composing.current = true
@@ -195,9 +212,9 @@ export function CaptureEntry({
         type="button"
         variant="ghost"
         size="icon"
-        aria-label="新增這一列"
-        title="Enter 新增"
-        disabled={!taskTitle(draft)}
+        aria-label={t('addThisTask')}
+        title={t('enterToAdd')}
+        disabled={!canSubmit || !taskTitle(draft)}
         onClick={submit}
       >
         <CornerDownLeft />

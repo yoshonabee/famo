@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { ApiError, request, type Action, type Task } from '@/lib/api'
+import { useLanguage } from '@/lib/i18n'
 
 type Edit = { task: Task; title: string }
 
@@ -13,6 +14,7 @@ export function TodoTitle({
   title: string
   onDeleted: () => void
 }) {
+  const { t, errorText } = useLanguage()
   const client = useQueryClient()
   const input = useRef<HTMLInputElement>(null)
   const edit = useRef<Edit | null>(null)
@@ -85,9 +87,7 @@ export function TodoTitle({
         requestAnimationFrame(() => {
           const target = nextFocus?.isConnected
             ? nextFocus
-            : document.querySelector<HTMLInputElement>(
-                '[aria-label="快速新增任務名稱"]',
-              )
+            : document.querySelector<HTMLInputElement>('[data-capture-entry]')
           target?.focus()
         })
       }
@@ -102,7 +102,7 @@ export function TodoTitle({
       <input
         ref={input}
         className="todo-title"
-        aria-label={`編輯任務標題：${title}`}
+        aria-label={t('editTaskTitle', title)}
         value={draft ?? title}
         maxLength={200}
         readOnly={action.isPending}
@@ -149,7 +149,7 @@ export function TodoTitle({
       />
       {error && (
         <div className="inline-edit-error" role="alert">
-          {error}
+          {errorText(error)}
           <button
             type="button"
             onPointerDown={(e) => e.preventDefault()}
@@ -158,7 +158,7 @@ export function TodoTitle({
               input.current?.blur()
             }}
           >
-            取消並讀取最新標題
+            {t('discardTitleAndReload')}
           </button>
         </div>
       )}

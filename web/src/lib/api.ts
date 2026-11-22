@@ -1,10 +1,28 @@
 import { notifyTasksChanged } from '@/lib/desktop'
+import type { Locale } from '@/lib/i18n'
 
 export type Link = { url: string }
+export type Project = {
+  id: string
+  name: string
+  color: string
+  workspace_dir: string
+  workspace_prompt: string
+  version: number
+}
+export type Board = {
+  id: string
+  name: string
+  icon: string
+  project_ids: string[]
+  version: number
+}
+export type BoardInput = Pick<Board, 'name' | 'icon' | 'project_ids'>
 export type Task = {
   id: string
   title: string
   scheduled_date: string
+  project_id?: string
   description: string
   completed_at: string | null
   deleted_at: string | null
@@ -25,6 +43,7 @@ export type Action = {
   links?: Link[]
   link_index?: number
   scheduled_date?: string
+  project_id?: string
   title?: string
   description?: string
 }
@@ -57,15 +76,20 @@ export async function request<T>(
   if (body !== undefined && path.startsWith('/tasks')) void notifyTasksChanged()
   return data as T
 }
-export function orderSubset(tasks: Task[], ids: string[]) {
+export function orderSubset<T extends { id: string }>(
+  items: T[],
+  ids: string[],
+) {
   const selected = new Map(
-    tasks.filter((t) => ids.includes(t.id)).map((t) => [t.id, t]),
+    items
+      .filter((item) => ids.includes(item.id))
+      .map((item) => [item.id, item]),
   )
   const ordered = ids
     .map((id) => selected.get(id))
-    .filter((t): t is Task => !!t)
+    .filter((item): item is T => !!item)
   let index = 0
-  return tasks.map((t) => (selected.has(t.id) ? ordered[index++] : t))
+  return items.map((item) => (selected.has(item.id) ? ordered[index++] : item))
 }
 function fractionalSecond(timestamp: string) {
   return Number(timestamp.match(/\.\d+/)?.[0] ?? 0)
@@ -81,9 +105,9 @@ export function compareCompletionTime(a: Task, b: Task) {
   )
 }
 
-export const dateTime = (v: string | null) =>
+export const dateTime = (v: string | null, locale: Locale) =>
   v
-    ? new Date(v).toLocaleString('zh-TW', {
+    ? new Date(v).toLocaleString(locale, {
         month: 'numeric',
         day: 'numeric',
         hour: '2-digit',

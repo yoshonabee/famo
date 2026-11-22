@@ -1,317 +1,160 @@
-import {
-  Check,
-  Download,
-  Monitor,
-  Palette,
-  Pencil,
-  Trash2,
-  Upload,
-} from 'lucide-react'
-import { useRef, useState, type ChangeEvent } from 'react'
+import { Bot, Palette, Settings2 } from 'lucide-react'
+import { useRef, useState } from 'react'
 import { AgentPreferences } from '@/components/agent-preferences'
+import { AppearancePreferences } from '@/components/appearance-preferences'
+import { DataCleanupPreferences } from '@/components/data-cleanup-preferences'
 import { DriveBackupPreferences } from '@/components/drive-backup-preferences'
+import { isDesktop } from '@/lib/desktop'
 import { Button } from '@/components/ui/button'
-import { ThemeEditor } from '@/components/theme-editor'
-import { ThemePreview } from '@/components/theme-preview'
-import { exportThemeFile, isDesktop } from '@/lib/desktop'
-import {
-  maxThemeFileSize,
-  parseThemeFile,
-  serializeThemes,
-  themes,
-  type Theme,
-  type ThemeController,
-  type ThemePreference,
-} from '@/lib/theme'
+import { Checkbox } from '@/components/ui/checkbox'
+import { type ThemeController } from '@/lib/theme'
+import { languages, useLanguage, type Locale } from '@/lib/i18n'
+import { footerNavigation, type FooterNavItem } from '@/lib/sidebar-preferences'
 
-function ThemeOption({
-  theme,
-  preference,
-  onChange,
-}: {
-  theme: Theme
-  preference: ThemePreference
-  onChange: (id: string) => void
-}) {
-  return (
-    <label className="theme-option">
-      <input
-        type="radio"
-        name="theme"
-        value={theme.id}
-        aria-label={theme.name}
-        checked={preference === theme.id}
-        onChange={() => onChange(theme.id)}
-      />
-      <ThemePreview theme={theme} />
-      <span className="theme-option-heading">
-        <strong>{theme.name}</strong>
-        <Check className="theme-check" size={16} aria-hidden="true" />
-      </span>
-      <span className="theme-option-description">
-        {theme.description ||
-          (theme.mode === 'light' ? '自訂淺色主題' : '自訂深色主題')}
-      </span>
-    </label>
-  )
-}
+type Section = 'general' | 'appearance' | 'agent'
 
 export function PreferencesPage({
   appearance,
   active,
+  showToday,
+  footerItems,
+  onShowTodayChange,
+  onFooterChange,
 }: {
-  appearance: ThemeController
   active: boolean
+  appearance: ThemeController
+  showToday: boolean
+  footerItems: FooterNavItem[]
+  onShowTodayChange: (show: boolean) => void
+  onFooterChange: (id: FooterNavItem, move: boolean) => void
 }) {
-  const {
-    preference,
-    theme,
-    selectTheme,
-    storageError,
-    customThemes,
-    allThemes,
-  } = appearance
-  const [editor, setEditor] = useState<{ base: Theme; id?: string } | null>(
-    null,
-  )
-  const [pendingDelete, setPendingDelete] = useState<string | null>(null)
-  const [notice, setNotice] = useState('')
-  const [error, setError] = useState('')
-  const [busy, setBusy] = useState(false)
-  const fileInput = useRef<HTMLInputElement>(null)
-
-  async function importFile(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0]
-    event.target.value = ''
-    if (!file) return
-    setError('')
-    setNotice('')
-    setBusy(true)
-    try {
-      if (file.size > maxThemeFileSize)
-        throw new Error('主題檔案不可超過 1 MB。')
-      const imported = parseThemeFile(await file.text())
-      if (appearance.importThemes(imported))
-        setNotice(`已匯入 ${imported.length} 款主題。`)
-    } catch (error) {
-      setError((error as Error).message)
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  async function exportSelection(selection: Theme[]) {
-    setError('')
-    setNotice('')
-    setBusy(true)
-    try {
-      const filename =
-        selection.length === 1
-          ? `famo-theme-${selection[0].name.replace(/[/\\:*?"<>|]/g, '-')}.json`
-          : 'famo-themes.json'
-      if (await exportThemeFile(serializeThemes(selection), filename))
-        setNotice(`已匯出 ${selection.length} 款主題。`)
-    } catch (error) {
-      setError(`匯出失敗：${(error as Error).message}`)
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  return (
-    <div className="preferences-page">
-      <header className="preferences-heading">
-        <h1>設定</h1>
-      </header>
-      <AgentPreferences />
-      {isDesktop() && <DriveBackupPreferences active={active} />}
-      <div className="theme-tools">
-        <Button
-          variant="outline"
-          disabled={busy}
-          onClick={() => {
-            setEditor({ base: theme })
-            setError('')
-            setNotice('')
-          }}
-        >
-          <Palette />
-          新增主題
-        </Button>
-        <Button
-          variant="outline"
-          disabled={busy}
-          onClick={() => fileInput.current?.click()}
-        >
-          <Upload />
-          匯入主題
-        </Button>
-        <Button
-          variant="outline"
-          disabled={busy}
-          onClick={() => void exportSelection([theme])}
-        >
-          <Download />
-          匯出目前主題
-        </Button>
-        <input
-          ref={fileInput}
-          hidden
-          type="file"
-          accept=".json,application/json"
-          aria-label="匯入主題檔案"
-          onChange={(event) => void importFile(event)}
-        />
-      </div>
-      {(error || storageError) && (
-        <p className="inline-edit-error theme-notice" role="alert">
-          {error || storageError}
-        </p>
-      )}
-      {notice && (
-        <p className="theme-notice" role="status">
-          {notice}
-        </p>
-      )}
-      {editor && (
-        <ThemeEditor
-          key={editor.id ?? 'new'}
-          initialTheme={editor.base}
-          editingId={editor.id}
-          allThemes={allThemes}
-          onCancel={() => setEditor(null)}
-          onSave={(draft, id) => {
-            if (!appearance.saveTheme(draft, id)) return false
-            setEditor(null)
-            setNotice('主題已儲存並套用。')
-            return true
-          }}
-        />
-      )}
-      <fieldset className="theme-settings" aria-describedby="theme-description">
-        <legend>外觀主題</legend>
-        <p id="theme-description" className="preferences-description">
-          選擇後立即套用，並自動記住你的偏好。
-        </p>
-        <label className="system-theme-option">
-          <input
-            type="radio"
-            name="theme"
-            value="system"
-            aria-label="跟隨系統"
-            checked={preference === 'system'}
-            onChange={() => selectTheme('system')}
-          />
-          <Monitor size={22} aria-hidden="true" />
-          <span>
-            <strong>跟隨系統</strong>
-            <span>隨系統切換淺色「苔綠」與深色「午夜」</span>
-          </span>
-          <Check className="theme-check" size={18} aria-hidden="true" />
-        </label>
-        {customThemes.length > 0 && (
-          <section className="theme-group" aria-labelledby="custom-themes">
-            <div className="custom-themes-heading">
-              <h2 id="custom-themes">自訂主題</h2>
-              <Button
-                variant="ghost"
-                size="sm"
-                disabled={busy}
-                onClick={() => void exportSelection(customThemes)}
-              >
-                <Download />
-                匯出全部自訂主題
-              </Button>
+  const { t, locale, setLocale, storageFailed } = useLanguage()
+  const [activeSection, setActiveSection] = useState<Section>('appearance')
+  const heading = useRef<HTMLHeadingElement>(null)
+  const sections = [
+    {
+      id: 'general',
+      label: t('general'),
+      icon: Settings2,
+      content: (
+        <div className="preferences-general">
+          <section aria-labelledby="preferences-language-heading">
+            <h3 id="preferences-language-heading">{t('language')}</h3>
+            <div className="preferences-card">
+              <label className="field">
+                <span>{t('displayLanguage')}</span>
+                <select
+                  value={locale}
+                  onChange={(event) => setLocale(event.target.value as Locale)}
+                >
+                  {languages.map(({ code, label }) => (
+                    <option key={code} lang={code} value={code}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {storageFailed && (
+                <p role="alert">{t('languageStorageFailed')}</p>
+              )}
             </div>
-            <div className="theme-grid">
-              {customThemes.map((item) => (
-                <div className="custom-theme-card" key={item.id}>
-                  <ThemeOption
-                    theme={item}
-                    preference={preference}
-                    onChange={selectTheme}
+          </section>
+          <section aria-labelledby="preferences-sidebar-heading">
+            <h3 id="preferences-sidebar-heading">{t('sidebar')}</h3>
+            <div className="preferences-card">
+              <label className="preferences-checkbox">
+                <Checkbox
+                  checked={showToday}
+                  onCheckedChange={(checked) =>
+                    onShowTodayChange(checked === true)
+                  }
+                />
+                <span>{t('showTodayTab')}</span>
+              </label>
+              {footerNavigation.map((id) => (
+                <label className="preferences-checkbox" key={id}>
+                  <Checkbox
+                    checked={footerItems.includes(id)}
+                    onCheckedChange={(checked) =>
+                      onFooterChange(id, checked === true)
+                    }
                   />
-                  <div className="custom-theme-actions">
-                    {pendingDelete === item.id ? (
-                      <>
-                        <span>刪除此主題？</span>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setPendingDelete(null)}
-                        >
-                          取消
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => {
-                            if (appearance.removeTheme(item.id)) {
-                              setPendingDelete(null)
-                              if (editor?.id === item.id) setEditor(null)
-                            }
-                          }}
-                        >
-                          確認刪除
-                        </Button>
-                      </>
-                    ) : (
-                      <>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          aria-label={`編輯主題：${item.name}`}
-                          onClick={() => setEditor({ base: item, id: item.id })}
-                        >
-                          <Pencil />
-                          編輯
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          aria-label={`刪除主題：${item.name}`}
-                          onClick={() => setPendingDelete(item.id)}
-                        >
-                          <Trash2 />
-                          刪除
-                        </Button>
-                      </>
+                  <span>
+                    {t(
+                      'moveAboveRecentlyDeleted',
+                      t(id === 'active' ? 'tasks' : 'completed'),
                     )}
-                  </div>
-                </div>
+                  </span>
+                </label>
               ))}
             </div>
           </section>
-        )}
-        {(['light', 'dark'] as const).map((mode) => (
-          <section
-            className="theme-group"
-            key={mode}
-            aria-labelledby={`${mode}-themes`}
-          >
-            <h2 id={`${mode}-themes`}>
-              {mode === 'light' ? '淺色主題' : '深色主題'}
-            </h2>
-            <div className="theme-grid">
-              {themes
-                .filter((item) => item.mode === mode)
-                .map((item) => (
-                  <ThemeOption
-                    key={item.id}
-                    theme={item}
-                    preference={preference}
-                    onChange={selectTheme}
-                  />
-                ))}
-            </div>
+          <section aria-labelledby="preferences-local-data-heading">
+            <h3 id="preferences-local-data-heading">{t('localData')}</h3>
+            <DataCleanupPreferences />
           </section>
-        ))}
-      </fieldset>
-      <p className="theme-status" role="status" aria-live="polite">
-        {preference === 'system'
-          ? `跟隨系統 · 目前為${theme.name}`
-          : `目前主題：${theme.name}`}
-      </p>
+          {isDesktop() && (
+            <DriveBackupPreferences
+              active={active && activeSection === 'general'}
+            />
+          )}
+        </div>
+      ),
+    },
+    {
+      id: 'appearance',
+      label: t('appearance'),
+      icon: Palette,
+      content: <AppearancePreferences appearance={appearance} />,
+    },
+    {
+      id: 'agent',
+      label: t('agents'),
+      icon: Bot,
+      content: <AgentPreferences />,
+    },
+  ] as const
+
+  return (
+    <div className="preferences-page">
+      <h1 className="preferences-heading" ref={heading}>
+        {t('settings')}
+      </h1>
+      <div className="preferences-layout">
+        <nav className="preferences-nav" aria-label={t('settingsCategories')}>
+          {sections.map(({ id, icon: Icon, label }) => (
+            <Button
+              key={id}
+              variant="ghost"
+              type="button"
+              aria-controls={`preferences-${id}`}
+              aria-current={id === activeSection ? 'true' : undefined}
+              onClick={() => {
+                if (id === activeSection) return
+                setActiveSection(id)
+                heading.current?.scrollIntoView({ block: 'nearest' })
+              }}
+            >
+              <Icon aria-hidden="true" />
+              {label}
+            </Button>
+          ))}
+        </nav>
+        <div className="preferences-panels">
+          {sections.map(({ id, label, content }) => (
+            <section
+              key={id}
+              className="preferences-panel"
+              id={`preferences-${id}`}
+              aria-labelledby={`preferences-heading-${id}`}
+              hidden={id !== activeSection}
+            >
+              <h2 id={`preferences-heading-${id}`}>{label}</h2>
+              {content}
+            </section>
+          ))}
+        </div>
+      </div>
     </div>
   )
 }

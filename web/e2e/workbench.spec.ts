@@ -176,7 +176,7 @@ test('備註直接編輯、Agent 更新與版本衝突', async ({ page, request 
     dialog.getByRole('button', { name: '編輯備註', exact: true }),
   ).toHaveText('已完成後補上的描述')
   await dialog.getByRole('button', { name: '關閉', exact: true }).click()
-  await page.getByRole('button', { name: '已完成', exact: false }).click()
+  await page.getByRole('button', { name: '已完成', exact: true }).click()
   await expect(
     page.getByRole('checkbox', { name: '恢復任務：已直接改名', exact: true }),
   ).toBeChecked()

@@ -39,6 +39,10 @@ func (s *Store) List(ctx context.Context) ([]Task, error) {
 	if err != nil {
 		return nil, err
 	}
+	return readTasks(rows)
+}
+
+func readTasks(rows *sql.Rows) ([]Task, error) {
 	defer rows.Close()
 	out := []Task{}
 	for rows.Next() {
@@ -105,8 +109,12 @@ func (s *Store) Reorder(ctx context.Context, ids []string) error {
 	return tx.Commit()
 }
 func (s *Store) Get(ctx context.Context, id string) (Task, error) {
+	return readTask(s.db.QueryRowContext(ctx, `SELECT document FROM tasks WHERE id=? AND deleted_at IS NULL`, id))
+}
+
+func readTask(row *sql.Row) (Task, error) {
 	var raw string
-	err := s.db.QueryRowContext(ctx, `SELECT document FROM tasks WHERE id=? AND deleted_at IS NULL`, id).Scan(&raw)
+	err := row.Scan(&raw)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Task{}, ErrNotFound
 	}
@@ -128,8 +136,21 @@ func (s *Store) Create(ctx context.Context, in CreateInput) (Task, error) {
 	if err != nil {
 		return Task{}, err
 	}
-	_, err = s.db.ExecContext(ctx, `INSERT INTO tasks(id,version,document) VALUES(?,?,?)`, t.ID, t.Version, string(raw))
-	return t, err
+	result, err := s.db.ExecContext(ctx, `
+		INSERT INTO tasks(id,version,document)
+		SELECT ?,?,? WHERE ?='' OR EXISTS(SELECT 1 FROM projects WHERE id=?)`,
+		t.ID, t.Version, string(raw), t.ProjectID, t.ProjectID)
+	if err != nil {
+		return Task{}, err
+	}
+	n, err := result.RowsAffected()
+	if err != nil {
+		return Task{}, err
+	}
+	if n != 1 {
+		return Task{}, fmt.Errorf("%w：找不到指定的 Project", ErrInvalid)
+	}
+	return t, nil
 }
 func (s *Store) Act(ctx context.Context, id string, a Action) (Task, error) {
 	s.mu.Lock()
@@ -144,11 +165,22 @@ func (s *Store) Act(ctx context.Context, id string, a Action) (Task, error) {
 	if err = apply(&t, a, time.Now().UTC()); err != nil {
 		return Task{}, fmt.Errorf("%w：%v", ErrInvalid, err)
 	}
+	projectToValidate := ""
+	if a.Op == "update" && a.ProjectID != nil {
+		projectToValidate = t.ProjectID
+		if err := validateProject(ctx, s.db, projectToValidate); err != nil {
+			return Task{}, err
+		}
+	}
 	raw, err := json.Marshal(t)
 	if err != nil {
 		return Task{}, err
 	}
-	result, err := s.db.ExecContext(ctx, `UPDATE tasks SET completed_at=?,deleted_at=?,version=?,document=? WHERE id=? AND version=? AND deleted_at IS NULL`, t.CompletedAt, t.DeletedAt, t.Version, string(raw), id, a.Version)
+	result, err := s.db.ExecContext(ctx, `
+		UPDATE tasks SET completed_at=?,deleted_at=?,version=?,document=?
+		WHERE id=? AND version=? AND deleted_at IS NULL
+		  AND (?='' OR EXISTS(SELECT 1 FROM projects WHERE id=?))`,
+		t.CompletedAt, t.DeletedAt, t.Version, string(raw), id, a.Version, projectToValidate, projectToValidate)
 	if err != nil {
 		return Task{}, err
 	}

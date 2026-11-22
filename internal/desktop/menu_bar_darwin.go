@@ -5,6 +5,7 @@ package desktop
 import (
 	"context"
 	_ "embed"
+	"sync/atomic"
 	"time"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -16,10 +17,37 @@ import (
 //go:embed menu-bar-template.png
 var menuBarIcon []byte
 
-// MenuBar exposes native navigation only to the desktop WebView.
-type MenuBar struct{}
+// MenuBar connects the panel's Board selection to the native tray and window.
+type MenuBar struct {
+	boardID atomic.Value
+	refresh chan struct{}
+}
 
-func (*MenuBar) OpenFamo() {
+func (m *MenuBar) SelectBoard(id string) {
+	if m.boardID.Swap(id) != id {
+		m.refreshProgress()
+	}
+}
+
+func (m *MenuBar) refreshProgress() {
+	select {
+	case m.refresh <- struct{}{}:
+	default:
+	}
+}
+
+func (m *MenuBar) selectedBoardID() string {
+	id, _ := m.boardID.Load().(string)
+	return id
+}
+
+func (*MenuBar) OpenFamo(boardID string) {
+	if window := showFamo(); window != nil {
+		window.EmitEvent("famo:open-board", boardID)
+	}
+}
+
+func showFamo() application.Window {
 	app := application.Get()
 	if panel, ok := app.Window.GetByName("menu-bar"); ok {
 		panel.Hide()
@@ -28,14 +56,17 @@ func (*MenuBar) OpenFamo() {
 		window.Show()
 		window.UnMinimise()
 		window.Focus()
+		return window
 	}
+	return nil
 }
 
-func setupMenuBar(app *application.App, backend *Backend) {
+func setupMenuBar(app *application.App, backend *Backend, menuBar *MenuBar, language *DisplayLanguage) {
 	panel := app.Window.NewWithOptions(application.WebviewWindowOptions{
 		Name: "menu-bar", Title: "Famo 今日任務", URL: "/menu-bar.html",
 		Width: 360, Height: 480, Frameless: true, AlwaysOnTop: true,
-		Hidden: true, DisableResize: true, HideOnFocusLost: true, HideOnEscape: true,
+		// Escape is handled in the WebView so it can dismiss an open Board menu first.
+		Hidden: true, DisableResize: true, HideOnFocusLost: true,
 		BackgroundColour: application.NewRGB(248, 249, 246),
 		Mac: application.MacWindow{
 			// Stay in the current Space, including another app's fullscreen Space,
@@ -52,15 +83,17 @@ func setupMenuBar(app *application.App, backend *Backend) {
 		event.Cancel()
 		panel.Hide()
 	})
+	language.trackLabel(func(title string) { panel.SetTitle(title) }, "Famo 今日任務", "Famo Today")
+	language.labels = append(language.labels, menuBar.refreshProgress)
 	tray := app.SystemTray.New()
 	tray.SetTemplateIcon(menuBarIcon)
 	tray.SetLabel("…")
 	tray.SetTooltip("Famo · 今日任務")
 	tray.AttachWindow(panel).WindowOffset(6)
 	menu := app.NewMenu()
-	menu.Add("Open Famo").OnClick(func(*application.Context) { (&MenuBar{}).OpenFamo() })
+	language.addItem(menu, "開啟 Famo", "Open Famo").OnClick(func(*application.Context) { menuBar.OpenFamo(menuBar.selectedBoardID()) })
 	menu.AddSeparator()
-	menu.Add("Quit Famo").OnClick(func(*application.Context) { app.Quit() })
+	language.addItem(menu, "結束 Famo", "Quit Famo").OnClick(func(*application.Context) { app.Quit() })
 	tray.SetMenu(menu)
 
 	// Keep updating even when both WebViews are hidden. This also picks up Agent
@@ -76,22 +109,32 @@ func setupMenuBar(app *application.App, backend *Backend) {
 					return
 				}
 				queryCtx, queryCancel := context.WithTimeout(ctx, time.Second)
-				progress, err := backend.todayProgress(queryCtx, time.Now())
+				boardID := menuBar.selectedBoardID()
+				progress, err := backend.todayProgress(queryCtx, time.Now(), boardID)
 				queryCancel()
 				if ctx.Err() != nil {
 					return
 				}
+				if boardID != menuBar.selectedBoardID() {
+					continue
+				}
 				if err != nil {
 					tray.SetLabel("—")
-					tray.SetTooltip("Famo · 無法讀取今日進度")
+					tray.SetTooltip(language.text("Famo · 無法讀取今日進度", "Famo · Could not load today's progress"))
 				} else {
-					tray.SetLabel(progress.Label())
-					tray.SetTooltip("Famo · 今日已完成 " + progress.Label())
+					label := progress.Label()
+					tooltip := "Famo · "
+					if progress.BoardName != "" {
+						tooltip += progress.BoardName + " · "
+					}
+					tray.SetLabel(label)
+					tray.SetTooltip(tooltip + language.text("今日已完成 ", "Completed today: ") + label)
 				}
 				select {
 				case <-ctx.Done():
 					return
 				case <-ticker.C:
+				case <-menuBar.refresh:
 				}
 			}
 		}()

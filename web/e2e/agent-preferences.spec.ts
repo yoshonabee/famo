@@ -13,8 +13,12 @@ test('可以儲存 Agent 工作區與選填指引並取得安裝指令', async (
     await page.context().grantPermissions(['clipboard-read', 'clipboard-write'])
     await page.goto('/')
     await page.getByRole('button', { name: '設定' }).click()
+    await page
+      .getByRole('navigation', { name: '設定分類' })
+      .getByRole('button', { name: 'Agents', exact: true })
+      .click()
 
-    const settings = page.getByRole('region', { name: '本機 Agent' })
+    const settings = page.getByRole('region', { name: 'Agents' })
     await expect(
       settings.getByRole('button', { name: '複製 CLI 安裝指令' }),
     ).toBeVisible()
@@ -39,6 +43,10 @@ test('可以儲存 Agent 工作區與選填指引並取得安裝指令', async (
 
     await page.reload()
     await page.getByRole('button', { name: '設定' }).click()
+    await page
+      .getByRole('navigation', { name: '設定分類' })
+      .getByRole('button', { name: 'Agents', exact: true })
+      .click()
     await expect(workspace).toHaveValue(dir)
     await expect(prompt).toHaveValue('先看 docs/，再跑測試。')
     await prompt.clear()

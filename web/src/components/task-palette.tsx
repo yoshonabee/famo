@@ -1,6 +1,7 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { CalendarDays, ChevronDown, Search } from 'lucide-react'
 import { DatePicker } from '@/components/date-picker'
+import { ProjectPicker } from '@/components/project-picker'
 import {
   CaptureAnnouncement,
   CaptureDraftRow,
@@ -13,6 +14,9 @@ import {
   DialogDescription,
   DialogTitle,
 } from '@/components/ui/dialog'
+import type { Project, Task } from '@/lib/api'
+import { useLanguage } from '@/lib/i18n'
+import { formatTaskDate } from '@/lib/calendar'
 
 export function TaskSearch({
   value,
@@ -23,12 +27,13 @@ export function TaskSearch({
   onChange: (value: string) => void
   onDone?: () => void
 }) {
+  const { t } = useLanguage()
   return (
     <label className="search">
       <Search size={16} aria-hidden="true" />
       <input
-        aria-label="搜尋任務"
-        placeholder="搜尋"
+        aria-label={t('searchTasks')}
+        placeholder={t('search')}
         value={value}
         onChange={(event) => onChange(event.target.value)}
         onKeyDown={(event) => {
@@ -49,21 +54,38 @@ export function TaskSearch({
 
 export function TaskPalette({
   mode,
+  tasks,
+  tasksLoading,
+  tasksError,
+  onOpenTask,
   onClose,
   capture,
   captureDate,
+  captureProjects,
+  captureProjectId,
+  requireCaptureProject,
   onCaptureDateChange,
+  onCaptureProjectChange,
   search,
   onSearchChange,
 }: {
-  mode: 'capture' | 'search' | null
+  mode: 'capture' | 'search' | 'global-search' | null
+  tasks: Task[]
+  tasksLoading: boolean
+  tasksError: string
+  onOpenTask: (id: string) => void
   onClose: () => void
   capture: ReturnType<typeof useQuickCapture>
   captureDate: string
+  captureProjects: Project[]
+  captureProjectId: string
+  requireCaptureProject: boolean
   onCaptureDateChange: (date: string) => void
+  onCaptureProjectChange: (id: string) => void
   search: string
   onSearchChange: (value: string) => void
 }) {
+  const { t, locale } = useLanguage()
   const content = useRef<HTMLDivElement>(null)
   const returnFocus = useRef<HTMLElement | null>(null)
   const drafts = capture.drafts.filter((draft) => draft.floating)
@@ -71,7 +93,7 @@ export function TaskPalette({
   useEffect(() => {
     const input = content.current?.querySelector('input')
     input?.focus({ preventScroll: true })
-    if (mode === 'search') input?.select()
+    if (mode !== 'capture') input?.select()
   }, [mode])
 
   return (
@@ -84,7 +106,7 @@ export function TaskPalette({
           onEscapeKeyDown={(event) => {
             if (
               event.target instanceof Element &&
-              event.target.closest('.calendar-popover')
+              event.target.closest('.calendar-popover, .project-picker-popup')
             )
               event.preventDefault()
           }}
@@ -103,17 +125,25 @@ export function TaskPalette({
           }}
         >
           <DialogTitle className="sr-only">
-            {isCapture ? '快速新增任務' : '搜尋任務'}
+            {isCapture
+              ? t('quickCapture')
+              : mode === 'global-search'
+                ? t('searchAllTasks')
+                : t('searchTasks')}
           </DialogTitle>
           {isCapture ? (
             <>
               <CaptureEntry
+                canSubmit={!requireCaptureProject || !!captureProjectId}
                 onSubmit={(title) =>
-                  capture.submit(title, { scheduledDate: captureDate })
+                  capture.submit(title, {
+                    scheduledDate: captureDate,
+                    projectId: captureProjectId,
+                  })
                 }
               />
               <DialogDescription className="sr-only">
-                選擇任務日期，按 Enter 新增。
+                {t('captureHelp')}
               </DialogDescription>
               <div className="task-palette-hint task-palette-date">
                 <DatePicker
@@ -124,16 +154,41 @@ export function TaskPalette({
                       ?.querySelector('input')
                       ?.focus({ preventScroll: true })
                   }}
-                  label={`任務日期 ${captureDate}`}
+                  label={t(
+                    'captureTaskDate',
+                    formatTaskDate(captureDate, locale),
+                  )}
                   buttonClassName="task-palette-date-button"
                   align="start"
                 >
                   <CalendarDays size={14} />
-                  {captureDate}
+                  {formatTaskDate(captureDate, locale)}
                   <ChevronDown size={12} />
                 </DatePicker>
+                {(captureProjects.length > 0 || requireCaptureProject) && (
+                  <ProjectPicker
+                    projects={captureProjects}
+                    value={captureProjectId}
+                    allowUnassigned={!requireCaptureProject}
+                    label={t('captureTaskProject')}
+                    buttonClassName="task-palette-date-button"
+                    onChange={(id) => {
+                      onCaptureProjectChange(id)
+                      content.current
+                        ?.querySelector('input')
+                        ?.focus({ preventScroll: true })
+                    }}
+                  />
+                )}
               </div>
             </>
+          ) : mode === 'global-search' ? (
+            <GlobalTaskSearch
+              tasks={tasks}
+              loading={tasksLoading}
+              error={tasksError}
+              onOpenTask={onOpenTask}
+            />
           ) : (
             <>
               <TaskSearch
@@ -142,12 +197,12 @@ export function TaskPalette({
                 onDone={onClose}
               />
               <DialogDescription className="task-palette-hint">
-                搜尋目前清單，按 Enter 返回
+                {t('searchHelp')}
               </DialogDescription>
             </>
           )}
           {isCapture && drafts.length > 0 && (
-            <ul className="task-palette-drafts" aria-label="快速新增草稿">
+            <ul className="task-palette-drafts" aria-label={t('captureDrafts')}>
               {drafts.map((draft) => (
                 <CaptureDraftRow
                   key={draft.id}
@@ -163,5 +218,59 @@ export function TaskPalette({
         </DialogContent>
       )}
     </Dialog>
+  )
+}
+
+function GlobalTaskSearch({
+  tasks,
+  loading,
+  error,
+  onOpenTask,
+}: {
+  tasks: Task[]
+  loading: boolean
+  error: string
+  onOpenTask: (id: string) => void
+}) {
+  const { t } = useLanguage()
+  const [query, setQuery] = useState('')
+  const term = query.trim().toLowerCase()
+  const matches = term
+    ? tasks.filter((task) =>
+        `${task.title} ${task.description}`.toLowerCase().includes(term),
+      )
+    : []
+  return (
+    <>
+      <TaskSearch
+        value={query}
+        onChange={setQuery}
+        onDone={() => matches[0] && onOpenTask(matches[0].id)}
+      />
+      <DialogDescription className="task-palette-hint">
+        {t('globalSearchHelp')}
+      </DialogDescription>
+      {term && !matches.length && (
+        <p role="status" className="task-palette-hint">
+          {error
+            ? t('loadTasksError', error)
+            : loading
+              ? t('loading')
+              : t('noMatches')}
+        </p>
+      )}
+      {matches.length > 0 && (
+        <ul className="global-search-results">
+          {matches.map((task) => (
+            <li key={task.id}>
+              <button type="button" onClick={() => onOpenTask(task.id)}>
+                <span>{task.title}</span>
+                {task.completed_at && <small>{t('completed')}</small>}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </>
   )
 }

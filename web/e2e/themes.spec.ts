@@ -17,6 +17,7 @@ test('設定提供 12 款主題，切換立即生效並在重開後保留', asyn
   await expect(
     page.getByRole('textbox', { name: '快速新增任務名稱' }),
   ).toBeHidden()
+  const dangerColors = new Set<string>()
   const backgrounds = new Set<string>()
   for (const name of [
     '苔綠',
@@ -33,13 +34,23 @@ test('設定提供 12 款主題，切換立即生效並在重開後保留', asyn
     '摩卡',
   ]) {
     await page.getByRole('radio', { name, exact: true }).check()
-    await expect(page.getByRole('status')).toHaveText(`目前主題：${name}`)
+    await expect(page.getByRole('main').getByRole('status')).toHaveText(
+      `目前主題：${name}`,
+    )
+    dangerColors.add(
+      await page
+        .locator('html')
+        .evaluate((el) =>
+          getComputedStyle(el).getPropertyValue('--danger').trim(),
+        ),
+    )
     backgrounds.add(
       await page
         .locator('html')
         .evaluate((el) => getComputedStyle(el).backgroundColor),
     )
   }
+  expect(dangerColors.size).toBe(12)
   expect(backgrounds.size).toBe(12)
   await page.getByRole('radio', { name: '海鹽', exact: true }).check()
   await expect(page.locator('html')).toHaveCSS(
@@ -82,7 +93,9 @@ test('設定提供 12 款主題，切換立即生效並在重開後保留', asyn
   expect((await request.get('/api/settings')).status()).toBe(404)
   expect(await (await request.get('/api/tasks')).json()).toEqual(tasks)
   await page.goto('/menu-bar.html')
-  await expect(page.locator('.menu-bar-brand .brand-mark')).toHaveCSS(
+  await page.getByRole('button', { name: /^選擇 Board/ }).click()
+  await page.getByRole('menuitemradio', { name: '今日', exact: true }).click()
+  await expect(page.locator('.menu-bar-board-trigger .brand-mark')).toHaveCSS(
     'background-color',
     iconColor,
   )
@@ -141,7 +154,9 @@ test('跟隨系統即時更新，固定主題維持選擇', async ({ page }) => 
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'moss')
   await page.emulateMedia({ colorScheme: 'dark' })
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'midnight')
-  await expect(page.getByRole('status')).toHaveText('跟隨系統 · 目前為午夜')
+  await expect(page.getByRole('main').getByRole('status')).toHaveText(
+    '跟隨系統 · 目前為午夜',
+  )
   await page.reload()
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'midnight')
   await page.getByRole('button', { name: '設定', exact: true }).click()

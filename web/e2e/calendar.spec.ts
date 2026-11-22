@@ -662,3 +662,67 @@ test('搜尋框聚焦時，外框包含搜尋圖示', async ({ page }) => {
     await expect(input).toHaveCSS('outline-style', 'none')
   }
 })
+
+test('任務列表用相對日期開啟月曆，可跨年切換月份並重新排程', async ({
+  page,
+  request,
+}) => {
+  await page.clock.setFixedTime(new Date('2026-01-01T00:30:00+08:00'))
+  const dates = [
+    ['2025-12-29', '2025-12-29'],
+    ['2025-12-31', '昨天'],
+    ['2026-01-01', '今天'],
+    ['2026-01-02', '明天'],
+  ]
+  for (const [date] of dates) {
+    expect(
+      (
+        await request.post('/api/tasks', {
+          data: { title: '跨年計畫 ' + date, scheduled_date: date },
+        })
+      ).status(),
+    ).toBe(201)
+  }
+  await page.goto('/')
+  await page.getByRole('button', { name: '任務列表', exact: true }).click()
+  await page.getByLabel('搜尋任務').fill('跨年計畫')
+  for (const [date, label] of dates) {
+    const button = page.getByRole('button', {
+      name: '設定日期：跨年計畫 ' + date,
+    })
+    await expect(button).toHaveText(label)
+    await expect(button.locator('time')).toHaveClass(
+      date < '2026-01-01' ? 'overdue-date' : '',
+    )
+  }
+  const trigger = page.getByRole('button', {
+    name: '設定日期：跨年計畫 2025-12-31',
+  })
+  const overdueDate = trigger.locator('time')
+  await expect(overdueDate).toHaveCSS('font-weight', '500')
+  await expect(overdueDate).toHaveCSS('color', 'rgb(160, 63, 50)')
+  await page.getByRole('button', { name: '設定', exact: true }).click()
+  await page.getByRole('radio', { name: '午夜', exact: true }).check()
+  await page.getByRole('button', { name: '任務列表', exact: true }).click()
+  await page.getByLabel('搜尋任務').fill('跨年計畫')
+  await expect(overdueDate).toHaveCSS('color', 'rgb(255, 156, 174)')
+  await page.screenshot({ path: '/private/tmp/famo-overdue-midnight.png' })
+  await trigger.click()
+  const calendar = page.getByRole('dialog', { name: '選擇日期' })
+  await calendar.getByRole('button', { name: '下一個月' }).click()
+  await expect(
+    calendar.getByRole('button', { name: '2026 年 1 月' }),
+  ).toBeVisible()
+  await calendar.getByRole('button', { name: '上一個月' }).click()
+  await expect(
+    calendar.getByRole('button', { name: '2025 年 12 月' }),
+  ).toBeVisible()
+  await page.screenshot({
+    path: '/private/tmp/famo-task-list-relative-dates.png',
+  })
+  await calendar.getByRole('button', { name: '2025-12-28' }).click()
+  await expect(trigger).toHaveText('2025-12-28')
+  await page.reload()
+  await page.getByRole('button', { name: '任務列表', exact: true }).click()
+  await expect(trigger).toHaveText('2025-12-28')
+})

@@ -14,10 +14,12 @@ import { previewStyle } from '@/components/theme-preview'
 import { Checkbox } from '@/components/ui/checkbox'
 import { localDate } from '@/lib/calendar'
 import { type ThemeDraft } from '@/lib/theme'
+import { useLanguage } from '@/lib/i18n'
 
 const ignoreChange = () => {}
 
 export function TodayThemePreview({ theme }: { theme: ThemeDraft }) {
+  const { t } = useLanguage()
   const today = localDate()
 
   return (
@@ -33,18 +35,20 @@ export function TodayThemePreview({ theme }: { theme: ThemeDraft }) {
           </div>
           <div className="palette-preview-nav">
             <span className="nav-item active">
-              <CalendarDays /> 今日
+              <CalendarDays /> {t('today')}
             </span>
             <span className="nav-item">
-              <Inbox /> 任務<span className="nav-count">4</span>
+              <Inbox /> {t('tasks')}
+              <span className="nav-count">4</span>
             </span>
             <span className="nav-item">
-              <CheckCheck /> 已完成<span className="nav-count">1</span>
+              <CheckCheck /> {t('completed')}
+              <span className="nav-count">1</span>
             </span>
           </div>
           <div className="sidebar-footer">
             <span className="nav-item">
-              <Settings /> 設定
+              <Settings /> {t('settings')}
             </span>
           </div>
         </div>
@@ -57,22 +61,22 @@ export function TodayThemePreview({ theme }: { theme: ThemeDraft }) {
             <TaskSearch value="" onChange={ignoreChange} />
           </header>
           <CaptureEntry onSubmit={ignoreChange} />
-          <p className="daily-progress">已完成 1 / 3</p>
+          <p className="daily-progress">{t('dailyProgress', 1, 3)}</p>
           <ul className="task-list">
-            <PreviewTask title="整理會議筆記" />
-            <PreviewTask title="確認明天的行程" />
+            <PreviewTask title={t('sampleMeetingTask')} />
+            <PreviewTask title={t('sampleScheduleTask')} />
           </ul>
           <section className="daily-completed">
-            <h5>已完成</h5>
+            <h5>{t('completed')}</h5>
             <ul className="task-list">
-              <PreviewTask title="回覆專案進度" completed />
+              <PreviewTask title={t('sampleProjectTask')} completed />
             </ul>
           </section>
           <details className="task-move-section">
-            <summary>先前未完成（1）</summary>
+            <summary>{t('earlierTasksCount', 1)}</summary>
           </details>
           <details className="task-move-section">
-            <summary>未指定日期（1）</summary>
+            <summary>{t('undatedTasksCount', 1)}</summary>
           </details>
         </div>
       </div>

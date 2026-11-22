@@ -3,6 +3,7 @@ import {
   useEffectEvent,
   useRef,
   useState,
+  type CSSProperties,
   type FormEvent,
 } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -24,14 +25,41 @@ import {
   Settings,
   Trash2,
 } from 'lucide-react'
+import { BoardEditor } from '@/components/board-editor'
+import { BoardHeading } from '@/components/board-heading'
+import { getBoardIcon } from '@/components/board-icons'
 import { PreferencesPage } from '@/components/preferences-page'
+import {
+  NavigationButton,
+  PrimaryNavigation,
+  type PrimaryNavItem,
+} from '@/components/primary-navigation'
+import { ProjectBadge } from '@/components/project-appearance'
+import { ProjectEditor } from '@/components/project-editor'
+import { ProjectPicker } from '@/components/project-picker'
+import { RecentlyDeletedPage } from '@/components/recently-deleted-page'
+import { ProjectNavigation } from '@/components/sidebar-collection'
+import { SidebarResizeHandle } from '@/components/sidebar-resize-handle'
+import {
+  TodayProjectFilter,
+  useTodayProjectFilter,
+} from '@/components/today-project-filter'
 import { useTheme } from '@/lib/theme'
-import { isDesktop, openSettingsEvent, shortcutEvent } from '@/lib/desktop'
+import {
+  isDesktop,
+  openBoardEvent,
+  openSettingsEvent,
+  shortcutEvent,
+} from '@/lib/desktop'
 import { DatePicker } from '@/components/date-picker'
 import { CalendarDate, DateNavigation } from '@/components/date-navigation'
 import { CalendarPage } from '@/components/calendar-page'
-import { localDate } from '@/lib/calendar'
+import { formatListDate, formatTaskDate, localDate } from '@/lib/calendar'
 import { linkLabel } from '@/lib/links'
+import {
+  orderSidebarItems,
+  useSidebarPreferences,
+} from '@/lib/sidebar-preferences'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { TaskDate } from '@/components/task-date'
@@ -43,6 +71,7 @@ import {
   useQuickCapture,
 } from '@/components/quick-capture'
 import { TaskPalette, TaskSearch } from '@/components/task-palette'
+import { TaskProjectAssignment } from '@/components/task-project-assignment'
 import {
   Dialog,
   DialogContent,
@@ -56,8 +85,12 @@ import {
   orderSubset,
   request,
   type Action,
+  type Board,
+  type Project,
   type Task,
 } from '@/lib/api'
+import { useLanguage } from '@/lib/i18n'
+import { useTaskSelection } from '@/lib/task-selection'
 
 type Act = (
   t: Task,
@@ -70,9 +103,13 @@ const shortcuts = new Map([
   ['t', 'capture'],
   ['k', 'today'],
   ['f', 'search'],
+  ['shift+f', 'global-search'],
 ])
+const defaultNavigation = ['date', 'active', 'completed']
+const initialBoardId = new URLSearchParams(window.location.search).get('board')
 
 function Links({ task, onOpen }: { task: Task; onOpen: () => void }) {
+  const { t } = useLanguage()
   if (!task.links.length) return null
   return (
     <div className="link-list">
@@ -92,7 +129,11 @@ function Links({ task, onOpen }: { task: Task; onOpen: () => void }) {
         <button
           className="more-links"
           onClick={onOpen}
-          aria-label={`查看其餘 ${task.links.length - 2} 個連結：${task.title}`}
+          aria-label={t(
+            task.links.length === 3 ? 'viewOneMoreLink' : 'viewMoreLinks',
+            task.links.length - 2,
+            task.title,
+          )}
         >
           +{task.links.length - 2}
         </button>
@@ -101,6 +142,7 @@ function Links({ task, onOpen }: { task: Task; onOpen: () => void }) {
   )
 }
 function App() {
+  const { t, errorText, locale } = useLanguage()
   const client = useQueryClient()
   const theme = useTheme()
   const [dragging, setDragging] = useState(false)
@@ -111,41 +153,181 @@ function App() {
     enabled: !dragging && !ordering,
     refetchInterval: 30_000,
   })
-  const [view, setView] = useState<
-    'active' | 'date' | 'completed' | 'preferences'
-  >('date')
+  const [requestedView, setView] = useState<
+    | 'active'
+    | 'date'
+    | 'completed'
+    | 'recently-deleted'
+    | 'preferences'
+    | 'project'
+    | 'board'
+    | 'menu-bar-today'
+  >(
+    initialBoardId === null
+      ? 'date'
+      : initialBoardId
+        ? 'board'
+        : 'menu-bar-today',
+  )
+  const boards = useQuery({
+    queryKey: ['boards'],
+    queryFn: ({ signal }) => request<Board[]>('/boards', undefined, signal),
+    refetchInterval: 30_000,
+  })
+  const boardList = boards.data ?? []
+  const sidebar = useSidebarPreferences()
+  const { showToday, order, footerItems, width } = sidebar.preferences
+  const [resizingWidth, setResizingWidth] = useState<number | null>(null)
+  const sidebarWidth = resizingWidth ?? width ?? (locale === 'en' ? 192 : 168)
+  const boardsByNavId = new Map(
+    boardList.map((board) => [`board:${board.id}`, board]),
+  )
+  const orderedNavIds = orderSidebarItems(
+    [...defaultNavigation, ...boardsByNavId.keys()],
+    order,
+  )
+  const [boardId, setBoardId] = useState(initialBoardId ?? undefined)
+  const [boardEditor, setBoardEditor] = useState<Board | 'new' | null>(null)
+  const projects = useQuery({
+    queryKey: ['projects'],
+    queryFn: ({ signal }) => request<Project[]>('/projects', undefined, signal),
+    refetchInterval: 30_000,
+  })
+  const projectList = projects.data ?? []
+  const [projectId, setProjectId] = useState<string>()
+  const [projectEditor, setProjectEditor] = useState<Project | 'new' | null>(
+    null,
+  )
+  const projectsById = new Map(
+    projectList.map((project) => [project.id, project]),
+  )
+  const editProject =
+    projectEditor && projectEditor !== 'new'
+      ? (projectsById.get(projectEditor.id) ?? projectEditor)
+      : undefined
+  let view = requestedView === 'menu-bar-today' ? 'date' : requestedView
+  let currentBoard =
+    view === 'board' ? boardsByNavId.get(`board:${boardId}`) : undefined
+  if (
+    (view === 'board' && !currentBoard) ||
+    (view === 'project' && !projectsById.has(projectId ?? ''))
+  )
+    view = 'date'
+  if (view === 'date' && !showToday && requestedView !== 'menu-bar-today') {
+    const firstBoardId = orderedNavIds.find((id) => boardsByNavId.has(id))
+    currentBoard = boardsByNavId.get(firstBoardId ?? '')
+    view = currentBoard ? 'board' : 'active'
+  }
+  const currentProjectId = view === 'project' ? projectId : undefined
+  const currentProject = projectsById.get(currentProjectId ?? '')
+  const boardProjectIds = currentBoard
+    ? new Set(currentBoard.project_ids)
+    : null
+  const isCalendarView = view === 'date' || view === 'board'
   const [date, setDate] = useState(localDate)
+  const todayFilter = useTodayProjectFilter()
+  const today = localDate()
+  const isToday = view === 'date' && date === today
+  const projectFiltered = isToday && todayFilter.hidden.length > 0
   const [search, setSearch] = useState('')
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
-  const [palette, setPalette] = useState<'capture' | 'search' | null>(null)
+  const [palette, setPalette] = useState<
+    'capture' | 'search' | 'global-search' | null
+  >(null)
   const [paletteCaptureDate, setPaletteCaptureDate] = useState('')
+  const [paletteCaptureProjectId, setPaletteCaptureProjectId] = useState('')
+  const captureProjects = boardProjectIds
+    ? projectList.filter((project) => boardProjectIds.has(project.id))
+    : projectList
+  const selectedCaptureProjectId = captureProjects.some(
+    (project) => project.id === paletteCaptureProjectId,
+  )
+    ? paletteCaptureProjectId
+    : ''
+  const requireCaptureProject = !!boardProjectIds?.size
+  const multiProjectBoard = (boardProjectIds?.size ?? 0) > 1
+  const defaultCaptureProjectId =
+    currentBoard?.project_ids.length === 1
+      ? currentBoard.project_ids[0]
+      : currentProjectId
   const capture = useQuickCapture(
     () => setSearch(''),
-    view === 'date' ? date : '',
+    isCalendarView ? date : '',
+    defaultCaptureProjectId,
   )
-  const visibleDrafts = capture.drafts.filter((draft) =>
-    view === 'date' ? draft.scheduled_date === date : true,
-  )
+  const visibleDrafts = capture.drafts.filter((draft) => {
+    if (boardProjectIds)
+      return (
+        draft.scheduled_date === date &&
+        boardProjectIds.has(draft.project_id ?? '')
+      )
+    if (view === 'date') return draft.scheduled_date === date
+    if (view === 'project') return draft.project_id === currentProjectId
+    return true
+  })
   const [selected, setSelected] = useState<string | null>(null)
-  function goToToday() {
+  function openCapture() {
+    if (currentBoard && !requireCaptureProject)
+      setView(showToday ? 'date' : 'active')
+    if (palette !== 'capture') {
+      setPaletteCaptureDate(isCalendarView ? date : today)
+      setPaletteCaptureProjectId(defaultCaptureProjectId ?? '')
+    }
+    setPalette('capture')
+  }
+  function goToBoard(id: string) {
+    setBoardId(id)
+    setView('board')
+    setSelected(null)
+    setPalette(null)
+    setSearch('')
+    window.scrollTo(0, 0)
+  }
+  function goToProject(id: string) {
+    setProjectId(id)
+    setView('project')
+    setSelected(null)
+    setPalette(null)
+    setSearch('')
+    window.scrollTo(0, 0)
+  }
+  function goToToday(fromMenuBar = false) {
     setDate(localDate())
-    setView('date')
+    if (fromMenuBar) {
+      setView('menu-bar-today')
+      setSearch('')
+    } else if (!showToday && currentBoard) {
+      setBoardId(currentBoard.id)
+      setView('board')
+    } else setView('date')
     setSelected(null)
     setPalette(null)
     window.scrollTo(0, 0)
   }
+  const openBoard = useEffectEvent((id: unknown) => {
+    if (typeof id !== 'string') return
+    if (id === '') {
+      goToToday(true)
+      return
+    }
+    void client.invalidateQueries({ queryKey: ['boards'] })
+    setDate(localDate())
+    goToBoard(id)
+  })
   const runShortcut = useEffectEvent((action: unknown) => {
+    if (projectEditor !== null || boardEditor !== null) return
     switch (action) {
       case 'sidebar':
         setSidebarCollapsed((collapsed) => !collapsed)
         break
       case 'capture':
-        if (palette !== 'capture')
-          setPaletteCaptureDate(view === 'date' ? date : localDate())
-        setPalette('capture')
+        openCapture()
         break
       case 'today':
         goToToday()
+        break
+      case 'global-search':
+        setPalette('global-search')
         break
       case 'search':
         if (view === 'preferences') goToToday()
@@ -153,6 +335,13 @@ function App() {
         break
     }
   })
+  useEffect(() => {
+    function onOpenBoard(event: Event) {
+      openBoard((event as CustomEvent<unknown>).detail)
+    }
+    window.addEventListener(openBoardEvent, onOpenBoard)
+    return () => window.removeEventListener(openBoardEvent, onOpenBoard)
+  }, [])
   useEffect(() => {
     const openSettings = () => {
       setSelected(null)
@@ -173,11 +362,12 @@ function App() {
         event.isComposing ||
         event.keyCode === 229 ||
         event.metaKey === event.ctrlKey ||
-        event.altKey ||
-        event.shiftKey
+        event.altKey
       )
         return
-      const action = shortcuts.get(event.key.toLowerCase())
+      const action = shortcuts.get(
+        (event.shiftKey ? 'shift+' : '') + event.key.toLowerCase(),
+      )
       if (!action) return
       event.preventDefault()
       if (!event.repeat) runShortcut(action)
@@ -189,7 +379,16 @@ function App() {
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [])
-  const [message, setMessage] = useState('')
+  const [message, setMessage] = useState<{
+    error: string
+    reorder?: boolean
+  } | null>(null)
+  const projectOrder = useMutation({
+    mutationFn: (ids: string[]) =>
+      request('/projects/reorder', { project_ids: ids }),
+    onError: (error) => setMessage({ error: error.message, reorder: true }),
+    onSettled: () => client.invalidateQueries({ queryKey: ['projects'] }),
+  })
   const reorder = useMutation({
     mutationFn: (ids: string[]) =>
       request<Task[]>('/tasks/reorder', { task_ids: ids }),
@@ -205,7 +404,7 @@ function App() {
       client.setQueryData<Task[]>(['tasks'], (current) =>
         orderSubset(current ?? [], previous ?? []),
       )
-      setMessage(`順序未儲存：${error.message}`)
+      setMessage({ error: error.message, reorder: true })
     },
     onSettled: () => {
       setOrdering(false)
@@ -227,38 +426,219 @@ function App() {
       }),
     onSuccess: (t) => {
       client.setQueryData<Task[]>(['tasks'], (old) =>
-        old?.map((item) => (item.id === t.id ? t : item)),
+        t.deleted_at
+          ? old?.filter((item) => item.id !== t.id)
+          : old?.map((item) => (item.id === t.id ? t : item)),
       )
       void client.invalidateQueries({ queryKey: ['tasks'] })
     },
     onError: (e, { failed }) => {
       if (failed) failed(e.message)
-      else setMessage(e.message)
+      else setMessage({ error: e.message })
       if (e instanceof ApiError && e.status === 409)
         void client.invalidateQueries({ queryKey: ['tasks'] })
     },
   })
   const act: Act = (t, action, done, failed) =>
     mutation.mutate({ t, action, failed }, { onSuccess: done })
+  const assignment = useMutation({
+    onMutate: () => setMessage(null),
+    mutationFn: ({ projectId, items }: { projectId: string; items: Task[] }) =>
+      request<Task[]>('/tasks/assign-project', {
+        project_id: projectId,
+        tasks: items.map(({ id, version }) => ({ id, version })),
+      }),
+    onSuccess: async (updated) => {
+      await client.cancelQueries({ queryKey: ['tasks'] })
+      const updatedById = new Map(updated.map((task) => [task.id, task]))
+      client.setQueryData<Task[]>(['tasks'], (old) =>
+        old?.map((task) => {
+          const assigned = updatedById.get(task.id)
+          return assigned && assigned.version > task.version ? assigned : task
+        }),
+      )
+      selection.clear()
+    },
+    onError: (error) => {
+      setMessage({ error: error.message })
+      void client.invalidateQueries({ queryKey: ['projects'] })
+    },
+    onSettled: () => client.invalidateQueries({ queryKey: ['tasks'] }),
+  })
   const all = tasks.data ?? []
   const active = all.filter((t) => !t.completed_at)
-  const filtered = all.filter(
+  const searchTerm = search.toLowerCase()
+  const matchesSearch = (task: Task) =>
+    `${task.title} ${task.description}`.toLowerCase().includes(searchTerm)
+  const matching = all.filter(
     (t) =>
-      (view === 'completed') === !!t.completed_at &&
-      `${t.title} ${t.description}`
-        .toLowerCase()
-        .includes(search.toLowerCase()),
+      (view !== 'project' || t.project_id === currentProjectId) &&
+      matchesSearch(t),
   )
-  if (view === 'completed') filtered.sort(compareCompletionTime)
+  const filtered = matching.filter((t) => !t.completed_at)
+  const completed = matching
+    .filter((t) => t.completed_at)
+    .sort(compareCompletionTime)
+  const listTitle =
+    view === 'project'
+      ? currentProject?.name
+      : view === 'active'
+        ? t('tasks')
+        : t('completed')
+  const listCount =
+    view === 'project'
+      ? matching.length
+      : view === 'completed'
+        ? completed.length
+        : filtered.length
+  const busy = mutation.isPending || reorder.isPending || assignment.isPending
+  const calendarTasks = isCalendarView
+    ? all.filter((task) => {
+        const id = task.project_id ?? ''
+        if (boardProjectIds) return boardProjectIds.has(id)
+        return !projectFiltered || !todayFilter.hidden.includes(id)
+      })
+    : []
+  const selectableTasks = isCalendarView
+    ? calendarTasks.filter(
+        (task) => task.scheduled_date === date && matchesSearch(task),
+      )
+    : view === 'active'
+      ? filtered
+      : view === 'completed'
+        ? completed
+        : view === 'project'
+          ? matching
+          : []
+  const selectionScope = JSON.stringify([
+    view,
+    currentBoard?.id,
+    currentProjectId,
+    isCalendarView ? date : null,
+    search,
+    projectFiltered ? todayFilter.hidden : null,
+  ])
+  const selection = useTaskSelection(selectionScope, busy || dragging)
+  const selectedIds = new Set(selection.ids)
+  const chosenTasks = selectableTasks.filter((task) => selectedIds.has(task.id))
+  function renderTask(
+    task: Task,
+    index: number,
+    sortableDisabled: boolean,
+    hideCompletion?: boolean,
+  ) {
+    return (
+      <TaskRow
+        key={task.id}
+        task={task}
+        index={index}
+        project={
+          view !== 'project' && task.project_id
+            ? projectsById.get(task.project_id)
+            : undefined
+        }
+        dateKind={
+          isCalendarView
+            ? undefined
+            : view === 'completed'
+              ? 'completed'
+              : 'scheduled'
+        }
+        hideCompletion={hideCompletion}
+        sortableDisabled={sortableDisabled || visibleDrafts.length > 0}
+        busy={busy}
+        selectedForBatch={!hideCompletion && selectedIds.has(task.id)}
+        onSetDate={(date) => act(task, { op: 'update', scheduled_date: date })}
+        onOpen={() => setSelected(task.id)}
+        onComplete={() =>
+          act(task, {
+            op: task.completed_at ? 'reopen_task' : 'complete_task',
+          })
+        }
+      />
+    )
+  }
+  const isActiveList = view === 'active' || view === 'project'
   const detail = all.find((t) => t.id === selected)
   const searchField = <TaskSearch value={search} onChange={setSearch} />
   const SidebarIcon = sidebarCollapsed ? PanelLeftOpen : PanelLeftClose
-  const sidebarAction = sidebarCollapsed ? '展開側邊欄' : '收合側邊欄'
+  const sidebarAction = sidebarCollapsed
+    ? t('expandSidebar')
+    : t('collapseSidebar')
+  const navItems = new Map<string, PrimaryNavItem>([
+    [
+      'date',
+      {
+        id: 'date',
+        label: t('today'),
+        icon: CalendarDays,
+        current: view === 'date',
+        ariaLabel: t('todayTasks'),
+        shortcut: 'Meta+K Control+K',
+        onSelect: () => goToToday(),
+      },
+    ],
+    [
+      'active',
+      {
+        id: 'active',
+        label: t('tasks'),
+        icon: Inbox,
+        current: view === 'active',
+        ariaLabel: t('taskList'),
+        count: active.length,
+        onSelect: () => setView('active'),
+      },
+    ],
+    [
+      'completed',
+      {
+        id: 'completed',
+        label: t('completed'),
+        icon: CheckCheck,
+        current: view === 'completed',
+        count: all.length - active.length,
+        onSelect: () => setView('completed'),
+      },
+    ],
+  ])
+  for (const [id, board] of boardsByNavId) {
+    navItems.set(id, {
+      id,
+      label: board.name,
+      icon: getBoardIcon(board.icon),
+      current: currentBoard?.id === board.id,
+      onSelect: () => goToBoard(board.id),
+      onEdit: () => setBoardEditor(board),
+    })
+  }
+  const footerNavIds = new Set<string>(footerItems)
+  const visibleNavIds = orderedNavIds.filter(
+    (id) => (showToday || id !== 'date') && !footerNavIds.has(id),
+  )
+  const visibleNavItems = visibleNavIds.map((id) => navItems.get(id)!)
+  function reorderNavigation(ids: string[]) {
+    if (currentBoard && requestedView === 'date') {
+      setBoardId(currentBoard.id)
+      setView('board')
+    }
+    const visible = new Set(visibleNavIds)
+    let index = 0
+    sidebar.save({
+      order: orderedNavIds.map((id) => (visible.has(id) ? ids[index++] : id)),
+    })
+  }
   return (
     <div
       className={sidebarCollapsed ? 'app-shell sidebar-collapsed' : 'app-shell'}
+      data-has-batch-selection={chosenTasks.length > 0 || undefined}
+      data-resizing-sidebar={resizingWidth !== null || undefined}
+      style={
+        { '--expanded-sidebar-width': `${sidebarWidth}px` } as CSSProperties
+      }
     >
-      <aside className="sidebar">
+      <div className="window-titlebar" aria-hidden="true" />
+      <aside className="sidebar" id="app-sidebar">
         <div className="sidebar-heading">
           <a className="brand" href="/" aria-label="Famo">
             <span className="brand-mark" aria-hidden="true" />
@@ -277,84 +657,128 @@ function App() {
             <SidebarIcon />
           </Button>
         </div>
-        <nav aria-label="主要導覽">
-          <button
-            className={view === 'date' ? 'nav-item active' : 'nav-item'}
-            onClick={goToToday}
-            aria-label="今日任務"
-            aria-keyshortcuts="Meta+K Control+K"
-            title="今日 (⌘K)"
-          >
-            <CalendarDays size={17} />
-            <span className="nav-label">今日</span>
-          </button>
-          <button
-            className={view === 'active' ? 'nav-item active' : 'nav-item'}
-            onClick={() => setView('active')}
-            aria-label="任務列表"
-            title="任務"
-          >
-            <Inbox size={17} />
-            <span className="nav-label">任務</span>
-            <span className="nav-count">{active.length}</span>
-          </button>
-          <button
-            className={view === 'completed' ? 'nav-item active' : 'nav-item'}
-            onClick={() => setView('completed')}
-            aria-label="已完成"
-            title="已完成"
-          >
-            <CheckCheck size={17} />
-            <span className="nav-label">已完成</span>
-            <span className="nav-count">{all.length - active.length}</span>
-          </button>
-        </nav>
+        <PrimaryNavigation
+          items={visibleNavItems}
+          collapsed={sidebarCollapsed}
+          error={errorText(boards.error)}
+          onReorder={reorderNavigation}
+          onCreate={() => setBoardEditor('new')}
+          onRetry={() => void boards.refetch()}
+        />
+        <ProjectNavigation
+          projects={
+            projectOrder.isPending
+              ? orderSubset(projectList, projectOrder.variables)
+              : projectList
+          }
+          current={currentProjectId}
+          collapsed={sidebarCollapsed}
+          reordering={projectOrder.isPending}
+          error={errorText(projects.error)}
+          onSelect={goToProject}
+          onExpand={() => setSidebarCollapsed(false)}
+          onCreate={() => setProjectEditor('new')}
+          onEdit={(id) => setProjectEditor(projectsById.get(id) ?? null)}
+          onReorder={(ids) => projectOrder.mutate(ids)}
+          onRetry={() => void projects.refetch()}
+        />
+        <SidebarResizeHandle
+          width={sidebarWidth}
+          onResize={setResizingWidth}
+          onSave={(width) => sidebar.save({ width })}
+        />
         <div className="sidebar-footer">
+          {orderedNavIds
+            .filter((id) => footerNavIds.has(id))
+            .map((id) => (
+              <NavigationButton key={id} item={navItems.get(id)!} />
+            ))}
+          <button
+            className={
+              view === 'recently-deleted' ? 'nav-item active' : 'nav-item'
+            }
+            onClick={() => setView('recently-deleted')}
+            aria-current={view === 'recently-deleted' ? 'page' : undefined}
+            aria-label={t('recentlyDeleted')}
+            title={t('recentlyDeleted')}
+          >
+            <Trash2 size={17} />
+            <span className="nav-label">{t('recentlyDeleted')}</span>
+          </button>
           <button
             className={view === 'preferences' ? 'nav-item active' : 'nav-item'}
             onClick={() => setView('preferences')}
             aria-current={view === 'preferences' ? 'page' : undefined}
-            aria-label="設定"
-            title="設定"
+            aria-label={t('settings')}
+            title={t('settings')}
           >
             <Settings size={17} />
-            <span className="nav-label">設定</span>
+            <span className="nav-label">{t('settings')}</span>
           </button>
         </div>
       </aside>
-      <main>
-        <div className="main-content" hidden={view === 'preferences'}>
-          {view === 'date' && (
+      <main onClick={selection.onBackgroundClick}>
+        <div
+          className="main-content"
+          data-has-batch-selection={chosenTasks.length > 0 || undefined}
+          hidden={view === 'preferences' || view === 'recently-deleted'}
+          {...selection.handlers}
+        >
+          {isCalendarView ? (
             <header className="calendar-heading">
-              <h1>
-                <CalendarDate date={date} />
-              </h1>
+              {currentBoard ? (
+                <BoardHeading
+                  key={currentBoard.id}
+                  board={currentBoard}
+                  date={date}
+                />
+              ) : (
+                <h1>
+                  <CalendarDate date={date} />
+                </h1>
+              )}
               <DateNavigation date={date} onChange={setDate} />
               {searchField}
             </header>
-          )}
-          {view !== 'date' && (
+          ) : (
             <div className="list-toolbar">
               <div className="list-title">
-                <h1>{view === 'active' ? '任務' : '已完成'}</h1>
-                <span className="list-count">{filtered.length}</span>
+                <h1>{listTitle}</h1>
+                <span className="list-count">{listCount}</span>
               </div>
               {searchField}
             </div>
           )}
+          {isToday && (projectList.length > 0 || projectFiltered) && (
+            <TodayProjectFilter projects={projectList} filter={todayFilter} />
+          )}
           <QuickCapture
-            hidden={view !== 'active' && view !== 'date'}
+            hidden={
+              !isActiveList && view !== 'date' && !defaultCaptureProjectId
+            }
             onSubmit={capture.submit}
             announcement={capture.announcement}
           />
-          {view === 'date' && (
+          {multiProjectBoard && (
+            <button
+              type="button"
+              className="capture-entry board-capture-button"
+              aria-keyshortcuts="Meta+T Control+T"
+              onClick={openCapture}
+            >
+              <Plus size={17} aria-hidden="true" />
+              {t('addTask')}
+            </button>
+          )}
+          {isCalendarView && (
             <CalendarPage
               date={date}
-              key={date}
-              tasks={all}
+              key={`${currentBoard?.id ?? 'date'}/${date}`}
+              tasks={calendarTasks}
+              projectFiltered={projectFiltered || !!currentBoard}
               search={search}
               loading={!tasks.isSuccess}
-              busy={mutation.isPending || reorder.isPending}
+              busy={busy}
               onReorder={(ids) => reorder.mutate(ids)}
               onDragging={setDragging}
               onMove={async (task, targetDate) => {
@@ -363,25 +787,7 @@ function App() {
                   action: { op: 'update', scheduled_date: targetDate },
                 })
               }}
-              renderTask={(task, index, disabled, hideCompletion) => (
-                <TaskRow
-                  key={task.id}
-                  task={task}
-                  index={index}
-                  hideCompletion={hideCompletion}
-                  sortableDisabled={disabled || visibleDrafts.length > 0}
-                  busy={mutation.isPending || reorder.isPending}
-                  onSetDate={(date) =>
-                    act(task, { op: 'update', scheduled_date: date })
-                  }
-                  onOpen={() => setSelected(task.id)}
-                  onComplete={() =>
-                    act(task, {
-                      op: task.completed_at ? 'reopen_task' : 'complete_task',
-                    })
-                  }
-                />
-              )}
+              renderTask={renderTask}
               drafts={visibleDrafts.map((draft) => (
                 <CaptureDraftRow
                   key={draft.id}
@@ -394,18 +800,18 @@ function App() {
           {tasks.isPending && (
             <div className="state">
               <LoaderCircle className="animate-spin" />
-              讀取中…
+              {t('loading')}
             </div>
           )}
           {tasks.isError && (
             <div role="alert" className="state">
-              無法讀取任務：{tasks.error.message}
+              {t('loadTasksError', errorText(tasks.error))}
               <Button variant="outline" onClick={() => void tasks.refetch()}>
-                重新讀取
+                {t('reload')}
               </Button>
             </div>
           )}
-          {tasks.isSuccess && view === 'active' && (
+          {tasks.isSuccess && isActiveList && (
             <>
               <DragDropProvider
                 onDragStart={() => {
@@ -424,26 +830,16 @@ function App() {
                   reorder.mutate(next.map((t) => t.id))
                 }}
               >
-                <ul className="task-list" aria-label="主要任務列表">
-                  {filtered.map((t, index) => (
-                    <TaskRow
-                      key={t.id}
-                      index={index}
-                      sortableDisabled={
-                        reorder.isPending ||
-                        mutation.isPending ||
-                        capture.drafts.length > 0
-                      }
-                      task={t}
-                      busy={mutation.isPending || reorder.isPending}
-                      onSetDate={(date) =>
-                        act(t, { op: 'update', scheduled_date: date })
-                      }
-                      onOpen={() => setSelected(t.id)}
-                      onComplete={() => act(t, { op: 'complete_task' })}
-                    />
-                  ))}
-                  {capture.drafts.map((draft) => (
+                <ul
+                  className="task-list"
+                  aria-label={
+                    view === 'project'
+                      ? t('projectOpenTasks')
+                      : t('mainTaskList')
+                  }
+                >
+                  {filtered.map((t, index) => renderTask(t, index, busy))}
+                  {visibleDrafts.map((draft) => (
                     <CaptureDraftRow
                       key={draft.id}
                       draft={draft}
@@ -452,42 +848,79 @@ function App() {
                   ))}
                 </ul>
               </DragDropProvider>
-              {!filtered.length && !capture.drafts.length && (
-                <div className="empty-list">
-                  {search ? '沒有符合的任務' : '尚無任務'}
-                </div>
-              )}
+              {!filtered.length &&
+                !visibleDrafts.length &&
+                (view === 'active' || !completed.length) && (
+                  <div className="empty-list">
+                    {search ? t('noMatches') : t('noTasks')}
+                  </div>
+                )}
             </>
           )}
           {tasks.isSuccess &&
-            view === 'completed' &&
-            (filtered.length ? (
-              <DragDropProvider>
-                <ul className="task-list" aria-label="已完成任務列表">
-                  {filtered.map((t, index) => (
-                    <TaskRow
-                      key={t.id}
-                      index={index}
-                      task={t}
-                      busy={mutation.isPending || reorder.isPending}
-                      onSetDate={(date) =>
-                        act(t, { op: 'update', scheduled_date: date })
-                      }
-                      onOpen={() => setSelected(t.id)}
-                      onComplete={() => act(t, { op: 'reopen_task' })}
-                    />
-                  ))}
-                </ul>
-              </DragDropProvider>
-            ) : (
-              <div className="state">
-                <CheckCheck />
-                {search ? '沒有符合的任務。' : '尚無已完成任務'}
-              </div>
-            ))}
+            (view === 'completed' || view === 'project') &&
+            completed.length > 0 && (
+              <section
+                className={view === 'project' ? 'daily-completed' : undefined}
+                aria-label={
+                  view === 'project' ? t('projectCompleted') : undefined
+                }
+              >
+                {view === 'project' && <h2>{t('completed')}</h2>}
+                <DragDropProvider>
+                  <ul
+                    className="task-list"
+                    aria-label={
+                      view === 'project'
+                        ? t('projectCompletedTasks')
+                        : t('completedTaskList')
+                    }
+                  >
+                    {completed.map((t, index) => renderTask(t, index, true))}
+                  </ul>
+                </DragDropProvider>
+              </section>
+            )}
+          {tasks.isSuccess && view === 'completed' && !completed.length && (
+            <div className="state">
+              <CheckCheck />
+              {search ? t('noMatchingTasks') : t('noCompletedTasks')}
+            </div>
+          )}
+          <TaskProjectAssignment
+            projects={projectList}
+            selectedCount={chosenTasks.length}
+            allSelected={chosenTasks.length === selectableTasks.length}
+            busy={busy}
+            onSelectAll={() =>
+              selection.selectAll(selectableTasks.map((task) => task.id))
+            }
+            onClear={selection.clear}
+            onAssign={(projectId) =>
+              assignment.mutate({ projectId, items: chosenTasks })
+            }
+          />
         </div>
+        {view === 'recently-deleted' && (
+          <div className="main-content">
+            <RecentlyDeletedPage search={search} onSearchChange={setSearch} />
+          </div>
+        )}
         <div className="main-content" hidden={view !== 'preferences'}>
-          <PreferencesPage appearance={theme} active={view === 'preferences'} />
+          <PreferencesPage
+            appearance={theme}
+            active={view === 'preferences'}
+            showToday={showToday}
+            footerItems={footerItems}
+            onShowTodayChange={(showToday) => sidebar.save({ showToday })}
+            onFooterChange={(id, move) => {
+              sidebar.save({
+                footerItems: move
+                  ? [...footerItems, id]
+                  : footerItems.filter((item) => item !== id),
+              })
+            }}
+          />
         </div>
       </main>
       <Dialog
@@ -500,24 +933,92 @@ function App() {
           <Detail
             key={detail.id}
             task={detail}
+            projects={projects.data}
             act={act}
-            busy={mutation.isPending || reorder.isPending}
+            busy={busy}
+          />
+        )}
+      </Dialog>
+      <Dialog
+        open={boardEditor !== null}
+        onOpenChange={(open) => !open && setBoardEditor(null)}
+      >
+        {boardEditor !== null && (
+          <BoardEditor
+            key={boardEditor === 'new' ? 'new' : boardEditor.id}
+            board={boardEditor === 'new' ? undefined : boardEditor}
+            projects={projects.data}
+            projectsError={errorText(projects.error)}
+            onRetryProjects={() => void projects.refetch()}
+            onSaved={(saved) => {
+              if (boardEditor === 'new') goToBoard(saved.id)
+              setBoardEditor(null)
+            }}
+            onDeleted={(id) => {
+              if (currentBoard?.id === id) {
+                setView('date')
+                setDate(localDate())
+                setSearch('')
+              }
+              setBoardEditor(null)
+            }}
+          />
+        )}
+      </Dialog>
+      <Dialog
+        open={projectEditor !== null}
+        onOpenChange={(open) => !open && setProjectEditor(null)}
+      >
+        {projectEditor !== null && (
+          <ProjectEditor
+            key={projectEditor === 'new' ? 'new' : projectEditor.id}
+            project={editProject}
+            onSaved={(saved) => {
+              if (projectEditor === 'new') goToProject(saved.id)
+              setProjectEditor(null)
+            }}
+            onDeleted={(id) => {
+              if (currentProjectId === id) {
+                setView('date')
+                setDate(localDate())
+                setSearch('')
+              }
+              setProjectEditor(null)
+            }}
           />
         )}
       </Dialog>
       <TaskPalette
         mode={palette}
+        tasks={all}
+        tasksLoading={tasks.isPending}
+        tasksError={tasks.isError ? errorText(tasks.error) : ''}
+        onOpenTask={(id) => {
+          setPalette(null)
+          setSelected(id)
+        }}
         onClose={() => setPalette(null)}
         capture={capture}
         captureDate={paletteCaptureDate}
+        captureProjects={captureProjects}
+        captureProjectId={selectedCaptureProjectId}
+        requireCaptureProject={requireCaptureProject}
         onCaptureDateChange={setPaletteCaptureDate}
+        onCaptureProjectChange={setPaletteCaptureProjectId}
         search={search}
         onSearchChange={setSearch}
       />
       {message && (
         <div className="toast" role="alert">
-          <span>{message}</span>
-          <button aria-label="關閉提示" onClick={() => setMessage('')}>
+          <span>
+            {message.reorder
+              ? t('reorderFailed', errorText(message.error))
+              : errorText(message.error)}
+          </span>
+          <button
+            aria-label={t('dismissNotice')}
+            onClick={() => setMessage(null)}
+          >
             ×
           </button>
         </div>
@@ -526,7 +1027,9 @@ function App() {
   )
 }
 function TaskRow({
-  task: t,
+  task,
+  dateKind,
+  project,
   busy,
   onOpen,
   onComplete,
@@ -534,8 +1037,11 @@ function TaskRow({
   index,
   sortableDisabled = false,
   hideCompletion = false,
+  selectedForBatch,
 }: {
   task: Task
+  project?: Project
+  dateKind?: 'scheduled' | 'completed'
   busy: boolean
   onOpen: () => void
   onComplete: () => void
@@ -543,18 +1049,39 @@ function TaskRow({
   index: number
   sortableDisabled?: boolean
   hideCompletion?: boolean
+  selectedForBatch: boolean
 }) {
-  const completed = !!t.completed_at
-  const title = t.title
+  const { t, locale } = useLanguage()
+  const completed = !!task.completed_at
+  const rowDate =
+    dateKind === 'scheduled'
+      ? task.scheduled_date
+      : dateKind === 'completed' && task.completed_at
+        ? localDate(new Date(task.completed_at))
+        : ''
+  const today = localDate()
+  const overdue = !!rowDate && !completed && rowDate < today
+  const title = task.title
   const { ref, handleRef, isDragging } = useSortable({
-    id: t.id,
+    id: task.id,
     index,
     disabled: completed || sortableDisabled,
   })
   return (
     <li
       ref={ref}
-      data-task-id={t.id}
+      data-task-id={task.id}
+      data-selectable-task={hideCompletion ? undefined : task.id}
+      data-batch-selected={selectedForBatch || undefined}
+      tabIndex={hideCompletion ? undefined : 0}
+      aria-label={
+        hideCompletion
+          ? undefined
+          : t(selectedForBatch ? 'selectedTask' : 'selectTask', title)
+      }
+      aria-keyshortcuts={
+        hideCompletion ? undefined : 'Space Shift+ArrowUp Shift+ArrowDown'
+      }
       className={`task-row ${completed ? 'is-completed' : ''} ${isDragging ? 'dragging' : ''}`}
     >
       <div className="todo-line">
@@ -562,8 +1089,8 @@ function TaskRow({
           ref={handleRef}
           className="drag-handle"
           disabled={completed || sortableDisabled}
-          aria-label={`拖曳排序：${title}`}
-          title="拖曳調整順序"
+          aria-label={t('dragTask', title)}
+          title={t('dragToReorder')}
         >
           <GripVertical size={16} />
         </button>
@@ -571,30 +1098,51 @@ function TaskRow({
           <Checkbox
             checked={completed}
             disabled={busy}
-            aria-label={`${completed ? '恢復' : '完成'}任務：${title}`}
+            aria-label={t(
+              completed ? 'reopenNamedTask' : 'completeNamedTask',
+              title,
+            )}
             onCheckedChange={onComplete}
           />
         )}
-        <TodoTitle task={t} title={title} onDeleted={() => {}} />
-        <Links task={t} onOpen={onOpen} />
+        <TodoTitle task={task} title={title} onDeleted={() => {}} />
+        <Links task={task} onOpen={onOpen} />
+        {project && <ProjectBadge project={project} />}
         <DatePicker
-          date={t.scheduled_date}
+          date={task.scheduled_date}
           onChange={onSetDate}
-          label={`設定日期：${title}`}
+          label={t('setTaskDate', title)}
           title={
-            t.scheduled_date ? `任務日期：${t.scheduled_date}` : '設定日期'
+            task.scheduled_date
+              ? t('taskDateValue', formatTaskDate(task.scheduled_date, locale))
+              : t('setDate')
           }
-          buttonClassName="row-action-button"
+          buttonClassName={
+            rowDate ? 'row-action-button task-row-date' : 'row-action-button'
+          }
           clearable
           disabled={busy}
         >
-          <CalendarDays size={15} />
+          {rowDate ? (
+            <time
+              className={overdue ? 'overdue-date' : undefined}
+              dateTime={rowDate}
+              title={t(
+                dateKind === 'completed' ? 'completedAt' : 'taskDateValue',
+                formatTaskDate(rowDate, locale),
+              )}
+            >
+              {formatListDate(rowDate, locale, today)}
+            </time>
+          ) : (
+            <CalendarDays size={15} />
+          )}
         </DatePicker>
         <button
           className="row-action-button row-detail-button"
           onClick={onOpen}
-          aria-label={`任務詳情：${title}`}
-          title="備註與連結"
+          aria-label={t('taskDetails', title)}
+          title={t('notesAndLinks')}
         >
           <PanelRightOpen size={15} />
         </button>
@@ -603,19 +1151,23 @@ function TaskRow({
   )
 }
 function Detail({
-  task: t,
+  task,
+  projects,
   act,
   busy,
 }: {
   task: Task
+  projects?: Project[]
   act: Act
   busy: boolean
 }) {
+  const { t, locale, errorText } = useLanguage()
   const dialogRef = useRef<HTMLDivElement>(null)
   const [adding, setAdding] = useState(false)
   const [linkError, setLinkError] = useState('')
   const [removeError, setRemoveError] = useState('')
-  const completed = !!t.completed_at
+  const [projectError, setProjectError] = useState('')
+  const completed = !!task.completed_at
   const CompletionIcon = completed ? SolidCheckCircle : OutlineCheckCircle
   function addLink(e: FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -623,7 +1175,7 @@ function Detail({
     const f = new FormData(form)
     setLinkError('')
     act(
-      t,
+      task,
       {
         op: 'add_link',
         links: [{ url: String(f.get('url')).trim() }],
@@ -637,7 +1189,12 @@ function Detail({
   }
   function removeLink(index: number) {
     setRemoveError('')
-    act(t, { op: 'remove_link', link_index: index }, undefined, setRemoveError)
+    act(
+      task,
+      { op: 'remove_link', link_index: index },
+      undefined,
+      setRemoveError,
+    )
   }
 
   return (
@@ -651,7 +1208,7 @@ function Detail({
       onEscapeKeyDown={(event) => {
         if (
           (event.target as Element)?.closest(
-            '.inline-content-editor, .calendar-popover',
+            '.inline-content-editor, .calendar-popover, .project-picker-popup',
           )
         )
           event.preventDefault()
@@ -662,32 +1219,59 @@ function Detail({
           className="detail-completion size-5 rounded-full border-0 bg-transparent text-muted-foreground/75 data-[state=checked]:bg-transparent data-[state=checked]:text-primary"
           checked={completed}
           disabled={busy}
-          aria-label={completed ? '恢復為未完成' : '完成任務'}
-          title={completed ? '恢復為未完成' : '完成任務'}
+          aria-label={completed ? t('markIncomplete') : t('completeTask')}
+          title={completed ? t('markIncomplete') : t('completeTask')}
           onCheckedChange={() =>
-            act(t, { op: completed ? 'reopen_task' : 'complete_task' })
+            act(task, { op: completed ? 'reopen_task' : 'complete_task' })
           }
         >
           <CompletionIcon width={20} height={20} />
         </Checkbox>
-        <DialogTitle className="dialog-title" aria-label={t.title}>
-          <InlineContent task={t} field="title" busy={busy} />
+        <DialogTitle className="dialog-title" aria-label={task.title}>
+          <InlineContent task={task} field="title" busy={busy} />
         </DialogTitle>
         <DialogDescription className="sr-only">
-          日期、備註與相關連結
+          {t('taskDetailsDescription')}
         </DialogDescription>
       </div>
       <div className="detail-meta">
-        <TaskDate task={t} busy={busy} />
-        {completed && <span>已完成 · {dateTime(t.completed_at)}</span>}
+        <TaskDate task={task} busy={busy} />
+        {projects && projects.length > 0 && (
+          <div className="task-project-field">
+            <span className="task-date-label">Project</span>
+            <ProjectPicker
+              label="Project"
+              projects={projects}
+              value={task.project_id ?? ''}
+              disabled={busy}
+              onChange={(projectId) => {
+                setProjectError('')
+                act(
+                  task,
+                  { op: 'update', project_id: projectId },
+                  undefined,
+                  setProjectError,
+                )
+              }}
+            />
+            {projectError && (
+              <p className="inline-edit-error" role="alert">
+                {errorText(projectError)}
+              </p>
+            )}
+          </div>
+        )}
+        {completed && (
+          <span>{t('completedAt', dateTime(task.completed_at, locale))}</span>
+        )}
       </div>
       <div className="detail-block">
-        <h3>備註</h3>
-        <InlineContent task={t} field="description" busy={busy} />
+        <h3>{t('notes')}</h3>
+        <InlineContent task={task} field="description" busy={busy} />
       </div>
       <div className="detail-block">
         <div className="block-heading">
-          <h3>相關連結</h3>
+          <h3>{t('relatedLinks')}</h3>
           <Button
             variant="ghost"
             size="sm"
@@ -696,12 +1280,12 @@ function Detail({
             onClick={() => setAdding(!adding)}
           >
             <Plus />
-            新增連結
+            {t('addLink')}
           </Button>
         </div>
-        {t.links.length ? (
+        {task.links.length ? (
           <div className="detail-links">
-            {t.links.map((l, i) => (
+            {task.links.map((l, i) => (
               <div className="detail-link" key={`${l.url}-${i}`}>
                 <a href={l.url} target="_blank" rel="noreferrer" title={l.url}>
                   <span>{linkLabel(l.url)}</span>
@@ -711,8 +1295,8 @@ function Detail({
                 <button
                   type="button"
                   className="row-action-button remove-link-button"
-                  aria-label={`刪除連結：${l.url}`}
-                  title="刪除連結"
+                  aria-label={t('deleteNamedLink', l.url)}
+                  title={t('deleteLink')}
                   disabled={busy}
                   onClick={() => removeLink(i)}
                 >
@@ -722,36 +1306,36 @@ function Detail({
             ))}
           </div>
         ) : (
-          <p className="muted">尚無連結</p>
+          <p className="muted">{t('noLinks')}</p>
         )}
         {removeError && (
           <p className="inline-edit-error" role="alert">
-            {removeError}
+            {errorText(removeError)}
           </p>
         )}
         {adding && (
           <form onSubmit={addLink}>
             <div className="link-form">
               <label className="field">
-                <span>連結網址</span>
+                <span>{t('linkUrl')}</span>
                 <input
                   name="url"
-                  aria-label="連結網址"
+                  aria-label={t('linkUrl')}
                   type="url"
                   pattern="https?://.*"
-                  placeholder="貼上 https://…"
+                  placeholder={t('pasteUrl')}
                   required
                   autoFocus
                   readOnly={busy}
                 />
               </label>
               <Button disabled={busy} size="sm">
-                加入
+                {t('add')}
               </Button>
             </div>
             {linkError && (
               <p className="inline-edit-error" role="alert">
-                {linkError}。網址已保留，請確認最新內容後重試。
+                {t('linkDraftError', errorText(linkError))}
               </p>
             )}
           </form>

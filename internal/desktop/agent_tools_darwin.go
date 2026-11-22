@@ -13,8 +13,9 @@ import (
 )
 
 type AgentTools struct {
-	backend *Backend
-	mu      sync.Mutex
+	backend  *Backend
+	language *DisplayLanguage
+	mu       sync.Mutex
 }
 
 type AgentToolsState struct {
@@ -94,10 +95,10 @@ func (a *AgentTools) RemoveCLI() error {
 	return paths.Remove()
 }
 
-func (*AgentTools) ChooseWorkspace() (string, error) {
+func (a *AgentTools) ChooseWorkspace() (string, error) {
 	app := application.Get()
 	dialog := app.Dialog.OpenFile().
-		SetTitle("選擇工作區資料夾").
+		SetTitle(a.language.text("選擇工作區資料夾", "Choose Workspace Folder")).
 		CanChooseDirectories(true).
 		CanChooseFiles(false)
 	if window, ok := app.Window.GetByName("famo"); ok {

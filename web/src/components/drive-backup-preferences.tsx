@@ -38,10 +38,10 @@ export function DriveBackupPreferences({ active }: { active: boolean }) {
   const busy = operation.isPending
   return (
     <section
-      className="backup-preferences"
+      className="preferences-card backup-preferences"
       aria-labelledby="drive-backup-heading"
     >
-      <h2 id="drive-backup-heading">Google Drive 備份</h2>
+      <h3 id="drive-backup-heading">Google Drive 備份</h3>
       <p className="preferences-description">
         將包含任務與本機資料庫設定的快照存到「我的雲端硬碟」。
       </p>

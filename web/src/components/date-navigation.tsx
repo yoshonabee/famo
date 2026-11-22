@@ -2,20 +2,22 @@ import { ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react'
 import { DatePicker } from '@/components/date-picker'
 import { Button } from '@/components/ui/button'
 import { adjacentDate } from '@/lib/calendar'
+import { useLanguage } from '@/lib/i18n'
 
 export function CalendarDate({ date }: { date: string }) {
+  const { locale } = useLanguage()
   const day = new Date(`${date}T12:00:00`)
   return (
     <>
       <time dateTime={date}>
-        {day.toLocaleDateString('zh-TW', {
+        {day.toLocaleDateString(locale, {
           year: 'numeric',
           month: 'long',
           day: 'numeric',
         })}
       </time>
       <span className="date-weekday">
-        {day.toLocaleDateString('zh-TW', { weekday: 'long' })}
+        {day.toLocaleDateString(locale, { weekday: 'long' })}
       </span>
     </>
   )
@@ -28,13 +30,18 @@ export function DateNavigation({
   date: string
   onChange: (date: string) => void
 }) {
+  const { t } = useLanguage()
   return (
-    <div className="date-navigation" role="group" aria-label="日期導覽">
+    <div
+      className="date-navigation"
+      role="group"
+      aria-label={t('dateNavigation')}
+    >
       <Button
         type="button"
         variant="ghost"
         size="icon"
-        aria-label="前一天"
+        aria-label={t('previousDay')}
         disabled={date === '0001-01-01'}
         onClick={() => onChange(adjacentDate(date, -1))}
       >
@@ -43,7 +50,7 @@ export function DateNavigation({
       <DatePicker
         date={date}
         onChange={onChange}
-        label="開啟日期選單"
+        label={t('openCalendar')}
         buttonClassName="today-picker-trigger"
         showToday
       >
@@ -53,7 +60,7 @@ export function DateNavigation({
         type="button"
         variant="ghost"
         size="icon"
-        aria-label="後一天"
+        aria-label={t('nextDay')}
         disabled={date === '9999-12-31'}
         onClick={() => onChange(adjacentDate(date, 1))}
       >

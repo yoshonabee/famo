@@ -21,7 +21,7 @@ test('⌘D 收合與展開側邊欄，⌘K 從其他頁面或日期返回今日'
   const expand = page.getByRole('button', { name: '展開側邊欄' })
   await expect(expand).toHaveAttribute('aria-expanded', 'false')
   await expect(page.locator('.sidebar')).toHaveCSS('width', '56px')
-  await page.getByRole('button', { name: '任務列表' }).click()
+  await page.getByRole('button', { name: '任務列表', exact: true }).click()
   await expect(
     page.getByRole('heading', { name: '任務', exact: true }),
   ).toBeVisible()
@@ -165,4 +165,53 @@ test('⌘F 浮窗使用清單的搜尋條件，Enter 返回篩選後的今日清
   await expect(inline).toHaveValue('浮窗搜尋：符合')
   await expect(page.getByLabel('編輯任務標題：浮窗搜尋：符合')).toBeVisible()
   await expect(page.getByLabel('編輯任務標題：浮窗搜尋：略過')).toHaveCount(0)
+})
+
+test('⌘⇧F 從今日和設定搜尋所有日期的任務並開啟詳情', async ({
+  page,
+  request,
+}) => {
+  const title = '封存前確認文件'
+  const created = await request.post('/api/tasks', {
+    data: { title, scheduled_date: '2001-01-02' },
+  })
+  expect(created.ok()).toBeTruthy()
+  const task = await created.json()
+  const updated = await request.post(`/api/tasks/${task.id}/actions`, {
+    data: {
+      op: 'update',
+      version: task.version,
+      description: 'Global-Search-Notes',
+    },
+  })
+  expect(updated.ok()).toBeTruthy()
+  const completed = await request.post(`/api/tasks/${task.id}/actions`, {
+    data: { op: 'complete_task', version: (await updated.json()).version },
+  })
+  expect(completed.ok()).toBeTruthy()
+  await page.goto('/')
+  const local = page.getByRole('textbox', { name: '搜尋任務' })
+  await local.fill('保留篩選')
+  await page.keyboard.press('Meta+Shift+f')
+  const search = page.getByRole('dialog', { name: '搜尋所有任務' })
+  const input = search.getByRole('textbox')
+  await expect(input).toBeFocused()
+  await input.fill('global-search-notes')
+  const result = search.getByRole('button', { name: new RegExp(title) })
+  await expect(result).toContainText('已完成')
+  await result.click()
+  const detail = page.getByRole('dialog', { name: title })
+  await expect(detail).toBeVisible()
+  await detail.getByRole('button', { name: '關閉', exact: true }).click()
+  await expect(local).toHaveValue('保留篩選')
+
+  await page.getByRole('button', { name: '設定', exact: true }).click()
+  await page.keyboard.press('Meta+Shift+f')
+  await input.fill('global-search-no-match')
+  await expect(search.getByRole('status')).toHaveText('沒有符合的任務')
+  await input.fill(title)
+  await input.press('Enter')
+  await expect(detail).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(page.getByRole('navigation', { name: '設定分類' })).toBeVisible()
 })

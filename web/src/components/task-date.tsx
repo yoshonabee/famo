@@ -3,8 +3,11 @@ import { CalendarDays } from 'lucide-react'
 import { DatePicker } from '@/components/date-picker'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { ApiError, request, type Task } from '@/lib/api'
+import { useLanguage } from '@/lib/i18n'
+import { formatTaskDate } from '@/lib/calendar'
 
 export function TaskDate({ task, busy }: { task: Task; busy: boolean }) {
+  const { t, locale, errorText } = useLanguage()
   const client = useQueryClient()
   const [draft, setDraft] = useState<{ value: string; version: number } | null>(
     null,
@@ -37,20 +40,22 @@ export function TaskDate({ task, busy }: { task: Task; busy: boolean }) {
     if (snapshot.version === task.version) save.mutate(snapshot)
   }
   const conflict = !!draft && draft.version !== task.version
+  const dateLabel = value ? formatTaskDate(value, locale) : t('undated')
+
   return (
     <div className="scheduled-date-field">
-      <span className="task-date-label">任務日期</span>
+      <span className="task-date-label">{t('taskDate')}</span>
       <DatePicker
         date={value}
         onChange={change}
-        label={`任務日期：${value || '未指定日期'}`}
+        label={t('taskDateValue', dateLabel)}
         align="start"
         buttonClassName="task-date-button"
         disabled={disabled}
         invalid={save.isError || conflict}
       >
         <CalendarDays size={16} />
-        {value || '未指定日期'}
+        {dateLabel}
       </DatePicker>
       {value && (
         <button
@@ -59,19 +64,17 @@ export function TaskDate({ task, busy }: { task: Task; busy: boolean }) {
           disabled={disabled}
           onClick={() => change('')}
         >
-          清除日期
+          {t('clearDate')}
         </button>
       )}
       {save.isPending && (
         <span className="muted" role="status">
-          儲存中…
+          {t('saving')}
         </span>
       )}
       {(save.isError || conflict) && (
         <span className="inline-edit-error" role="alert">
-          {conflict
-            ? '任務已更新，日期選擇已保留。請讀取最新日期後重新選擇。'
-            : save.error?.message}
+          {conflict ? t('dateConflict') : errorText(save.error)}
           {!conflict && (
             <button
               type="button"
@@ -80,7 +83,7 @@ export function TaskDate({ task, busy }: { task: Task; busy: boolean }) {
                 if (draft) save.mutate(draft)
               }}
             >
-              重試
+              {t('retry')}
             </button>
           )}
           <button
@@ -92,7 +95,7 @@ export function TaskDate({ task, busy }: { task: Task; busy: boolean }) {
               void client.invalidateQueries({ queryKey: ['tasks'] })
             }}
           >
-            讀取最新日期
+            {t('loadLatestDate')}
           </button>
         </span>
       )}

@@ -30,7 +30,7 @@ func NewEmbedded(store *tasks.Store, assets fs.FS) http.Handler {
 	return newHandler(store, assets, requireJSON, true)
 }
 
-func newHandler(store *tasks.Store, assets fs.FS, access func(http.Handler) http.Handler, workspaceEditable bool) http.Handler {
+func newHandler(store *tasks.Store, assets fs.FS, access func(http.Handler) http.Handler, settingsEditable bool) http.Handler {
 	r := chi.NewRouter()
 	r.Use(recoverer)
 	r.Use(access)
@@ -44,7 +44,25 @@ func newHandler(store *tasks.Store, assets fs.FS, access func(http.Handler) http
 			}
 			write(w, 200, workspace)
 		})
-		if workspaceEditable {
+		if settingsEditable {
+			r.Post("/tasks/recently-deleted/cleanup", func(w http.ResponseWriter, r *http.Request) {
+				var in struct {
+					Confirm bool `json:"confirm"`
+				}
+				if !decode(w, r, &in) {
+					return
+				}
+				if !in.Confirm {
+					write(w, http.StatusBadRequest, map[string]string{"error": "請先確認永久清理"})
+					return
+				}
+				count, err := store.PurgeExpiredDeleted(r.Context())
+				if err != nil {
+					fail(w, err)
+					return
+				}
+				write(w, http.StatusOK, map[string]int64{"deleted_count": count})
+			})
 			r.Post("/agent/workspace", func(w http.ResponseWriter, r *http.Request) {
 				var workspace agent.Workspace
 				if !decode(w, r, &workspace) {
@@ -58,8 +76,18 @@ func newHandler(store *tasks.Store, assets fs.FS, access func(http.Handler) http
 				write(w, 200, saved)
 			})
 		}
+		projectRoutes(r, store, settingsEditable)
+		boardRoutes(r, store)
 		r.Get("/tasks", func(w http.ResponseWriter, r *http.Request) {
 			list, err := store.List(r.Context())
+			if err != nil {
+				fail(w, err)
+				return
+			}
+			write(w, 200, list)
+		})
+		r.Get("/tasks/recently-deleted", func(w http.ResponseWriter, r *http.Request) {
+			list, err := store.ListRecentlyDeleted(r.Context())
 			if err != nil {
 				fail(w, err)
 				return
@@ -96,6 +124,25 @@ func newHandler(store *tasks.Store, assets fs.FS, access func(http.Handler) http
 			}
 			write(w, 200, list)
 		})
+		r.Post("/tasks/assign-project", func(w http.ResponseWriter, r *http.Request) {
+			var in struct {
+				ProjectID *string             `json:"project_id"`
+				Tasks     []tasks.TaskVersion `json:"tasks"`
+			}
+			if !decode(w, r, &in) {
+				return
+			}
+			if in.ProjectID == nil {
+				fail(w, tasks.ErrInvalid)
+				return
+			}
+			list, err := store.AssignProject(r.Context(), *in.ProjectID, in.Tasks)
+			if err != nil {
+				fail(w, err)
+				return
+			}
+			write(w, http.StatusOK, list)
+		})
 		get := func(w http.ResponseWriter, r *http.Request) {
 			t, err := store.Get(r.Context(), chi.URLParam(r, "id"))
 			if err != nil {
@@ -105,7 +152,28 @@ func newHandler(store *tasks.Store, assets fs.FS, access func(http.Handler) http
 			write(w, 200, t)
 		}
 		r.Get("/tasks/{id}", get)
-		r.Get("/tasks/{id}/context", get)
+		r.Get("/tasks/{id}/context", func(w http.ResponseWriter, r *http.Request) {
+			current, err := store.GetContext(r.Context(), chi.URLParam(r, "id"))
+			if err != nil {
+				fail(w, err)
+				return
+			}
+			write(w, 200, current)
+		})
+		r.Post("/tasks/{id}/restore", func(w http.ResponseWriter, r *http.Request) {
+			var in struct {
+				Version int `json:"version"`
+			}
+			if !decode(w, r, &in) {
+				return
+			}
+			t, err := store.Restore(r.Context(), chi.URLParam(r, "id"), in.Version)
+			if err != nil {
+				fail(w, err)
+				return
+			}
+			write(w, 200, t)
+		})
 		r.Post("/tasks/{id}/actions", func(w http.ResponseWriter, r *http.Request) {
 			var a tasks.Action
 			if !decode(w, r, &a) {
@@ -122,7 +190,8 @@ func newHandler(store *tasks.Store, assets fs.FS, access func(http.Handler) http
 	r.Route("/api", api)
 	r.Group(api)
 	r.NotFound(func(w http.ResponseWriter, r *http.Request) {
-		if strings.HasPrefix(r.URL.Path, "/api/") || strings.HasPrefix(r.URL.Path, "/tasks/") {
+		if strings.HasPrefix(r.URL.Path, "/api/") || strings.HasPrefix(r.URL.Path, "/tasks/") ||
+			strings.HasPrefix(r.URL.Path, "/projects/") || strings.HasPrefix(r.URL.Path, "/boards/") {
 			write(w, 404, map[string]string{"error": "找不到 API"})
 			return
 		}
