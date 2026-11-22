@@ -57,6 +57,7 @@ test('retries an unconfirmed creation with the same operation after a reload', a
   })
 
   await page.goto('/')
+  await page.getByRole('button', { name: '快速新增任務', exact: true }).tap()
   await page
     .getByRole('textbox', { name: '快速新增任務名稱' })
     .fill('Buy tomatoes')
@@ -68,6 +69,7 @@ test('retries an unconfirmed creation with the same operation after a reload', a
   await expect(
     page.getByRole('checkbox', { name: '完成任務：Buy tomatoes' }),
   ).toBeVisible()
+  await page.getByRole('button', { name: '快速新增任務', exact: true }).tap()
   await expect(
     page.getByRole('textbox', { name: '快速新增任務名稱' }),
   ).toHaveValue('')
@@ -110,8 +112,6 @@ test('applies the current task on conflict, preserves fields on completion and h
   })
 
   await page.goto('/')
-  await page.getByRole('button', { name: '展開側邊欄' }).click()
-  await page.getByRole('button', { name: '任務列表' }).click()
   await page
     .getByRole('checkbox', { name: `完成任務：${firstTask.title}` })
     .click()
@@ -125,11 +125,9 @@ test('applies the current task on conflict, preserves fields on completion and h
   })
   await expect(checkbox).not.toBeChecked()
   await checkbox.click()
-  await page.getByRole('button', { name: '展開側邊欄' }).click()
+  await page.getByRole('button', { name: /^切換 Board：/ }).click()
   await page.getByRole('button', { name: '已完成', exact: true }).click()
-  const completed = page.getByRole('textbox', {
-    name: `編輯任務標題：${changedTitle}`,
-  })
+  const completed = page.getByRole('button', { name: new RegExp(changedTitle) })
   await expect(completed).toBeVisible()
   expect(operations[1]).toMatchObject({
     base_version: 2,
@@ -182,7 +180,7 @@ test('preserves a Project draft and shows the latest version on conflict', async
   })
 
   await page.goto('/')
-  await page.getByRole('button', { name: '展開側邊欄' }).click()
+  await page.getByRole('button', { name: 'Projects', exact: true }).click()
   await page.getByRole('button', { name: '編輯 Project：Errands' }).click()
   const name = page.getByLabel('Project 名稱')
   const save = page.getByRole('button', { name: '儲存', exact: true })

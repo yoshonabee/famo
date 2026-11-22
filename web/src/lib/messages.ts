@@ -343,6 +343,18 @@ export const messages = {
   ],
   localData: ['本機資料', 'Local data'],
   mainNavigation: ['主要導覽', 'Main navigation'],
+  mobileBoards: ['Boards', 'Boards'],
+  mobileProjects: ['Projects', 'Projects'],
+  mobileSwitchBoard: ['切換 Board：{1}', 'Switch board: {1}'],
+  mobileBoardMenuDescription: [
+    '選擇要瀏覽或編輯的 Board。',
+    'Choose a board to open or edit.',
+  ],
+  mobileTaskDetailsDescription: [
+    '查看任務內容、日期與 Project。',
+    'View the task, date, and Project.',
+  ],
+  noProjects: ['尚無 Project', 'No Projects yet'],
   mainTaskList: ['主要任務列表', 'Main task list'],
   mainWindowTitle: ['Famo · 個人任務工作台', 'Famo · Personal task workspace'],
   markIncomplete: ['恢復為未完成', 'Mark incomplete'],

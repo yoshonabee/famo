@@ -11,6 +11,7 @@ type Props = {
   date: string
   tasks: Task[]
   projectFiltered: boolean
+  compact?: boolean
   search: string
   loading: boolean
   busy: boolean
@@ -30,6 +31,7 @@ export function CalendarPage({
   date,
   tasks,
   projectFiltered,
+  compact = false,
   search,
   loading,
   busy,
@@ -61,6 +63,12 @@ export function CalendarPage({
         matches(task),
     )
     .sort((a, b) => a.scheduled_date.localeCompare(b.scheduled_date))
+  const undated =
+    date === localDate()
+      ? tasks.filter(
+          (task) => !task.scheduled_date && !task.completed_at && matches(task),
+        )
+      : []
   const moveSection = {
     busy: disabled,
     onMoving: setMoving,
@@ -120,16 +128,11 @@ export function CalendarPage({
               </DragDropProvider>
             </section>
           )}
-          <TaskMoveSection kind="earlier" tasks={earlier} {...moveSection} />
-          {date === localDate() && (
-            <TaskMoveSection
-              kind="undated"
-              tasks={tasks.filter(
-                (task) =>
-                  !task.scheduled_date && !task.completed_at && matches(task),
-              )}
-              {...moveSection}
-            />
+          {(!compact || earlier.length > 0) && (
+            <TaskMoveSection kind="earlier" tasks={earlier} {...moveSection} />
+          )}
+          {date === localDate() && (!compact || undated.length > 0) && (
+            <TaskMoveSection kind="undated" tasks={undated} {...moveSection} />
           )}
         </>
       )}

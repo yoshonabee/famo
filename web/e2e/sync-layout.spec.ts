@@ -25,7 +25,7 @@ const task: Task = {
   scheduled_date: '2024-06-06',
   project_id: project.id,
   description: 'Ask about opening hours',
-  links: [],
+  links: [{ url: 'https://example.com/library' }],
   created_at: '2024-06-06T12:00:00Z',
   updated_at: '2024-06-06T12:00:00Z',
   completed_at: null,
@@ -48,37 +48,60 @@ test.beforeEach(async ({ page }) => {
   })
 })
 
-test('opens the compact navigation, selects a Project and searches across views', async ({
+test('switches Boards, browses Projects and searches without exposing mobile URL or theme controls', async ({
   page,
 }) => {
+  await page.addInitScript(() => localStorage.setItem('famo.theme', 'midnight'))
   await page.route('**/api/sync/collections', (route) =>
-    route.fulfill({ json: collections }),
+    route.fulfill({
+      json: {
+        ...collections,
+        boards: [
+          board,
+          { id: 'board-2', name: 'Work', icon: 'briefcase', project_ids: [] },
+        ],
+      },
+    }),
   )
   await page.goto('/')
-
   const navigation = page.getByRole('navigation', { name: '主要導覽' })
-  const openMenu = page.getByRole('button', { name: '展開側邊欄' })
-  await expect(navigation).toBeHidden()
-  await openMenu.tap()
   await expect(navigation).toBeVisible()
+  const navBounds = (await navigation.boundingBox())!
+  const captureBounds = (await page
+    .getByRole('button', { name: '快速新增任務' })
+    .boundingBox())!
+  expect(navBounds.y + navBounds.height).toBeCloseTo(
+    page.viewportSize()!.height,
+    0,
+  )
+  expect(captureBounds.y + captureBounds.height).toBeLessThan(navBounds.y)
+  await page.getByRole('button', { name: '切換 Board：Home' }).tap()
+  await page.getByRole('button', { name: 'Work', exact: true }).tap()
+  await expect(
+    page.getByRole('button', { name: '切換 Board：Work' }),
+  ).toBeVisible()
+
+  await navigation.getByRole('button', { name: 'Projects', exact: true }).tap()
   await page.getByRole('button', { name: project.name, exact: true }).tap()
   await expect(page.getByRole('heading', { name: project.name })).toBeVisible()
-  await expect(navigation).toBeHidden()
-  await expect(openMenu).toBeFocused()
+  await expect(page.getByRole('link')).toHaveCount(0)
 
-  await openMenu.tap()
-  await page.getByRole('button', { name: '設定', exact: true }).tap()
+  await navigation.getByRole('button', { name: 'Boards', exact: true }).tap()
   await expect(
-    page.getByRole('heading', { name: '設定', exact: true }),
+    page.getByRole('button', { name: '切換 Board：Work' }),
   ).toBeVisible()
-  await expect(page.getByRole('button', { name: 'Agents' })).toHaveCount(0)
-  await expect(page.getByRole('heading', { name: '本機資料' })).toHaveCount(0)
+  await expect(
+    page.getByRole('button', { name: '外觀', exact: true }),
+  ).toHaveCount(0)
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'moss')
 
-  await page.getByRole('button', { name: '搜尋所有任務' }).tap()
+  await navigation.getByRole('button', { name: '搜尋所有任務' }).tap()
   const search = page.getByRole('dialog', { name: '搜尋所有任務' })
   await search.getByRole('textbox', { name: '搜尋任務' }).fill('opening hours')
   await search.getByRole('button', { name: task.title }).tap()
   await expect(page.getByRole('dialog')).toContainText(task.description)
+  await expect(page.getByRole('dialog').getByRole('link')).toHaveCount(0)
+  await expect(page.getByRole('heading', { name: '相關連結' })).toHaveCount(0)
 
   const sizes = await page.evaluate(() => ({
     contentWidth: document.documentElement.scrollWidth,
@@ -111,12 +134,14 @@ test('retains a Board draft while the user reviews updated settings', async ({
   })
 
   await page.goto('/')
-  await page.getByRole('button', { name: '展開側邊欄' }).tap()
+  await page.getByRole('button', { name: '切換 Board：Home' }).tap()
   await page.getByRole('button', { name: '編輯 Board：Home' }).tap()
   const editor = page.getByRole('dialog', { name: '編輯 Board' })
   const name = editor.getByRole('textbox', { name: 'Board 名稱' })
   const save = editor.getByRole('button', { name: '儲存', exact: true })
   await name.fill('Local draft')
+  await editor.getByRole('button', { name: /^Board 圖示/ }).tap()
+  await editor.getByRole('option', { name: '公事包', exact: true }).tap()
   await save.tap()
   await expect(editor.getByRole('alert')).toContainText('同步時 Board 已更新')
   await expect(
@@ -128,9 +153,10 @@ test('retains a Board draft while the user reviews updated settings', async ({
   await save.tap()
   await expect(editor).toBeHidden()
   await expect(
-    page.getByRole('button', { name: 'Local draft', exact: true }),
+    page.getByRole('button', { name: '切換 Board：Local draft' }),
   ).toBeVisible()
   expect(versions).toEqual([1, 2])
+  expect(current.boards[0].icon).toBe('briefcase')
 })
 
 test('requires another Project save after data refreshes while the editor is open', async ({
@@ -149,11 +175,12 @@ test('requires another Project save after data refreshes while the editor is ope
   })
 
   await page.goto('/')
-  await page.getByRole('button', { name: '展開側邊欄' }).tap()
+  await page.getByRole('button', { name: 'Projects', exact: true }).tap()
   await page.getByRole('button', { name: '編輯 Project：Personal' }).tap()
   const editor = page.getByRole('dialog', { name: '編輯 Project' })
   const name = editor.getByRole('textbox', { name: 'Project 名稱' })
   await name.fill('Personal draft')
+  await editor.getByRole('radio', { name: '海藍', exact: true }).check()
 
   current = {
     ...collections,
@@ -161,9 +188,9 @@ test('requires another Project save after data refreshes while the editor is ope
     projects: [{ ...project, name: 'Remote Personal' }],
   }
   await page.clock.fastForward(11_000)
-  await expect(
-    page.locator('#app-sidebar').getByTitle('Remote Personal', { exact: true }),
-  ).toHaveCount(1)
+  await expect(page.getByText('Remote Personal', { exact: true })).toHaveCount(
+    1,
+  )
 
   const save = editor.getByRole('button', { name: '儲存', exact: true })
   await save.tap()
@@ -174,4 +201,76 @@ test('requires another Project save after data refreshes while the editor is ope
   await save.tap()
   await expect(editor).toBeHidden()
   expect(versions).toEqual([2])
+  expect(current.projects[0].color).toBe('#4F87CC')
+})
+
+test('opens the same quick capture from the floating button and retains the Board date and Project between tasks', async ({
+  page,
+}) => {
+  await page.clock.setFixedTime(new Date(2024, 5, 6, 12))
+  const extra = {
+    id: 'project-2',
+    name: 'Errands',
+    color: '#527844',
+    position: 1,
+  }
+  const outside = {
+    id: 'project-3',
+    name: 'Work',
+    color: '#4F87CC',
+    position: 2,
+  }
+  await page.route('**/api/sync/collections', (route) =>
+    route.fulfill({
+      json: {
+        ...collections,
+        projects: [project, extra, outside],
+        boards: [{ ...board, project_ids: [project.id, extra.id] }],
+      },
+    }),
+  )
+  const saved: Task[] = []
+  await page.route('**/api/sync/push', (route) => {
+    const task: Task = route.request().postDataJSON().task
+    saved.push(task)
+    return route.fulfill({
+      json: { change: { sequence: saved.length + 1, task } },
+    })
+  })
+  await page.goto('/')
+  await page.getByRole('button', { name: '切換 Board：Home' }).tap()
+  await page.getByRole('button', { name: 'Home', exact: true }).tap()
+  await page.getByRole('button', { name: '快速新增任務', exact: true }).tap()
+  const capture = page.getByRole('dialog', { name: '快速新增任務' })
+  const title = capture.getByRole('textbox', { name: '快速新增任務名稱' })
+  const add = capture.getByRole('button', { name: '新增這一列' })
+  const chooseProject = capture.getByRole('button', { name: '任務 Project' })
+  await expect(title).toBeFocused()
+  await title.fill('Return library book')
+  await expect(add).toBeDisabled()
+  await chooseProject.tap()
+  await expect(capture.getByRole('option', { name: outside.name })).toHaveCount(
+    0,
+  )
+  await capture.getByRole('option', { name: extra.name }).tap()
+  await capture.getByRole('button', { name: /^任務日期/ }).tap()
+  await capture.locator('[data-date="2024-06-07"]').tap()
+  await title.press('Enter')
+  await expect(title).toHaveValue('')
+  await expect(title).toBeFocused()
+  await expect(chooseProject).toContainText(extra.name)
+  await title.fill('Pick up groceries')
+  await add.tap()
+  await expect(title).toHaveValue('')
+  await expect.poll(() => saved.length).toBe(2)
+  expect(
+    saved.map(({ title, project_id, scheduled_date }) => [
+      title,
+      project_id,
+      scheduled_date,
+    ]),
+  ).toEqual([
+    ['Return library book', extra.id, '2024-06-07'],
+    ['Pick up groceries', extra.id, '2024-06-07'],
+  ])
 })
