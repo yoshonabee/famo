@@ -40,13 +40,13 @@ npx wrangler dev --local --ip 127.0.0.1 --port 8789 --config wrangler.dev.jsonc 
 1. 建立 D1 資料庫，記下名稱和 database ID；準備 Cloudflare 管理的自訂網域，例如 `sync.example.com`。 [D1 入門](https://developers.cloudflare.com/d1/get-started/)
 2. 在 Zero Trust 建立 Self-hosted Access 應用程式，保護該完整主機名及其所有路徑。新增只包含自己完整 email 的 **Allow** 規則，以及只包含專用 token 的 **Service Auth** 規則。記下應用程式 AUD、團隊網址和 service token 的 Client ID；Client Secret 留給 Mac 鑰匙圈。瀏覽器沿用這個應用程式的登入，Worker 驗證 JWT 的簽名、簽發者和 AUD，並將 service token 限制在同步 API。兩種身分都對應同一個內部帳號。 [Service tokens](https://developers.cloudflare.com/cloudflare-one/access-controls/service-credentials/service-tokens/) [JWT 驗證](https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/authorization-cookie/validating-json/)
 3. 從 `sync/` 將 `wrangler.example.jsonc` 複製為 `wrangler.local.jsonc`。填入 D1 名稱與 ID、`routes[0].pattern` 和 `ACCESS_HOST`（同一主機名），以及 `ACCESS_ISSUER`（例如 `https://your-team.cloudflareaccess.com`）、`ACCESS_AUDIENCE`、`ACCESS_EMAIL`、`ACCESS_SERVICE_CLIENT_ID` 和 `ACCESS_ACCOUNT_ID`（自選穩定識別碼，例如 `personal`）。Worker 僅服務指定主機，範本也停用 `workers.dev` 和預覽入口。 [Wrangler 設定](https://developers.cloudflare.com/workers/wrangler/configuration/)
-4. 從根目錄先跑 `npm --prefix web run build:sync`。執行以下指令時，兩個步驟共用同一份設定檔和 D1：
+4. 首次部署或版本有新增 D1 migration 時，先用部署設定檔套用 migration：
 
    ```sh
-   cd sync
-   npx wrangler d1 migrations apply DB --remote --config wrangler.local.jsonc
-   npx wrangler deploy --config wrangler.local.jsonc
+   (cd sync && npx wrangler d1 migrations apply DB --remote --config wrangler.local.jsonc)
    ```
+
+   從專案根目錄執行 `make deploy-sync`，安裝鎖定的相依套件、建置手機網頁，並使用 `sync/wrangler.local.jsonc` 部署 Worker。
 
 5. 在 Workers 的 **Domains & Routes** 確認只有正式自訂網域啟用。用手機登入測試；以登出或另一個帳號的瀏覽器確認無法取用。同一個 service token 應只可讀寫同步 API，開啟網頁路徑會被拒絕。完成 Mac 設定後，用測試任務跑一次離線新增、手機勾選和 Mac 收到結果的流程。 [Workers 預覽入口](https://developers.cloudflare.com/workers/previews/)
 
