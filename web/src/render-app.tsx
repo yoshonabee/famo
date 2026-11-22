@@ -12,7 +12,10 @@ export function renderApp(content: ReactNode, { panel = false } = {}) {
     defaultOptions: { queries: { staleTime: 10_000, retry: 1 } },
   })
   void initializeDesktop(() => {
-    void client.invalidateQueries({ queryKey: ['tasks'] })
+    void client.invalidateQueries({
+      predicate: ({ queryKey: [key] }) =>
+        key === 'tasks' || key === 'projects' || key === 'boards',
+    })
   }).catch((error: unknown) => {
     console.error('無法載入桌面整合', error)
   })

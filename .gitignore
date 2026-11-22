@@ -10,3 +10,8 @@ playwright-report/
 test-results/
 *.tsbuildinfo
 output/
+web/dist-sync/
+sync/.wrangler/
+sync/.dev.vars*
+sync/.env*
+sync/wrangler.local.jsonc

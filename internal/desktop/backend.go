@@ -11,21 +11,28 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
 	"famo/internal/agent"
 	"famo/internal/server"
+	"famo/internal/syncclient"
 	"famo/internal/tasks"
+
+	"github.com/go-chi/chi/v5/middleware"
 )
 
 const DefaultAPIAddr = "127.0.0.1:0"
 
 type Config struct {
-	DBPath           string
-	APIAddr          string // Port 0 is dynamic; empty disables the optional Agent HTTP API.
-	APIInfoPath      string // Empty skips publishing discovery information (for embedded callers).
-	UseAPIPreference bool   // Used for the default desktop launch, without an explicit -addr.
+	DBPath               string
+	APIAddr              string // Port 0 is dynamic; empty disables the optional Agent HTTP API.
+	APIInfoPath          string // Empty skips publishing discovery information (for embedded callers).
+	SyncConfigPath       string
+	UseDefaultSyncConfig bool
+	onSyncTasksChanged   func()
+	UseAPIPreference     bool // Used for the default desktop launch, without an explicit -addr.
 }
 
 func DefaultDatabasePath() (string, error) {
@@ -39,16 +46,18 @@ func DefaultDatabasePath() (string, error) {
 func DefaultAPIInfoPath() (string, error) { return agent.DefaultAPIInfoPath() }
 
 type Backend struct {
-	handler     http.Handler
-	external    http.Handler
-	store       *tasks.Store
-	apiAddr     string
-	apiInfoPath string
+	handler      http.Handler
+	external     http.Handler
+	store        *tasks.Store
+	apiAddr      string
+	apiInfoPath  string
+	syncActivity *syncclient.Activity
 
 	mu       sync.Mutex
 	api      *runningAPI
 	closed   bool
 	closeErr error
+	stopSync func()
 }
 
 type runningAPI struct {
@@ -98,9 +107,11 @@ func Start(cfg Config, assets fs.FS) (*Backend, error) {
 		return nil, err
 	}
 	b := &Backend{
-		store: store, handler: server.NewEmbedded(store, assets), external: server.NewDesktopAPI(store, assets),
+		store: store, syncActivity: syncclient.NewActivity(5 * time.Minute),
 		apiAddr: cfg.APIAddr, apiInfoPath: cfg.APIInfoPath,
 	}
+	b.handler = b.observeSyncWrites(server.NewEmbedded(store, assets))
+	b.external = b.observeSyncWrites(server.NewDesktopAPI(store, assets))
 	if b.apiAddr == "" {
 		b.apiAddr = DefaultAPIAddr
 	}
@@ -128,7 +139,65 @@ func Start(cfg Config, assets fs.FS) (*Backend, error) {
 		store.Close()
 		return nil, fmt.Errorf("無法清除 Agent API 位址檔案：%w", err)
 	}
+	if err := b.startSync(cfg); err != nil {
+		if cfg.SyncConfigPath != "" {
+			b.Close()
+			return nil, err
+		}
+		log.Printf("Sync: %v", err)
+	}
 	return b, nil
+}
+
+func (b *Backend) startSync(cfg Config) error {
+	path := cfg.SyncConfigPath
+	if path == "" {
+		if !cfg.UseDefaultSyncConfig {
+			return nil
+		}
+		path = filepath.Join(filepath.Dir(cfg.DBPath), syncclient.DefaultConfigName)
+	}
+	config, err := syncclient.ReadConfig(path)
+	if errors.Is(err, os.ErrNotExist) && cfg.SyncConfigPath == "" {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	runner, err := syncclient.New(ctx, b.store, config, cfg.onSyncTasksChanged)
+	if err != nil {
+		cancel()
+		return err
+	}
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		runner.RunWhileActive(ctx, b.syncActivity, func(err error) { log.Printf("Sync: %v", err) })
+	}()
+	b.stopSync = func() {
+		cancel()
+		<-done
+	}
+	return nil
+}
+
+// Both the embedded window and the Agent API write through these handlers.
+func (b *Backend) observeSyncWrites(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path := strings.TrimPrefix(r.URL.Path, "/api/")
+		path = strings.TrimPrefix(path, "/")
+		first, _, _ := strings.Cut(path, "/")
+		if r.Method != http.MethodPost || (first != "tasks" && first != "projects" && first != "boards") {
+			next.ServeHTTP(w, r)
+			return
+		}
+		response := middleware.NewWrapResponseWriter(w, r.ProtoMajor)
+		next.ServeHTTP(response, r)
+		if status := response.Status(); status >= 200 && status < 300 {
+			b.syncActivity.RequestSync()
+		}
+	})
 }
 
 func listenAPI(addr string) (net.Listener, error) {
@@ -238,6 +307,9 @@ func (b *Backend) Close() error {
 	defer b.mu.Unlock()
 	if !b.closed {
 		b.closed = true
+		if b.stopSync != nil {
+			b.stopSync()
+		}
 		b.closeErr = errors.Join(b.stopAPI(), b.store.Close())
 	}
 	return b.closeErr

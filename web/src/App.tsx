@@ -496,7 +496,8 @@ function App() {
     ? all.filter((task) => {
         const id = task.project_id ?? ''
         if (boardProjectIds) return boardProjectIds.has(id)
-        return !projectFiltered || !todayFilter.hidden.includes(id)
+        const project = projects.data && !projectsById.has(id) ? '' : id
+        return !projectFiltered || !todayFilter.hidden.includes(project)
       })
     : []
   const selectableTasks = isCalendarView
@@ -1241,7 +1242,11 @@ function Detail({
             <ProjectPicker
               label="Project"
               projects={projects}
-              value={task.project_id ?? ''}
+              value={
+                projects.some((project) => project.id === task.project_id)
+                  ? (task.project_id ?? '')
+                  : ''
+              }
               disabled={busy}
               onChange={(projectId) => {
                 setProjectError('')

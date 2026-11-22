@@ -198,6 +198,19 @@ func (s *Store) DeleteProject(ctx context.Context, id string, version int) error
 	if err != nil {
 		return err
 	}
+	// Keep assignments until the synced deletion is accepted. A conflicting
+	// deletion may be resolved by keeping the Project and its assignments.
+	var synced bool
+	if err := tx.QueryRowContext(ctx, `
+		SELECT EXISTS(
+			SELECT 1 FROM sync_collections, json_each(baseline, '$.projects') AS project
+			WHERE json_extract(project.value, '$.id')=?
+		)`, id).Scan(&synced); err != nil {
+		return err
+	}
+	if synced {
+		return tx.Commit()
+	}
 	// Include recently deleted tasks so restoring one cannot resurrect a removed Project assignment.
 	if _, err := tx.ExecContext(ctx, `
 		UPDATE tasks
