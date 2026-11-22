@@ -149,13 +149,20 @@ func Start(cfg Config, assets fs.FS) (*Backend, error) {
 	return b, nil
 }
 
+func (cfg Config) syncConfigPath() string {
+	if cfg.SyncConfigPath != "" {
+		return cfg.SyncConfigPath
+	}
+	if cfg.UseDefaultSyncConfig {
+		return filepath.Join(filepath.Dir(cfg.DBPath), syncclient.DefaultConfigName)
+	}
+	return ""
+}
+
 func (b *Backend) startSync(cfg Config) error {
-	path := cfg.SyncConfigPath
+	path := cfg.syncConfigPath()
 	if path == "" {
-		if !cfg.UseDefaultSyncConfig {
-			return nil
-		}
-		path = filepath.Join(filepath.Dir(cfg.DBPath), syncclient.DefaultConfigName)
+		return nil
 	}
 	config, err := syncclient.ReadConfig(path)
 	if errors.Is(err, os.ErrNotExist) && cfg.SyncConfigPath == "" {

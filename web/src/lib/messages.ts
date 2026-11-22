@@ -274,6 +274,53 @@ export const messages = {
     '無法讀取任務，請重試。',
     'Could not load tasks. Try again.',
   ],
+  syncSettings: ['跨裝置同步', 'Cross-device sync'],
+  syncURL: ['同步網址', 'Sync URL'],
+  syncAccount: ['同步帳號', 'Sync account'],
+  syncInterval: ['輪詢間隔（秒）', 'Polling interval (seconds)'],
+  syncSettingsDescription: [
+    '設定會寫入 famo-sync.json，完全退出並重開 Famo 後套用。',
+    'Famo saves these settings to famo-sync.json and applies them after you quit and reopen the app.',
+  ],
+  syncSettingsLoadFailed: [
+    '無法讀取同步設定。',
+    'Could not read sync settings.',
+  ],
+  syncSettingsSaveFailed: [
+    '無法儲存同步設定。',
+    'Could not save sync settings.',
+  ],
+  syncSettingsSaved: [
+    '同步設定已儲存。按 ⌘Q 完全退出 Famo，再重開以套用。',
+    'Sync settings saved. Press ⌘Q to quit Famo, then reopen it to apply them.',
+  ],
+  syncSetupGuide: ['設定教學', 'Setup guide'],
+  syncSetupTitle: ['設定跨裝置同步', 'Set up cross-device sync'],
+  syncSetupIntro: [
+    '準備 Worker 的網址和帳號，以及 Cloudflare Access service token。',
+    'You’ll need the Worker URL and account ID, plus a Cloudflare Access service token.',
+  ],
+  syncSetupWorker: [
+    '部署 Cloudflare Worker 與 D1，並在 Access 啟用 Service Auth。',
+    'Deploy the Cloudflare Worker and D1, and enable Service Auth in Access.',
+  ],
+  syncSetupDeploymentLink: ['查看部署指南', 'View deployment guide'],
+  syncSetupEnter: [
+    '填入 Worker 的 HTTPS 網址和 ACCESS_ACCOUNT_ID。網址填到主機名，輪詢間隔可留預設值。',
+    'Enter the Worker HTTPS origin and its ACCESS_ACCOUNT_ID. You can keep the default polling interval.',
+  ],
+  syncSetupKeychain: [
+    '在「鑰匙圈存取」選登入鑰匙圈，按 ⌘N 建立兩筆密碼項目。兩筆的帳號都填上一步的同步帳號，並將範例網址換成你的 Worker 網址。',
+    'In Keychain Access, select the login keychain and press ⌘N to add two password items. Use the sync account for both and replace the example URL with your Worker URL.',
+  ],
+  syncSetupKeychainItem: [
+    '使用 {1} 作為密碼。',
+    'Use the token’s {1} as the password.',
+  ],
+  syncSetupRestart: [
+    '儲存設定後，按 ⌘Q 完全退出再重開 Famo。首次同步會上傳這份資料庫的任務、Project 和 Board。新增一筆測試任務，確認能在手機的同步網頁看到。',
+    'Save the settings, then press ⌘Q to quit and reopen Famo. The first sync uploads tasks, Projects, and Boards from this database. Create a test task and check that it appears on the mobile site.',
+  ],
   localData: ['本機資料', 'Local data'],
   mainNavigation: ['主要導覽', 'Main navigation'],
   mainTaskList: ['主要任務列表', 'Main task list'],

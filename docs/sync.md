@@ -50,7 +50,9 @@ CI 可從乾淨 checkout 執行 `node sync/configure-deploy.mjs` 產生同格式
 
 ## Mac 設定與版本衝突
 
-在資料庫旁建立 `famo-sync.json`。預設路徑為 `~/Library/Application Support/Famo/famo-sync.json`，內容如下：
+在 Mac 版開啟「設定 → 一般 → 跨裝置同步」，可填寫同步網址、帳號及輪詢間隔。「設定教學」列出 Cloudflare 與鑰匙圈的準備步驟。儲存會以擁有者專用的檔案權限寫入資料庫旁的 `famo-sync.json`，Access 憑證由鑰匙圈保存。
+
+也可手動編輯同一份檔案。預設路徑為 `~/Library/Application Support/Famo/famo-sync.json`，內容如下：
 
 ```json
 {

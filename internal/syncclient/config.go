@@ -12,7 +12,10 @@ import (
 	"time"
 )
 
-const DefaultConfigName = "famo-sync.json"
+const (
+	DefaultConfigName      = "famo-sync.json"
+	DefaultIntervalSeconds = 30
+)
 
 type Config struct {
 	URL             string `json:"url"`
@@ -38,6 +41,15 @@ func ReadConfig(path string) (Config, error) {
 	return cfg, nil
 }
 
+// Origin validates the configuration and returns the same normalized URL used by the runner.
+func (c Config) Origin() (string, error) {
+	endpoint, _, err := c.validate()
+	if err != nil {
+		return "", err
+	}
+	return endpoint.String(), nil
+}
+
 func (c Config) validate() (*url.URL, time.Duration, error) {
 	endpoint, err := url.Parse(c.URL)
 	if err != nil || endpoint.Hostname() == "" || endpoint.User != nil ||
@@ -60,7 +72,7 @@ func (c Config) validate() (*url.URL, time.Duration, error) {
 	}
 	interval := time.Duration(c.IntervalSeconds) * time.Second
 	if interval == 0 {
-		interval = 30 * time.Second
+		interval = DefaultIntervalSeconds * time.Second
 	}
 	return endpoint, interval, nil
 }

@@ -107,6 +107,27 @@ const enqueueTask = `
     DELETE FROM sync_rejections WHERE task_id=NEW.id;
 `
 
+// CheckSyncDestination validates settings without binding the database or queuing uploads.
+func (s *Store) CheckSyncDestination(ctx context.Context, url, account string) error {
+	_, err := checkSyncDestination(ctx, s.db, url, account)
+	return err
+}
+
+func checkSyncDestination(ctx context.Context, db schemaReader, url, account string) (bool, error) {
+	var oldURL, oldAccount string
+	err := db.QueryRowContext(ctx, `SELECT url,account FROM sync_binding WHERE id=1`).Scan(&oldURL, &oldAccount)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	if oldURL != url || oldAccount != account {
+		return true, errors.New("sync database is bound to a different URL or account; use a separate database")
+	}
+	return true, nil
+}
+
 // BindSync records the destination before any upload. A populated database and
 // its pending edits stay attached to one destination, even while sync is paused.
 func (s *Store) BindSync(ctx context.Context, url, account string) error {
@@ -118,10 +139,11 @@ func (s *Store) BindSync(ctx context.Context, url, account string) error {
 	}
 	defer tx.Rollback()
 
-	var oldURL, oldAccount string
-	err = tx.QueryRowContext(ctx, `SELECT url,account FROM sync_binding WHERE id=1`).Scan(&oldURL, &oldAccount)
-	switch {
-	case errors.Is(err, sql.ErrNoRows):
+	bound, err := checkSyncDestination(ctx, tx, url, account)
+	if err != nil {
+		return err
+	}
+	if !bound {
 		if _, err := tx.ExecContext(ctx, `INSERT INTO sync_binding(id,url,account) VALUES(1,?,?)`, url, account); err != nil {
 			return err
 		}
@@ -131,10 +153,6 @@ func (s *Store) BindSync(ctx context.Context, url, account string) error {
 			FROM tasks t LEFT JOIN task_order o ON o.task_id=t.id ORDER BY o.position,t.id`); err != nil {
 			return err
 		}
-	case err != nil:
-		return err
-	case oldURL != url || oldAccount != account:
-		return errors.New("sync database is bound to a different URL or account; use a separate database")
 	}
 	return tx.Commit()
 }

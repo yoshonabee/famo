@@ -3,8 +3,10 @@ import { useRef, useState } from 'react'
 import { AgentPreferences } from '@/components/agent-preferences'
 import { AppearancePreferences } from '@/components/appearance-preferences'
 import { DataCleanupPreferences } from '@/components/data-cleanup-preferences'
+import { SyncPreferences } from '@/components/sync-preferences'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
+import { isDesktop } from '@/lib/desktop'
 import { type ThemeController } from '@/lib/theme'
 import { languages, useLanguage, type Locale } from '@/lib/i18n'
 import { footerNavigation, type FooterNavItem } from '@/lib/sidebar-preferences'
@@ -85,6 +87,7 @@ export function PreferencesPage({
               ))}
             </div>
           </section>
+          {isDesktop() && <SyncPreferences />}
           <section aria-labelledby="preferences-local-data-heading">
             <h3 id="preferences-local-data-heading">{t('localData')}</h3>
             <DataCleanupPreferences />
