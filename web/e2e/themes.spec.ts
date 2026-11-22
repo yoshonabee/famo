@@ -1,4 +1,9 @@
-import { expect, test } from '@playwright/test'
+import { expect, test, type Page } from '@playwright/test'
+
+async function openAppearance(page: Page) {
+  await page.getByRole('button', { name: '設定', exact: true }).click()
+  await page.getByRole('button', { name: '外觀', exact: true }).click()
+}
 
 test('設定提供 12 款主題，切換立即生效並在重開後保留', async ({
   page,
@@ -7,7 +12,7 @@ test('設定提供 12 款主題，切換立即生效並在重開後保留', asyn
   const tasks = await (await request.get('/api/tasks')).json()
   await page.goto('/')
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'moss')
-  await page.getByRole('button', { name: '設定', exact: true }).click()
+  await openAppearance(page)
   await expect(page.getByRole('heading', { name: '設定' })).toBeVisible()
   await expect(page.getByRole('radio')).toHaveCount(13)
   await expect(
@@ -72,7 +77,7 @@ test('設定提供 12 款主題，切換立即生效並在重開後保留', asyn
   })
   await page.reload()
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'ocean')
-  await page.getByRole('button', { name: '設定', exact: true }).click()
+  await openAppearance(page)
   await expect(
     page.getByRole('radio', { name: '海鹽', exact: true }),
   ).toBeChecked()
@@ -111,7 +116,7 @@ test('深色主題套用到任務、表單、月曆及詳情，切換頁面保�
   await page.goto('/')
   const capture = page.getByRole('textbox', { name: '快速新增任務名稱' })
   await capture.fill('尚未送出的草稿')
-  await page.getByRole('button', { name: '設定', exact: true }).click()
+  await openAppearance(page)
   await page.getByRole('radio', { name: '午夜', exact: true }).check()
   await page.getByRole('button', { name: '今日任務', exact: true }).click()
   await expect(capture).toHaveValue('尚未送出的草稿')
@@ -149,7 +154,7 @@ test('深色主題套用到任務、表單、月曆及詳情，切換頁面保�
 test('跟隨系統即時更新，固定主題維持選擇', async ({ page }) => {
   await page.emulateMedia({ colorScheme: 'light' })
   await page.goto('/')
-  await page.getByRole('button', { name: '設定', exact: true }).click()
+  await openAppearance(page)
   await page.getByRole('radio', { name: '跟隨系統', exact: true }).check()
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'moss')
   await page.emulateMedia({ colorScheme: 'dark' })
@@ -159,7 +164,7 @@ test('跟隨系統即時更新，固定主題維持選擇', async ({ page }) => 
   )
   await page.reload()
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'midnight')
-  await page.getByRole('button', { name: '設定', exact: true }).click()
+  await openAppearance(page)
   await expect(
     page.getByRole('radio', { name: '跟隨系統', exact: true }),
   ).toBeChecked()
@@ -174,12 +179,12 @@ test('跟隨系統即時更新，固定主題維持選擇', async ({ page }) => 
 
 test('分頁同步主題，清除或無效偏好使用預設值', async ({ page, context }) => {
   await page.goto('/')
-  await page.getByRole('button', { name: '設定', exact: true }).click()
+  await openAppearance(page)
   const other = await context.newPage()
   await other.goto('/')
   await page.getByRole('radio', { name: '玫瑰', exact: true }).check()
   await expect(other.locator('html')).toHaveAttribute('data-theme', 'rose')
-  await other.getByRole('button', { name: '設定', exact: true }).click()
+  await openAppearance(other)
   await expect(
     other.getByRole('radio', { name: '玫瑰', exact: true }),
   ).toBeChecked()
@@ -199,7 +204,7 @@ test('分頁同步主題，清除或無效偏好使用預設值', async ({ page,
 test('手機可選主題並支援鍵盤操作，頁面無水平溢出', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 })
   await page.goto('/')
-  await page.getByRole('button', { name: '設定', exact: true }).click()
+  await openAppearance(page)
   const moss = page.getByRole('radio', { name: '苔綠', exact: true })
   await moss.focus()
   await page.keyboard.press('ArrowRight')
@@ -239,7 +244,7 @@ test('本機儲存不可用時仍可切換主題，並顯示未儲存提示', as
   page.on('pageerror', (error) => errors.push(error.message))
   await page.goto('/')
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'moss')
-  await page.getByRole('button', { name: '設定', exact: true }).click()
+  await openAppearance(page)
   await page.getByRole('radio', { name: '石墨', exact: true }).check()
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'charcoal')
   await expect(page.getByRole('alert')).toContainText(

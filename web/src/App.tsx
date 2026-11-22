@@ -909,6 +909,7 @@ function App() {
         )}
         <div className="main-content" hidden={view !== 'preferences'}>
           <PreferencesPage
+            open={view === 'preferences'}
             appearance={theme}
             showToday={showToday}
             footerItems={footerItems}
