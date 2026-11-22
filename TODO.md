@@ -89,7 +89,7 @@
 
 ## 資料備份
 
-- [ ] 支援將 Famo 資料備份到 Google Drive。
+- [x] 支援將 Famo 資料備份到 Google Drive。
 
 ## 國際化
 

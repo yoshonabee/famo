@@ -19,6 +19,7 @@ func Run(cfg Config) error {
 	language := &DisplayLanguage{}
 	agentTools := &AgentTools{language: language}
 	menuBar := &MenuBar{refresh: make(chan struct{}, 1)}
+	driveBackup := &DriveBackup{dbPath: cfg.DBPath, client: googleDriveClient()}
 	assets := application.BundledAssetFileServer(web.Assets())
 	app := application.New(application.Options{
 		Name: "Famo", Description: "每天一小步。",
@@ -39,6 +40,7 @@ func Run(cfg Config) error {
 			application.NewService(menuBar),
 			application.NewService(agentTools),
 			application.NewService(language),
+			application.NewService(driveBackup),
 		},
 		SingleInstance: &application.SingleInstanceOptions{
 			UniqueID: "io.github.yoshonabee.famo",

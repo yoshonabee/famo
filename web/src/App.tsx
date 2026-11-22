@@ -909,6 +909,7 @@ function App() {
         <div className="main-content" hidden={view !== 'preferences'}>
           <PreferencesPage
             appearance={theme}
+            active={view === 'preferences'}
             showToday={showToday}
             footerItems={footerItems}
             onShowTodayChange={(showToday) => sidebar.save({ showToday })}

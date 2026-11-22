@@ -3,6 +3,8 @@ import { useRef, useState } from 'react'
 import { AgentPreferences } from '@/components/agent-preferences'
 import { AppearancePreferences } from '@/components/appearance-preferences'
 import { DataCleanupPreferences } from '@/components/data-cleanup-preferences'
+import { DriveBackupPreferences } from '@/components/drive-backup-preferences'
+import { isDesktop } from '@/lib/desktop'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { type ThemeController } from '@/lib/theme'
@@ -13,11 +15,13 @@ type Section = 'general' | 'appearance' | 'agent'
 
 export function PreferencesPage({
   appearance,
+  active,
   showToday,
   footerItems,
   onShowTodayChange,
   onFooterChange,
 }: {
+  active: boolean
   appearance: ThemeController
   showToday: boolean
   footerItems: FooterNavItem[]
@@ -89,6 +93,11 @@ export function PreferencesPage({
             <h3 id="preferences-local-data-heading">{t('localData')}</h3>
             <DataCleanupPreferences />
           </section>
+          {isDesktop() && (
+            <DriveBackupPreferences
+              active={active && activeSection === 'general'}
+            />
+          )}
         </div>
       ),
     },

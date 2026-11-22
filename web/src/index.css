@@ -2625,8 +2625,13 @@ input.todo-title {
   display: grid;
   gap: 16px;
 }
+.backup-preferences a {
+  text-decoration: underline;
+  overflow-wrap: anywhere;
+}
 .agent-inline,
-.agent-api {
+.agent-api,
+.backup-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 8px 12px;
