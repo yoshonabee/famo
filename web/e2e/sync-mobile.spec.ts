@@ -35,6 +35,54 @@ const firstTask: Task = {
   version: 1,
 }
 
+test('keeps the quick-capture sheet above the mobile keyboard', async ({
+  page,
+}) => {
+  await page.route('**/api/sync/pull?*', (route) =>
+    route.fulfill({ json: { changes: [], cursor: 0, has_more: false } }),
+  )
+  await page.goto('/')
+  await page.getByRole('button', { name: '快速新增任務', exact: true }).tap()
+  const sheet = page.getByRole('dialog', { name: '快速新增任務' })
+  await expect(
+    sheet.getByRole('textbox', { name: '快速新增任務名稱' }),
+  ).toBeFocused()
+
+  const sheetBottom = () =>
+    sheet.evaluate((el) => el.getBoundingClientRect().bottom)
+  const screenBottom = await page.evaluate(() => window.innerHeight)
+  await expect.poll(sheetBottom).toBeCloseTo(screenBottom, 0)
+
+  // Playwright has no native keyboard. Model the visual viewport changes it causes.
+  await page.evaluate(() => {
+    const viewport = window.visualViewport!
+    Object.defineProperty(viewport, 'height', {
+      configurable: true,
+      value: 320,
+    })
+    viewport.dispatchEvent(new Event('resize'))
+  })
+  await expect.poll(sheetBottom).toBeCloseTo(320, 0)
+
+  await page.evaluate(() => {
+    const viewport = window.visualViewport!
+    Object.defineProperty(viewport, 'offsetTop', {
+      configurable: true,
+      value: 48,
+    })
+    viewport.dispatchEvent(new Event('scroll'))
+  })
+  await expect.poll(sheetBottom).toBeCloseTo(368, 0)
+
+  await page.evaluate(() => {
+    const viewport = window.visualViewport!
+    Reflect.deleteProperty(viewport, 'height')
+    Reflect.deleteProperty(viewport, 'offsetTop')
+    viewport.dispatchEvent(new Event('resize'))
+  })
+  await expect.poll(sheetBottom).toBeCloseTo(screenBottom, 0)
+})
+
 test('retries an unconfirmed creation with the same operation after a reload', async ({
   page,
 }) => {

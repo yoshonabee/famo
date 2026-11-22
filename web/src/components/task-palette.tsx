@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { CalendarDays, ChevronDown, Search } from 'lucide-react'
 import { DatePicker } from '@/components/date-picker'
 import { ProjectPicker } from '@/components/project-picker'
@@ -92,42 +92,47 @@ export function TaskPalette({
   const returnFocus = useRef<HTMLElement | null>(null)
   const drafts = capture.drafts.filter((draft) => draft.floating)
   const isCapture = mode === 'capture'
+  const isMobileCapture = mobile && isCapture
   useEffect(() => {
     const input = content.current?.querySelector('input')
     input?.focus({ preventScroll: true })
     if (mode !== 'capture') input?.select()
   }, [mode])
 
-  useLayoutEffect(() => {
-    const sheet = content.current
-    const viewport = window.visualViewport
-    if (!mobile || !isCapture || !sheet || !viewport) return
-    function fitKeyboard() {
-      if (!sheet || !viewport) return
-      const inset = Math.max(
-        0,
-        window.innerHeight - viewport.height - viewport.offsetTop,
-      )
-      sheet.style.setProperty('--keyboard-inset', `${inset}px`)
-      sheet.style.setProperty('--visible-height', `${viewport.height}px`)
-    }
-    fitKeyboard()
-    viewport.addEventListener('resize', fitKeyboard)
-    viewport.addEventListener('scroll', fitKeyboard)
-    return () => {
-      viewport.removeEventListener('resize', fitKeyboard)
-      viewport.removeEventListener('scroll', fitKeyboard)
-      sheet.style.removeProperty('--keyboard-inset')
-      sheet.style.removeProperty('--visible-height')
-    }
-  }, [mobile, isCapture])
+  const setContent = useCallback(
+    (sheet: HTMLDivElement | null) => {
+      content.current = sheet
+      const viewport = window.visualViewport
+      if (!isMobileCapture || !sheet || !viewport) return
+
+      const fitKeyboard = () => {
+        const inset = Math.max(
+          0,
+          window.innerHeight - viewport.height - viewport.offsetTop,
+        )
+        sheet.style.setProperty('--keyboard-inset', `${inset}px`)
+        sheet.style.setProperty('--visible-height', `${viewport.height}px`)
+      }
+      fitKeyboard()
+      viewport.addEventListener('resize', fitKeyboard)
+      viewport.addEventListener('scroll', fitKeyboard)
+      return () => {
+        content.current = null
+        viewport.removeEventListener('resize', fitKeyboard)
+        viewport.removeEventListener('scroll', fitKeyboard)
+        sheet.style.removeProperty('--keyboard-inset')
+        sheet.style.removeProperty('--visible-height')
+      }
+    },
+    [isMobileCapture],
+  )
 
   return (
     <Dialog open={mode !== null} onOpenChange={(open) => !open && onClose()}>
       {mode && (
         <DialogContent
-          ref={content}
-          className={`task-palette ${mobile && isCapture ? 'mobile-sheet mobile-capture-sheet' : ''}`}
+          ref={setContent}
+          className={`task-palette ${isMobileCapture ? 'mobile-sheet mobile-capture-sheet' : ''}`}
           showCloseButton={!isCapture || mobile}
           onEscapeKeyDown={(event) => {
             if (
@@ -150,9 +155,7 @@ export function TaskPalette({
             returnFocus.current?.focus({ preventScroll: true })
           }}
         >
-          <DialogTitle
-            className={mobile && isCapture ? 'dialog-title' : 'sr-only'}
-          >
+          <DialogTitle className={isMobileCapture ? 'dialog-title' : 'sr-only'}>
             {isCapture
               ? t('quickCapture')
               : mode === 'global-search'
