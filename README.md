@@ -323,3 +323,7 @@ scripts/build-macos.sh macOS 建置、Universal binary 與本機簽章
 ```
 
 原始需求背景見 [personal-task-manager.md](personal-task-manager.md)；目前操作以本文件為準。
+
+## 授權
+
+Famo 的原始碼採用 [Mozilla Public License 2.0](LICENSE)。
