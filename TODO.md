@@ -87,6 +87,19 @@
 - [x] 可設定預設 workspace dir 和選填的自訂 prompt。CLI 一併回傳路徑及 prompt，留空時 Agent 依 Skill 的預設方式查找脈絡。
 - [x] Project 功能加入後可設定各 Project 的 workspace dir 和選填 prompt。未歸類的任務使用預設 workspace，已歸類的任務使用所屬 Project 的 workspace。
 
+## 手機版 Famo
+
+- [ ] 考量 iOS App 上架成本，現階段先透過手機瀏覽器使用 Famo。手機網頁與電腦版共用 React 介面，功能與電腦版相當。
+- [ ] 在同一個 Cloudflare Worker 網域提供完整的 Famo 網頁和應用 API，讓網頁操作直接使用同步資料。
+- [ ] 日後提供可安裝的手機 App，功能與電腦版相當。
+
+## 同步狀態
+
+- [ ] 在各版本的 Famo 加入同步狀態小圖示，包含電腦版、網頁版和未來的手機 App。用燈號和文字說明目前狀態。
+  - 綠燈代表最近一次同步成功，且沒有待同步異動。
+  - 黃燈代表正在同步、有異動等待同步，或正在等待網路連線。
+  - 紅燈代表同步失敗，或有需要使用者處理的衝突。
+
 ## 資料備份
 
 - [ ] 支援將 Famo 資料備份到 Google Drive。
