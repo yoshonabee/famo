@@ -16,16 +16,20 @@ import (
 
 	"famo/internal/agent"
 	"famo/internal/server"
+	"famo/internal/syncclient"
 	"famo/internal/tasks"
 )
 
 const DefaultAPIAddr = "127.0.0.1:0"
 
 type Config struct {
-	DBPath           string
-	APIAddr          string // Port 0 is dynamic; empty disables the optional Agent HTTP API.
-	APIInfoPath      string // Empty skips publishing discovery information (for embedded callers).
-	UseAPIPreference bool   // Used for the default desktop launch, without an explicit -addr.
+	DBPath               string
+	APIAddr              string // Port 0 is dynamic; empty disables the optional Agent HTTP API.
+	APIInfoPath          string // Empty skips publishing discovery information (for embedded callers).
+	SyncConfigPath       string
+	UseDefaultSyncConfig bool
+	onSyncTasksChanged   func()
+	UseAPIPreference     bool // Used for the default desktop launch, without an explicit -addr.
 }
 
 func DefaultDatabasePath() (string, error) {
@@ -49,6 +53,7 @@ type Backend struct {
 	api      *runningAPI
 	closed   bool
 	closeErr error
+	stopSync func()
 }
 
 type runningAPI struct {
@@ -128,7 +133,47 @@ func Start(cfg Config, assets fs.FS) (*Backend, error) {
 		store.Close()
 		return nil, fmt.Errorf("無法清除 Agent API 位址檔案：%w", err)
 	}
+	if err := b.startSync(cfg); err != nil {
+		if cfg.SyncConfigPath != "" {
+			b.Close()
+			return nil, err
+		}
+		log.Printf("Sync: %v", err)
+	}
 	return b, nil
+}
+
+func (b *Backend) startSync(cfg Config) error {
+	path := cfg.SyncConfigPath
+	if path == "" {
+		if !cfg.UseDefaultSyncConfig {
+			return nil
+		}
+		path = filepath.Join(filepath.Dir(cfg.DBPath), syncclient.DefaultConfigName)
+	}
+	config, err := syncclient.ReadConfig(path)
+	if errors.Is(err, os.ErrNotExist) && cfg.SyncConfigPath == "" {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	runner, err := syncclient.New(ctx, b.store, config, cfg.onSyncTasksChanged)
+	if err != nil {
+		cancel()
+		return err
+	}
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		runner.Run(ctx, func(err error) { log.Printf("Sync: %v", err) })
+	}()
+	b.stopSync = func() {
+		cancel()
+		<-done
+	}
+	return nil
 }
 
 func listenAPI(addr string) (net.Listener, error) {
@@ -238,6 +283,9 @@ func (b *Backend) Close() error {
 	defer b.mu.Unlock()
 	if !b.closed {
 		b.closed = true
+		if b.stopSync != nil {
+			b.stopSync()
+		}
 		b.closeErr = errors.Join(b.stopAPI(), b.store.Close())
 	}
 	return b.closeErr

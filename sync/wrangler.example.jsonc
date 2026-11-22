@@ -1,0 +1,30 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "famo-sync",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-11-01",
+  "workers_dev": false,
+  "preview_urls": false,
+  "routes": [{ "pattern": "sync.example.com", "custom_domain": true }],
+  "assets": {
+    "directory": "../web/dist-sync",
+    "binding": "ASSETS",
+    "run_worker_first": true
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "famo-sync",
+      "database_id": "00000000-0000-4000-8000-000000000000",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "vars": {
+    "ACCESS_HOST": "sync.example.com",
+    "ACCESS_ISSUER": "https://your-team.cloudflareaccess.com",
+    "ACCESS_AUDIENCE": "replace-with-access-application-aud",
+    "ACCESS_EMAIL": "you@example.com",
+    "ACCESS_SERVICE_CLIENT_ID": "replace-with-service-token-client-id",
+    "ACCESS_ACCOUNT_ID": "personal"
+  }
+}

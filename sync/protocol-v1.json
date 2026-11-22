@@ -1,0 +1,152 @@
+{
+  "create": {
+    "operation_id": "c0000000000000000000000000000001",
+    "task_id": "a0000000000000000000000000000001",
+    "base_version": 0,
+    "task": {
+      "id": "a0000000000000000000000000000001",
+      "title": "Pick up the repaired bike",
+      "scheduled_date": "2026-11-01",
+      "project_id": "b0000000000000000000000000000001",
+      "description": "Bring the receipt",
+      "completed_at": null,
+      "deleted_at": null,
+      "created_at": "2026-11-01T12:00:00Z",
+      "updated_at": "2026-11-01T12:00:00Z",
+      "version": 1,
+      "links": [
+        {
+          "url": "https://example.com/receipt"
+        }
+      ]
+    }
+  },
+  "complete": {
+    "operation_id": "c0000000000000000000000000000002",
+    "task_id": "a0000000000000000000000000000001",
+    "base_version": 1,
+    "task": {
+      "id": "a0000000000000000000000000000001",
+      "title": "Pick up the repaired bike",
+      "scheduled_date": "2026-11-01",
+      "project_id": "b0000000000000000000000000000001",
+      "description": "Bring the receipt",
+      "completed_at": "2026-11-01T12:00:01Z",
+      "deleted_at": null,
+      "created_at": "2026-11-01T12:00:00Z",
+      "updated_at": "2026-11-01T12:00:01Z",
+      "version": 2,
+      "links": [
+        {
+          "url": "https://example.com/receipt"
+        }
+      ]
+    }
+  },
+  "conflict": {
+    "operation_id": "c0000000000000000000000000000003",
+    "task_id": "a0000000000000000000000000000001",
+    "base_version": 1,
+    "task": {
+      "id": "a0000000000000000000000000000001",
+      "title": "Pick up the bike tomorrow",
+      "scheduled_date": "2026-11-01",
+      "project_id": "b0000000000000000000000000000001",
+      "description": "Bring the receipt",
+      "completed_at": null,
+      "deleted_at": null,
+      "created_at": "2026-11-01T12:00:00Z",
+      "updated_at": "2026-11-01T12:00:02Z",
+      "version": 2,
+      "links": [
+        {
+          "url": "https://example.com/receipt"
+        }
+      ]
+    }
+  },
+  "delete": {
+    "operation_id": "c0000000000000000000000000000004",
+    "task_id": "a0000000000000000000000000000001",
+    "base_version": 2,
+    "task": {
+      "id": "a0000000000000000000000000000001",
+      "title": "Pick up the repaired bike",
+      "scheduled_date": "2026-11-01",
+      "project_id": "b0000000000000000000000000000001",
+      "description": "Bring the receipt",
+      "completed_at": "2026-11-01T12:00:01Z",
+      "deleted_at": "2026-11-01T12:00:03Z",
+      "created_at": "2026-11-01T12:00:00Z",
+      "updated_at": "2026-11-01T12:00:03Z",
+      "version": 3,
+      "links": [
+        {
+          "url": "https://example.com/receipt"
+        }
+      ]
+    }
+  },
+  "changes": [
+    {
+      "sequence": 1,
+      "task": {
+        "id": "a0000000000000000000000000000001",
+        "title": "Pick up the repaired bike",
+        "scheduled_date": "2026-11-01",
+        "project_id": "b0000000000000000000000000000001",
+        "description": "Bring the receipt",
+        "completed_at": null,
+        "deleted_at": null,
+        "created_at": "2026-11-01T12:00:00Z",
+        "updated_at": "2026-11-01T12:00:00Z",
+        "version": 1,
+        "links": [
+          {
+            "url": "https://example.com/receipt"
+          }
+        ]
+      }
+    },
+    {
+      "sequence": 2,
+      "task": {
+        "id": "a0000000000000000000000000000001",
+        "title": "Pick up the repaired bike",
+        "scheduled_date": "2026-11-01",
+        "project_id": "b0000000000000000000000000000001",
+        "description": "Bring the receipt",
+        "completed_at": "2026-11-01T12:00:01Z",
+        "deleted_at": null,
+        "created_at": "2026-11-01T12:00:00Z",
+        "updated_at": "2026-11-01T12:00:01Z",
+        "version": 2,
+        "links": [
+          {
+            "url": "https://example.com/receipt"
+          }
+        ]
+      }
+    },
+    {
+      "sequence": 3,
+      "task": {
+        "id": "a0000000000000000000000000000001",
+        "title": "Pick up the repaired bike",
+        "scheduled_date": "2026-11-01",
+        "project_id": "b0000000000000000000000000000001",
+        "description": "Bring the receipt",
+        "completed_at": "2026-11-01T12:00:01Z",
+        "deleted_at": "2026-11-01T12:00:03Z",
+        "created_at": "2026-11-01T12:00:00Z",
+        "updated_at": "2026-11-01T12:00:03Z",
+        "version": 3,
+        "links": [
+          {
+            "url": "https://example.com/receipt"
+          }
+        ]
+      }
+    }
+  ]
+}

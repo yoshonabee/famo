@@ -52,6 +52,7 @@ func Run(cfg Config) error {
 	})
 	// Single-instance handling happens before opening the database or API port.
 	var err error
+	cfg.onSyncTasksChanged = func() { app.Event.Emit("famo:tasks-changed") }
 	backend, err = Start(cfg, web.Assets())
 	if err != nil {
 		app.Dialog.Error().SetTitle("無法開啟 Famo").SetMessage(err.Error()).Show()

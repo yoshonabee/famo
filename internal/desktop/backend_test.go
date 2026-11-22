@@ -153,3 +153,33 @@ func TestFailedDatabaseOpenReleasesAPIPort(t *testing.T) {
 	}
 	listener.Close()
 }
+
+func TestInvalidDefaultSyncConfigKeepsLocalDesktopAvailable(t *testing.T) {
+	dir := t.TempDir()
+	configPath := filepath.Join(dir, "famo-sync.json")
+	if err := os.WriteFile(configPath, []byte("invalid config"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	dbPath := filepath.Join(dir, "famo.db")
+	assets := fstest.MapFS{"index.html": {Data: []byte("<html>Famo</html>")}}
+	backend, err := Start(Config{DBPath: dbPath, UseDefaultSyncConfig: true}, assets)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer backend.Close()
+	w := httptest.NewRecorder()
+	backend.Handler().ServeHTTP(w, httptest.NewRequest(http.MethodGet, "wails://localhost/", nil))
+	if w.Code != http.StatusOK {
+		t.Fatalf("local desktop returned %d", w.Code)
+	}
+	status, err := backend.store.SyncStatus(t.Context())
+	if err != nil || status.URL != "" {
+		t.Fatalf("invalid config tied the database to sync: %+v, %v", status, err)
+	}
+	if err := backend.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Start(Config{DBPath: dbPath, SyncConfigPath: configPath}, assets); err == nil {
+		t.Fatal("explicit invalid sync configuration should fail")
+	}
+}

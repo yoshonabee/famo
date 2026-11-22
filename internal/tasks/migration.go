@@ -107,7 +107,7 @@ func migrateSchema(ctx context.Context, tx *sql.Tx) error {
 		return err
 	}
 	// Boards are additive and leave the v7 task and Project schema readable by older builds.
-	if _, err := tx.ExecContext(ctx, boardSchema); err != nil {
+	if _, err := tx.ExecContext(ctx, boardSchema+syncSchema); err != nil {
 		return err
 	}
 	var hasIcon bool
