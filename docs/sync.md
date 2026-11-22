@@ -1,8 +1,10 @@
 # 跨裝置同步
 
-Mac 仍可離線使用 SQLite。設好同步後，Mac 背景會推送任務異動並拉取遠端結果。手機從同一個 HTTPS 網域開啟 Famo，可以看任務、新增任務、勾選完成和恢復待辦。第一版同步任務內容、日期、連結、完成狀態、刪除和還原。Project ID 隨任務保留，Project 定義、Board、手動排序和外觀偏好各自存於本機。
+Mac 仍可離線使用 SQLite。設好同步後，Mac 背景會推送任務異動並拉取遠端結果。手機從同一個 HTTPS 網域開啟 Famo，可以看任務、新增任務、勾選完成和恢復待辦。同步涵蓋任務內容、日期、連結、完成狀態、刪除和還原，也包含 Project 的名稱、顏色、順序及 Board 的名稱、圖示和 Project 篩選。手機可用「任務範圍」切換檢視，在「管理 Project 與 Board」新增、編輯或刪除。刪除 Project 後，原本的任務會顯示為未分類，相關 Board 會移除該篩選。Mac 的 Project Agent 工作區路徑和提示詞、任務的手動排序、側欄順序和外觀偏好各自留在本機。
 
-啟用同步會把這份 SQLite 中的任務內容傳到所指定的 Worker 和 D1。D1 保留已接受的任務版本和刪除紀錄，本機「最近刪除」到期後仍可供其他裝置同步。建議先用測試資料庫驗證部署，再設定日常使用的資料庫。同一份資料庫的同步紀錄會綁定網址和帳號。搬到另一個 Worker 或帳號時，用另一份本機資料庫開始。
+啟用同步會把這份 SQLite 中的任務、Project 和 Board 傳到所指定的 Worker 和 D1。D1 保留已接受的任務版本和刪除紀錄，本機「最近刪除」到期後仍可供其他裝置同步。建議先用測試資料庫驗證部署，再設定日常使用的資料庫。同一份資料庫的同步紀錄會綁定網址和帳號。搬到另一個 Worker 或帳號時，用另一份本機資料庫開始。
+
+Mac 預設每 5 秒同步一次，可在 `famo-sync.json` 設定 `interval_seconds`。手機網頁在前景每 10 秒拉取一次，回到頁面、恢復連線或按「同步」也會拉取。
 
 ## 本機驗證
 
@@ -18,7 +20,7 @@ npm --prefix web run test:e2e:sync
 node scripts/test-sync.mjs
 ```
 
-整合測試啟動本機 Wrangler、D1、Go 程序和手機尺寸的 Chromium，使用各自的暫存資料庫。驗證桌面離線新增後重啟、回應中斷後重送、手機新增和完成、雙裝置版本衝突、解決衝突及刪除。可將截圖輸出路徑傳給腳本。
+整合測試啟動本機 Wrangler、D1、Go 程序和手機尺寸的 Chromium，使用各自的暫存資料庫。驗證桌面離線新增後重啟、回應中斷後重送、手機新增和完成、雙裝置版本衝突、解決衝突及刪除。也驗證離線新增 Project／Board 後上傳、手機改名及更新篩選回到 Mac、刪除後解除關聯，以及本機工作區設定保留。可將截圖輸出路徑傳給腳本。
 
 要手動操作，先用 `npm --prefix web run build:sync` 建置手機網頁，再從 `sync/` 目錄啟動 Worker。將指令中的測試 token 替換為自選的隨機值：
 
@@ -32,7 +34,7 @@ npx wrangler dev --local --ip 127.0.0.1 --port 8789 --config wrangler.dev.jsonc 
 ## Cloudflare 設定與部署
 
 1. 建立 D1 資料庫，記下名稱和 database ID；準備 Cloudflare 管理的自訂網域，例如 `sync.example.com`。 [D1 入門](https://developers.cloudflare.com/d1/get-started/)
-2. 在 Zero Trust 建立 Self-hosted Access 應用程式，保護該完整主機名及其所有路徑。新增只包含自己完整 email 的 **Allow** 規則，以及只包含專用 token 的 **Service Auth** 規則。記下應用程式 AUD、團隊網址和 service token 的 Client ID；Client Secret 留給 Mac 鑰匙圈。瀏覽器沿用這個應用程式的登入，Worker 驗證 JWT 的簽名、簽發者和 AUD，並將 service token 限制在 push、pull 路徑。兩種身分都對應同一個內部帳號。 [Service tokens](https://developers.cloudflare.com/cloudflare-one/access-controls/service-credentials/service-tokens/) [JWT 驗證](https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/authorization-cookie/validating-json/)
+2. 在 Zero Trust 建立 Self-hosted Access 應用程式，保護該完整主機名及其所有路徑。新增只包含自己完整 email 的 **Allow** 規則，以及只包含專用 token 的 **Service Auth** 規則。記下應用程式 AUD、團隊網址和 service token 的 Client ID；Client Secret 留給 Mac 鑰匙圈。瀏覽器沿用這個應用程式的登入，Worker 驗證 JWT 的簽名、簽發者和 AUD，並將 service token 限制在同步 API。兩種身分都對應同一個內部帳號。 [Service tokens](https://developers.cloudflare.com/cloudflare-one/access-controls/service-credentials/service-tokens/) [JWT 驗證](https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/authorization-cookie/validating-json/)
 3. 從 `sync/` 將 `wrangler.example.jsonc` 複製為 `wrangler.local.jsonc`。填入 D1 名稱與 ID、`routes[0].pattern` 和 `ACCESS_HOST`（同一主機名），以及 `ACCESS_ISSUER`（例如 `https://your-team.cloudflareaccess.com`）、`ACCESS_AUDIENCE`、`ACCESS_EMAIL`、`ACCESS_SERVICE_CLIENT_ID` 和 `ACCESS_ACCOUNT_ID`（自選穩定識別碼，例如 `personal`）。Worker 僅服務指定主機，範本也停用 `workers.dev` 和預覽入口。 [Wrangler 設定](https://developers.cloudflare.com/workers/wrangler/configuration/)
 4. 從根目錄先跑 `npm --prefix web run build:sync`。執行以下指令時，兩個步驟共用同一份設定檔和 D1：
 
@@ -77,8 +79,20 @@ db="$HOME/Library/Application Support/Famo/famo.db"
 
 `status` 的 `rejections` 列出被 Worker 拒絕的任務及 HTTP 狀態碼。例如 HTTP 413 表示任務過大。在 Mac 編輯該任務並儲存即可送出新版本，其他任務會繼續同步。
 
+Project 和 Board 共用一個集合版本，讓 Board 的篩選關聯可與 Project 一起更新。即使是修改不同的 Project 或 Board，兩台裝置從同一集合版本送出異動時，仍可能出現衝突。手機會載入最新集合並保留編輯中的表單，確認內容後可重送。Mac 會保留本機和遠端集合，任務仍繼續同步。
+
+用 `famo sync status` 讀取 `collections.conflict`。將其中的 `local_token` 和 `remote.version` 傳給 `resolve-collections`。選 `local` 會以所見的遠端版本為基準，送出整份本機集合。選 `remote` 會採用遠端集合。
+
+```sh
+./bin/famo sync resolve-collections -db "$db" -choice local -local-token <local_token> -remote-version <remote_version>
+./bin/famo sync resolve-collections -db "$db" -choice remote -local-token <local_token> -remote-version <remote_version>
+```
+
+升級時先套用 D1 migration `0002_collections.sql` 並部署更新後的 Worker，再更新 Mac。若遠端集合尚未建立，現有 Mac 的 Project 與 Board 會在第一次同步時上傳。若 Mac 和遠端各有不同資料，Mac 會保留兩份集合供選擇。
+
 ## 協定 v1
 
 - `POST /api/sync/push` 接收 `operation_id`、`task_id`、`base_version` 和完整 `task`。新任務的 base version 為 0，其餘操作以最後讀到的版本為 base，提交版本為 base + 1。請求上限為 2 MiB，單筆任務文件上限為 1.5 MiB。重送同一個操作 ID 及內容會得到原本的 `{change:{sequence,task}}`。版本衝突回傳 HTTP 409 與 `{current}`，不新增變更或確認紀錄。
 - `GET /api/sync/pull?after=0` 依序回傳 `{changes,cursor,has_more}`，下一頁從回傳的 cursor 繼續。單頁最多 20 筆和 4 MiB 的任務內容。刪除以包含 `deleted_at` 的任務快照傳送，清空欄位代表還原。
+- `GET /api/sync/collections` 讀取 `{version,projects,boards}`。用 `POST` 送出 `{operation_id,base_version,projects,boards}` 原子更新集合，衝突回傳 `409 {current}`，重送同一操作會得到原始回應。
 - `X-Famo-Sync-Account` 可用來核對伺服器解析的內部帳號。Go 與 TypeScript 的共用案例見 [protocol-v1.json](../sync/protocol-v1.json)。

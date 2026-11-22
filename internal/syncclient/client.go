@@ -104,8 +104,9 @@ func (r *Runner) Sync(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	collectionsErr := r.syncCollections(ctx, auth)
 	pushErr := r.push(ctx, auth)
-	return errors.Join(pushErr, r.pull(ctx, auth))
+	return errors.Join(collectionsErr, pushErr, r.pull(ctx, auth))
 }
 
 // Limit work per poll so a large outbox does not starve remote changes.

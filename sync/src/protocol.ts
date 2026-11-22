@@ -85,15 +85,15 @@ export function parseCursor(value: string): number | null {
   return isVersion(cursor) ? cursor : null
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
+export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
-function isID(value: unknown): value is string {
+export function isID(value: unknown): value is string {
   return typeof value === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(value)
 }
 
-function isVersion(value: unknown): value is number {
+export function isVersion(value: unknown): value is number {
   return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0
 }
 

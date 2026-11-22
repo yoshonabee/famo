@@ -35,12 +35,13 @@ type SyncRejection struct {
 }
 
 type SyncStatus struct {
-	URL        string          `json:"url"`
-	Account    string          `json:"account"`
-	Cursor     int64           `json:"cursor"`
-	Pending    int             `json:"pending"`
-	Conflicts  []SyncConflict  `json:"conflicts"`
-	Rejections []SyncRejection `json:"rejections"`
+	URL         string                `json:"url"`
+	Account     string                `json:"account"`
+	Cursor      int64                 `json:"cursor"`
+	Pending     int                   `json:"pending"`
+	Conflicts   []SyncConflict        `json:"conflicts"`
+	Rejections  []SyncRejection       `json:"rejections"`
+	Collections *CollectionSyncStatus `json:"collections,omitempty"`
 }
 
 // The triggers enqueue content writes in the transaction that changes tasks,
@@ -385,6 +386,18 @@ func writeRemoteTask(ctx context.Context, tx *sql.Tx, task Task) error {
 	if errors.Is(err, sql.ErrNoRows) && task.DeletedAt != nil && !canRestore(task, time.Now().UTC().Add(-deletionRetention)) {
 		return nil
 	}
+	if task.ProjectID != "" {
+		var removed bool
+		err := tx.QueryRowContext(ctx, `
+			SELECT EXISTS(SELECT 1 FROM sync_removed_projects WHERE id=?)
+			    AND NOT EXISTS(SELECT 1 FROM projects WHERE id=?)`, task.ProjectID, task.ProjectID).Scan(&removed)
+		if err != nil {
+			return err
+		}
+		if removed {
+			task.ProjectID = ""
+		}
+	}
 	if err := validate(task); err != nil {
 		return fmt.Errorf("invalid synced task %q: %w", task.ID, err)
 	}
@@ -454,7 +467,15 @@ func (s *Store) SyncStatus(ctx context.Context) (SyncStatus, error) {
 		}
 		status.Rejections = append(status.Rejections, rejection)
 	}
-	return status, rows.Err()
+	if err := rows.Err(); err != nil {
+		return SyncStatus{}, err
+	}
+	collections, err := collectionStatus(ctx, tx)
+	if err != nil {
+		return SyncStatus{}, err
+	}
+	status.Collections = &collections
+	return status, nil
 }
 
 // ResolveSyncConflict replaces all queued snapshots for a conflicted task with

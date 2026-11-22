@@ -16,7 +16,7 @@ export class SyncError extends Error {
   }
 }
 
-async function request(endpoint: string, body?: Operation) {
+export async function request(endpoint: string, body?: object) {
   const response = await fetch(`/api/sync/${endpoint}`, {
     method: body ? 'POST' : 'GET',
     headers: body ? { 'Content-Type': 'application/json' } : undefined,

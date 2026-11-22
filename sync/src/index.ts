@@ -2,6 +2,11 @@ import { Hono } from 'hono'
 import { bodyLimit } from 'hono/body-limit'
 import type { MiddlewareHandler } from 'hono'
 import { authorize } from './access'
+import {
+  getCollections,
+  parseCollectionsOperation,
+  pushCollections,
+} from './collections'
 import type { AccessBindings } from './access'
 import { parseCursor, parseOperation } from './protocol'
 import { pull, push } from './store'
@@ -53,10 +58,7 @@ sync.post(
     onError: (c) => c.json({ error: 'Task is too large to sync' }, 413),
   }),
   async (c) => {
-    if (
-      c.req.header('Content-Type')?.split(';', 1)[0].trim().toLowerCase() !==
-      'application/json'
-    ) {
+    if (!isJSONContentType(c.req.header('Content-Type'))) {
       return c.json({ error: 'Expected application/json' }, 415)
     }
     const operation = parseOperation(
@@ -73,6 +75,40 @@ sync.post(
     return c.json(result.body, result.status)
   },
 )
+
+sync.get('/collections', requireAccess(true), async (c) => {
+  return c.json(await getCollections(c.env.DB, c.get('accountID')))
+})
+
+sync.post(
+  '/collections',
+  requireAccess(true),
+  bodyLimit({
+    maxSize: 1024 * 1024,
+    onError: (c) => c.json({ error: 'Collections are too large to sync' }, 413),
+  }),
+  async (c) => {
+    if (!isJSONContentType(c.req.header('Content-Type'))) {
+      return c.json({ error: 'Expected application/json' }, 415)
+    }
+    const operation = parseCollectionsOperation(
+      await c.req.json<unknown>().catch(() => null),
+    )
+    if (!operation) return c.json({ error: 'Invalid collections' }, 400)
+    const result = await pushCollections(
+      c.env.DB,
+      c.get('accountID'),
+      operation,
+    )
+    return c.json(result.body, result.status)
+  },
+)
+
+function isJSONContentType(contentType: string | undefined): boolean {
+  return (
+    contentType?.split(';', 1)[0].trim().toLowerCase() === 'application/json'
+  )
+}
 
 sync.all('*', requireAccess(false), (c) => c.json({ error: 'Not found' }, 404))
 

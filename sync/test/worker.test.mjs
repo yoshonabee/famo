@@ -8,9 +8,10 @@ import { convertV4MiniflareOptions, Miniflare, Response } from 'miniflare'
 const fixture = JSON.parse(
   await readFile(new URL('../protocol-v1.json', import.meta.url), 'utf8'),
 )
-const migration = await readFile(
-  new URL('../migrations/0001_sync.sql', import.meta.url),
-  'utf8',
+const migrations = await Promise.all(
+  ['0001_sync.sql', '0002_collections.sql'].map((file) =>
+    readFile(new URL(`../migrations/${file}`, import.meta.url), 'utf8'),
+  ),
 )
 const {
   outputFiles: [{ text: script }],
@@ -38,10 +39,12 @@ async function start(t, options = {}) {
   t.after(() => worker.dispose())
   const db = await worker.getD1Database('DB')
   await db.batch(
-    migration
-      .trim()
-      .split(/\n\n+/)
-      .map((statement) => db.prepare(statement)),
+    migrations.flatMap((migration) =>
+      migration
+        .trim()
+        .split(/\n\n+/)
+        .map((statement) => db.prepare(statement)),
+    ),
   )
   return { worker, db }
 }
@@ -340,4 +343,172 @@ test('Access JWTs authorize the configured browser and service identities', asyn
   })
   assert.equal(conflict.headers.get('X-Famo-Sync-Account'), 'owner')
   await expectJSON(conflict, 409, { current: fixture.complete.task })
+})
+
+const emptyCollections = { version: 0, projects: [], boards: [] }
+
+const home = { id: 'home', name: 'Home', color: '#4F9D69', position: 0 }
+const work = { id: 'work', name: 'Work', color: '#E06464', position: null }
+const personal = {
+  id: 'personal',
+  name: 'Personal',
+  icon: 'house',
+  project_ids: ['home', 'work'],
+}
+const collections = {
+  operation_id: 'publish-collections',
+  base_version: 0,
+  projects: [home, work],
+  boards: [personal],
+}
+
+test('collection snapshots canonicalize the shared fields and replay across later versions', async (t) => {
+  const { worker, db } = await start(t, {
+    bindings: { LOCAL_SYNC_TOKEN: localToken },
+  })
+  const get = () => request(worker, '/api/sync/collections')
+  const put = (operation) =>
+    request(worker, '/api/sync/collections', { operation })
+
+  const initial = await get()
+  assert.equal(initial.headers.get('X-Famo-Sync-Account'), 'personal')
+  assert.equal(initial.headers.get('Cache-Control'), 'no-store')
+  await expectJSON(initial, 200, emptyCollections)
+
+  const first = { version: 1, projects: [home, work], boards: [personal] }
+  await expectJSON(
+    await put({
+      ...collections,
+      projects: [
+        work,
+        {
+          ...home,
+          color: home.color.toLowerCase(),
+          workspace_dir: '/mac/path',
+          workspace_prompt: 'Private',
+        },
+      ],
+      boards: [{ ...personal, project_ids: ['work', 'home'] }],
+    }),
+    200,
+    first,
+  )
+  await expectJSON(await get(), 200, first)
+  const { document } = await db
+    .prepare('SELECT document FROM sync_collections WHERE account_id = ?')
+    .bind('personal')
+    .first()
+  assert.deepEqual(JSON.parse(document), {
+    projects: [home, work],
+    boards: [personal],
+  })
+
+  // Removing a project and removing it from the associated board are one write.
+  const removeProject = {
+    ...collections,
+    operation_id: 'remove-project',
+    base_version: 1,
+    projects: [home],
+    boards: [{ ...personal, project_ids: ['home'] }],
+  }
+  const second = {
+    version: 2,
+    projects: removeProject.projects,
+    boards: removeProject.boards,
+  }
+  await expectJSON(await put(removeProject), 200, second)
+  await expectJSON(await put(collections), 200, first)
+  await expectJSON(await get(), 200, second)
+  await expectJSON(await put({ ...collections, base_version: 2 }), 400, {
+    error: 'Operation ID already used',
+  })
+})
+
+test('parallel collection writes have one winner and stay scoped to an account', async (t) => {
+  const { worker, db } = await start(t, {
+    bindings: { LOCAL_SYNC_TOKEN: localToken },
+  })
+  await db
+    .prepare(
+      `
+    INSERT INTO sync_collections (account_id, version, operation_id, document)
+    VALUES ('other', 50, 'publish-collections', '{"projects":[],"boards":[]}')
+  `,
+    )
+    .run()
+  const put = (operation) =>
+    request(worker, '/api/sync/collections', { operation })
+  const [winner, loser] = (
+    await Promise.all([
+      put(collections),
+      put({ ...collections, operation_id: 'second-device', boards: [] }),
+    ])
+  ).sort((a, b) => a.status - b.status)
+  assert.equal(winner.status, 200)
+  const snapshot = await winner.json()
+  assert.equal(snapshot.version, 1)
+  await expectJSON(loser, 409, { current: snapshot })
+  await expectJSON(
+    await request(worker, '/api/sync/collections'),
+    200,
+    snapshot,
+  )
+
+  const task = await request(worker, '/api/sync/push', {
+    operation: fixture.create,
+  })
+  await expectJSON(task, 200, { change: fixture.changes[0] })
+  await expectJSON(await request(worker, '/api/sync/pull'), 200, {
+    changes: [fixture.changes[0]],
+    cursor: 1,
+    has_more: false,
+  })
+})
+
+test('collection writes reject invalid references and respect Access and same-origin checks', async (t) => {
+  const { worker } = await start(t, {
+    bindings: { LOCAL_SYNC_TOKEN: localToken },
+  })
+  const path = '/api/sync/collections'
+  const put = (patch, options) =>
+    request(worker, path, {
+      operation: { ...collections, ...patch },
+      ...options,
+    })
+  for (const patch of [
+    { projects: [home] },
+    { projects: [home, { ...work, name: 'HOME' }] },
+    { projects: [home, home] },
+    { projects: [home, { ...work, color: '#f01' }] },
+    { projects: [home, { ...work, position: -1 }] },
+    { boards: [personal, { ...personal, id: 'another', name: 'PERSONAL' }] },
+    { boards: [{ ...personal, icon: 'other' }] },
+    { boards: [{ ...personal, project_ids: ['home', 'home'] }] },
+  ]) {
+    await expectJSON(await put(patch), 400, { error: 'Invalid collections' })
+  }
+
+  assert.equal((await put({}, { local: false })).status, 403)
+  assert.equal(
+    (
+      await put(
+        {},
+        {
+          local: false,
+          headers: {
+            'Sec-Fetch-Site': 'same-origin',
+            Origin: 'https://other.example',
+          },
+        },
+      )
+    ).status,
+    403,
+  )
+  assert.equal(
+    (await put({}, { headers: { 'X-Famo-Sync-Account': 'other' } })).status,
+    403,
+  )
+  assert.equal((await request(worker, path, { local: false })).status, 403)
+  assert.equal((await put({ padding: 'x'.repeat(1024 * 1024) })).status, 413)
+  await expectJSON(await request(worker, path), 200, emptyCollections)
 })

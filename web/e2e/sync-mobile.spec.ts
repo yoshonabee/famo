@@ -2,6 +2,12 @@ import { expect, test } from '@playwright/test'
 import type { Task } from '../src/lib/api'
 import type { Operation } from '../sync/sync-client'
 
+test.beforeEach(async ({ page }) => {
+  await page.route('**/api/sync/collections', (route) =>
+    route.fulfill({ status: 404, json: { error: 'Not found' } }),
+  )
+})
+
 const firstTask: Task = {
   id: '2196907089d602fd6d518a2790420672',
   title: 'Check the calendar',
@@ -120,4 +126,48 @@ test('applies the current task on conflict, preserves fields on completion and h
   })
   await page.getByRole('button', { name: '同步', exact: true }).click()
   await expect(checkbox).toHaveCount(0)
+})
+
+test('preserves a Project draft and shows the latest version on conflict', async ({
+  page,
+}) => {
+  const project = {
+    id: 'project-1',
+    name: 'Errands',
+    color: '#64748B',
+    position: null,
+  }
+  const remote = { ...project, name: 'Remote errands' }
+  let snapshot = { version: 1, projects: [project], boards: [] }
+  const revisions: number[] = []
+  await page.route('**/api/sync/pull?*', (route) =>
+    route.fulfill({ json: { changes: [], cursor: 0, has_more: false } }),
+  )
+  await page.route('**/api/sync/collections', (route) => {
+    if (route.request().method() === 'GET')
+      return route.fulfill({ json: snapshot })
+    const operation = route.request().postDataJSON()
+    revisions.push(operation.base_version)
+    if (operation.base_version === 1) {
+      snapshot = { ...snapshot, version: 2, projects: [remote] }
+      return route.fulfill({ status: 409, json: { current: snapshot } })
+    }
+    snapshot = { ...snapshot, version: 3, projects: operation.projects }
+    return route.fulfill({ json: snapshot })
+  })
+
+  await page.goto('/')
+  await page.getByRole('button', { name: '管理 Project 與 Board' }).click()
+  await page.getByRole('button', { name: '編輯 Project Errands' }).click()
+  const name = page.getByLabel('Project 名稱')
+  const save = page.getByRole('button', { name: '儲存', exact: true })
+  await name.fill('My errands')
+  await save.click()
+  await expect(page.getByText('最新版本：Remote errands')).toBeVisible()
+  await expect(name).toHaveValue('My errands')
+  await save.click()
+  await expect(
+    page.getByRole('button', { name: '編輯 Project My errands' }),
+  ).toBeVisible()
+  expect(revisions).toEqual([1, 2])
 })

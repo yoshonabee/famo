@@ -51,6 +51,9 @@ func TestRetryUsesIdenticalOperationAndChecksAccount(t *testing.T) {
 		if r.Header.Get("Authorization") != "Bearer local-test-token" || r.Header.Get(accountHeader) != "personal" {
 			t.Error("expected sync account and test authorization headers")
 		}
+		if r.URL.Path == collectionsPath {
+			return response(http.StatusForbidden, "", `{"error":"Access denied"}`), nil
+		}
 		if r.Method == http.MethodGet {
 			return response(200, account, `{"changes":[],"cursor":0,"has_more":false}`), nil
 		}
