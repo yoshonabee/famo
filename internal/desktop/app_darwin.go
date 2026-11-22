@@ -18,6 +18,7 @@ func Run(cfg Config) error {
 	var backend *Backend
 	language := &DisplayLanguage{}
 	agentTools := &AgentTools{language: language}
+	syncSettings := &SyncSettings{path: cfg.syncConfigPath(), dbPath: cfg.DBPath}
 	menuBar := &MenuBar{refresh: make(chan struct{}, 1)}
 	assets := application.BundledAssetFileServer(web.Assets())
 	app := application.New(application.Options{
@@ -38,6 +39,7 @@ func Run(cfg Config) error {
 			application.NewService(&ThemeFiles{language: language}),
 			application.NewService(menuBar),
 			application.NewService(agentTools),
+			application.NewService(syncSettings),
 			application.NewService(language),
 		},
 		SingleInstance: &application.SingleInstanceOptions{
@@ -59,6 +61,7 @@ func Run(cfg Config) error {
 		return err
 	}
 	agentTools.backend = backend
+	syncSettings.store = backend.store
 	defer backend.Close()
 	menu := app.NewMenu()
 	appMenu := menu.AddSubmenu("Famo")

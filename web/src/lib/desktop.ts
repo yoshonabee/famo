@@ -133,6 +133,30 @@ export type AgentToolsState = {
 
 export const isDesktop = () => window.location.protocol === 'wails:'
 
+export type SyncConfiguration = {
+  url: string
+  account: string
+  interval_seconds?: number
+}
+
+export type SyncSettingsState = {
+  path: string
+  config: SyncConfiguration | null
+  default_interval_seconds: number
+}
+
+export async function readSyncSettings() {
+  const { Call } = await import('@wailsio/runtime')
+  return (await Call.ByName(
+    'famo/internal/desktop.SyncSettings.Status',
+  )) as SyncSettingsState
+}
+
+export async function saveSyncSettings(config: SyncConfiguration) {
+  const { Call } = await import('@wailsio/runtime')
+  await Call.ByName('famo/internal/desktop.SyncSettings.Save', config)
+}
+
 export function setDesktopLanguage(locale: 'zh-TW' | 'en') {
   if (!isDesktop()) return
   desktopLanguageUpdate = desktopLanguageUpdate
