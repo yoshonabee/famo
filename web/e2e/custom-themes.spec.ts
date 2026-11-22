@@ -24,6 +24,7 @@ const themeFile = (themes = [sampleTheme]) => ({
 })
 async function openSettings(page: Page) {
   await page.getByRole('button', { name: '設定', exact: true }).click()
+  await page.getByRole('button', { name: '外觀', exact: true }).click()
 }
 async function importJSON(page: Page, value: unknown) {
   await page.getByLabel('匯入主題檔案').setInputFiles({
@@ -63,6 +64,9 @@ test('設定位於側欄底部，桌面選單事件會開啟設定且保留新�
     page.getByRole('heading', { name: '設定', exact: true }),
   ).toBeVisible()
   await expect(settings).toHaveAttribute('aria-current', 'page')
+  await expect(
+    page.getByRole('button', { name: '一般', exact: true }),
+  ).toHaveAttribute('aria-current', 'true')
   await page.getByRole('button', { name: '今日任務', exact: true }).click()
   await expect(capture).toHaveValue('選單切換前的草稿')
   await request.post('/api/tasks', { data: { title: '選單跳轉驗收' } })

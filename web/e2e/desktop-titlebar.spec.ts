@@ -40,6 +40,7 @@ test('桌面標題列隨側欄和主題調整，保留上方控制項的操作�
   await expect(sidebar).toHaveCSS('border-right-width', '1px')
   const light = await themeColours()
   await page.getByRole('button', { name: '設定', exact: true }).click()
+  await page.getByRole('button', { name: '外觀', exact: true }).click()
   await page.getByRole('radio', { name: '午夜', exact: true }).check()
   await expect(page.locator('html')).toHaveCSS('color-scheme', 'dark')
   const dark = await themeColours()

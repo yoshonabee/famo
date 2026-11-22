@@ -353,6 +353,7 @@ test('empty panel follows theme changes and Open Famo returns to the main app', 
   const other = await context.newPage()
   await other.goto('/')
   await other.getByRole('button', { name: '設定', exact: true }).click()
+  await other.getByRole('button', { name: '外觀', exact: true }).click()
   await other.getByRole('radio', { name: '午夜', exact: true }).check()
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'midnight')
   await expect(page.locator('.menu-bar-panel')).toHaveCSS(

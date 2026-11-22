@@ -702,6 +702,7 @@ test('任務列表用相對日期開啟月曆，可跨年切換月份並重新�
   await expect(overdueDate).toHaveCSS('font-weight', '500')
   await expect(overdueDate).toHaveCSS('color', 'rgb(160, 63, 50)')
   await page.getByRole('button', { name: '設定', exact: true }).click()
+  await page.getByRole('button', { name: '外觀', exact: true }).click()
   await page.getByRole('radio', { name: '午夜', exact: true }).check()
   await page.getByRole('button', { name: '任務列表', exact: true }).click()
   await page.getByLabel('搜尋任務').fill('跨年計畫')

@@ -1,5 +1,5 @@
 import { Bot, Palette, Settings2 } from 'lucide-react'
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { AgentPreferences } from '@/components/agent-preferences'
 import { AppearancePreferences } from '@/components/appearance-preferences'
 import { DataCleanupPreferences } from '@/components/data-cleanup-preferences'
@@ -14,12 +14,14 @@ import { footerNavigation, type FooterNavItem } from '@/lib/sidebar-preferences'
 type Section = 'general' | 'appearance' | 'agent'
 
 export function PreferencesPage({
+  open,
   appearance,
   showToday,
   footerItems,
   onShowTodayChange,
   onFooterChange,
 }: {
+  open: boolean
   appearance: ThemeController
   showToday: boolean
   footerItems: FooterNavItem[]
@@ -27,8 +29,11 @@ export function PreferencesPage({
   onFooterChange: (id: FooterNavItem, move: boolean) => void
 }) {
   const { t, locale, setLocale, storageFailed } = useLanguage()
-  const [activeSection, setActiveSection] = useState<Section>('appearance')
+  const [activeSection, setActiveSection] = useState<Section>('general')
   const heading = useRef<HTMLHeadingElement>(null)
+  useEffect(() => {
+    if (!open) setActiveSection('general')
+  }, [open])
   const sections = [
     {
       id: 'general',
