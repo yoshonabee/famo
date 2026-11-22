@@ -1,6 +1,6 @@
 import { useId, useRef, useState, type FormEvent } from 'react'
 import { BoardIconPicker } from '@/components/board-icon-picker'
-import { defaultBoardIcon } from '@/components/board-icons'
+import { defaultBoardIcon, getBoardIcon } from '@/components/board-icons'
 import { DeleteCollectionButton } from '@/components/delete-collection-button'
 import { ProjectColorDot } from '@/components/project-appearance'
 import { Button } from '@/components/ui/button'
@@ -12,10 +12,12 @@ import {
 } from '@/components/ui/dialog'
 import { ApiError, type Board, type Project } from '@/lib/api'
 import { useSaveBoard } from '@/lib/board-mutations'
+import { isCloudWeb } from '@/lib/environment'
 import { useLanguage } from '@/lib/i18n'
 
 export function BoardEditor({
   board,
+  latestBoard,
   projects,
   projectsError,
   onRetryProjects,
@@ -23,6 +25,7 @@ export function BoardEditor({
   onDeleted,
 }: {
   board?: Board
+  latestBoard?: Board
   projects?: Project[]
   projectsError?: string
   onRetryProjects: () => void
@@ -34,15 +37,33 @@ export function BoardEditor({
   const [icon, setIcon] = useState(board?.icon ?? defaultBoardIcon)
   const nameId = useId()
   const nameInput = useRef<HTMLInputElement>(null)
-  const [originalBoard] = useState(board)
+  const [baseBoard, setBaseBoard] = useState(board)
   const [selected, setSelected] = useState(board?.project_ids ?? [])
   const returnFocus = useRef<HTMLElement | null>(null)
-  const save = useSaveBoard(originalBoard)
+  const save = useSaveBoard(baseBoard)
   const conflict = save.error instanceof ApiError && save.error.status === 409
+  const blockedByConflict = conflict && (!isCloudWeb || !!baseBoard)
+  const updatedBoard =
+    isCloudWeb &&
+    conflict &&
+    baseBoard &&
+    latestBoard?.version !== baseBoard.version
+      ? latestBoard
+      : undefined
+  const UpdatedIcon = updatedBoard && getBoardIcon(updatedBoard.icon)
+
+  function keepDraft() {
+    if (!updatedBoard || !projects) return
+    setBaseBoard(updatedBoard)
+    setSelected((ids) =>
+      ids.filter((id) => projects.some((item) => item.id === id)),
+    )
+    save.reset()
+  }
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (!save.isPending && !conflict && name.trim() && projects)
+    if (!save.isPending && !blockedByConflict && name.trim() && projects)
       save.mutate({ name, icon, project_ids: selected }, { onSuccess: onSaved })
   }
 
@@ -148,20 +169,53 @@ export function BoardEditor({
         )}
         {save.isError && (
           <p className="inline-edit-error" role="alert">
-            {conflict ? t('boardConflict') : errorText(save.error)}
+            {conflict
+              ? t(
+                  isCloudWeb
+                    ? baseBoard
+                      ? 'boardCloudConflict'
+                      : 'boardCloudCreateConflict'
+                    : 'boardConflict',
+                )
+              : errorText(save.error)}
           </p>
         )}
+        {updatedBoard && UpdatedIcon && projects && (
+          <div className="grid justify-items-start gap-2 text-sm">
+            <p className="flex items-center gap-1.5">
+              <UpdatedIcon size={16} aria-hidden="true" />
+              {t(
+                'latestBoardSettings',
+                updatedBoard.name,
+                projects
+                  .filter(({ id }) => updatedBoard.project_ids.includes(id))
+                  .map(({ name }) => name)
+                  .join(', ') || '—',
+              )}
+            </p>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={keepDraft}
+            >
+              {t('reviewBoardDraft')}
+            </Button>
+          </div>
+        )}
         <div className="collection-editor-actions">
-          {board && (
+          {baseBoard && (
             <DeleteCollectionButton
               collection="boards"
-              item={board}
-              disabled={save.isPending || conflict}
+              item={baseBoard}
+              disabled={save.isPending || blockedByConflict}
               onDeleted={onDeleted}
             />
           )}
           <Button
-            disabled={save.isPending || conflict || !name.trim() || !projects}
+            disabled={
+              save.isPending || blockedByConflict || !name.trim() || !projects
+            }
           >
             {save.isPending ? t('saving') : t('save')}
           </Button>

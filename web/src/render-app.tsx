@@ -3,13 +3,23 @@ import ReactDOM from 'react-dom/client'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { LanguageProvider } from './lib/i18n'
 import { initializeDesktop } from './lib/desktop'
+import { isCloudWeb, mobileCloudQuery } from './lib/environment'
 import { initializeTheme } from './lib/theme'
 import './index.css'
+import './mobile.css'
 
 export function renderApp(content: ReactNode, { panel = false } = {}) {
-  initializeTheme()
+  initializeTheme(isCloudWeb && matchMedia(mobileCloudQuery).matches)
   const client = new QueryClient({
-    defaultOptions: { queries: { staleTime: 10_000, retry: 1 } },
+    defaultOptions: {
+      mutations: { networkMode: isCloudWeb ? 'always' : 'online' },
+      queries: {
+        staleTime: 10_000,
+        retry: 1,
+        refetchOnWindowFocus: isCloudWeb ? 'always' : true,
+        refetchOnReconnect: isCloudWeb ? 'always' : true,
+      },
+    },
   })
   void initializeDesktop(() => {
     void client.invalidateQueries({

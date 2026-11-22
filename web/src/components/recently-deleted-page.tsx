@@ -4,28 +4,32 @@ import { LoaderCircle, RotateCcw, Trash2 } from 'lucide-react'
 import { TaskSearch } from '@/components/task-palette'
 import { Button } from '@/components/ui/button'
 import { ApiError, dateTime, request, type Task } from '@/lib/api'
+import { appRefetchInterval } from '@/lib/environment'
 import { useLanguage } from '@/lib/i18n'
 import { formatListDate } from '@/lib/calendar'
 
 const queryKey = ['tasks', 'recently-deleted']
 
 export function RecentlyDeletedPage({
+  compact = false,
   search,
   onSearchChange,
 }: {
+  compact?: boolean
   search: string
   onSearchChange: (search: string) => void
 }) {
   const { t, locale, errorText } = useLanguage()
   const client = useQueryClient()
   const heading = useRef<HTMLHeadingElement>(null)
+  const hint = useRef<HTMLParagraphElement>(null)
   const [restoredTitle, setRestoredTitle] = useState('')
   const tasks = useQuery({
     queryKey,
     queryFn: ({ signal }) =>
       request<Task[]>('/tasks/recently-deleted', undefined, signal),
     staleTime: 0,
-    refetchInterval: 30_000,
+    refetchInterval: appRefetchInterval,
   })
   const restore = useMutation({
     mutationFn: (task: Task) =>
@@ -37,7 +41,8 @@ export function RecentlyDeletedPage({
       )
       void client.invalidateQueries({ queryKey: ['tasks'] })
       setRestoredTitle(task.title)
-      if (document.activeElement === document.body) heading.current?.focus()
+      if (document.activeElement === document.body)
+        (compact ? hint.current : heading.current)?.focus()
     },
     onError: (error) => {
       if (
@@ -55,18 +60,24 @@ export function RecentlyDeletedPage({
 
   return (
     <>
-      <header className="list-toolbar">
-        <div className="list-title">
-          <h1 ref={heading} tabIndex={-1}>
-            {t('recentlyDeleted')}
-          </h1>
-          {tasks.isSuccess && (
-            <span className="list-count">{filtered.length}</span>
-          )}
-        </div>
-        <TaskSearch value={search} onChange={onSearchChange} />
-      </header>
-      <p className="muted recently-deleted-hint">
+      {!compact && (
+        <header className="list-toolbar">
+          <div className="list-title">
+            <h1 ref={heading} tabIndex={-1}>
+              {t('recentlyDeleted')}
+            </h1>
+            {tasks.isSuccess && (
+              <span className="list-count">{filtered.length}</span>
+            )}
+          </div>
+          <TaskSearch value={search} onChange={onSearchChange} />
+        </header>
+      )}
+      <p
+        className="muted recently-deleted-hint"
+        ref={hint}
+        tabIndex={compact ? -1 : undefined}
+      >
         {t('recentlyDeletedDescription')}
       </p>
       <div className="sr-only" role="status">

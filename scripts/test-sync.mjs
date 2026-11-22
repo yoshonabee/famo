@@ -260,14 +260,43 @@ try {
 
   browser = await chromium.launch()
   const page = await browser.newPage({
-    viewport: { width: 390, height: 844 },
+    viewport: { width: 402, height: 874 },
     deviceScaleFactor: 2,
     isMobile: true,
     hasTouch: true,
   })
   await page.goto(worker)
   online = true
-  await page.getByText(task.title, { exact: true }).waitFor({ timeout: 25_000 })
+  const titleButton = (title) =>
+    page.getByRole('button', { name: new RegExp(title) })
+  const openCapture = () =>
+    page.getByRole('button', { name: '快速新增任務', exact: true }).tap()
+  const capture = page.getByRole('dialog', { name: '快速新增任務' })
+  const captureTitle = capture.getByRole('textbox', {
+    name: '快速新增任務名稱',
+  })
+  const addTask = capture.getByRole('button', {
+    name: '新增這一列',
+    exact: true,
+  })
+  const closeCapture = () =>
+    capture.getByRole('button', { name: '關閉', exact: true }).tap()
+  const switchBoard = () =>
+    page.getByRole('button', { name: /^切換 Board：/ }).tap()
+  const openProjects = () =>
+    page
+      .getByRole('navigation', { name: '主要導覽' })
+      .getByRole('button', { name: 'Projects', exact: true })
+      .tap()
+  const openBoards = () =>
+    page
+      .getByRole('navigation', { name: '主要導覽' })
+      .getByRole('button', { name: 'Boards', exact: true })
+      .tap()
+  const listDesktopTasks = () => get(`${desktop}/api/tasks`)
+  await titleButton(task.title).waitFor({ timeout: 25_000 })
+  await switchBoard()
+  await page.getByRole('button', { name: '今日', exact: true }).tap()
   await eventually(
     'an idempotent retry after the dropped response',
     () => pushes.length >= 2,
@@ -275,8 +304,15 @@ try {
   assert.deepEqual(pushes[0], pushes[1])
   assert.equal((await pull()).changes.length, 1)
 
-  const checkbox = page.getByRole('checkbox', { name: task.title, exact: true })
-  await checkbox.click()
+  const complete = page.getByRole('checkbox', {
+    name: `完成任務：${task.title}`,
+    exact: true,
+  })
+  const reopen = page.getByRole('checkbox', {
+    name: `恢復任務：${task.title}`,
+    exact: true,
+  })
+  await complete.click()
   await eventually('phone completion on desktop', async () => {
     const remote = await get(`${desktop}/api/tasks/${task.id}`)
     if (!remote.completed_at) return false
@@ -293,7 +329,7 @@ try {
     version: 2,
     title: 'Desktop edited while offline',
   })
-  await checkbox.click()
+  await reopen.click()
   await eventually(
     'phone reopen',
     async () => (await pull()).changes.length === 3,
@@ -343,8 +379,10 @@ try {
   )
 
   const phoneTitle = 'Plan next week'
-  await page.getByRole('textbox', { name: '新增任務' }).fill(phoneTitle)
-  await page.getByRole('button', { name: '新增', exact: true }).click()
+  await openCapture()
+  await captureTitle.fill(phoneTitle)
+  await addTask.tap()
+  await closeCapture()
   const phoneTask = await eventually('phone creation on desktop', async () =>
     (await get(`${desktop}/api/tasks`)).find(
       (entry) => entry.title === phoneTitle,
@@ -354,9 +392,7 @@ try {
     op: 'delete_item',
     version: phoneTask.version,
   })
-  await page
-    .getByText(phoneTitle, { exact: true })
-    .waitFor({ state: 'hidden', timeout: 25_000 })
+  await titleButton(phoneTitle).waitFor({ state: 'hidden', timeout: 25_000 })
   assert((await pull()).changes.at(-1).task.deleted_at)
 
   const collections = () => get(`${worker}/api/sync/collections`, { headers })
@@ -431,47 +467,32 @@ try {
   const refresh = () =>
     page.getByRole('button', { name: '同步', exact: true }).click()
   await refresh()
-  const scope = page.getByLabel('任務範圍')
-  await scope.selectOption(`board:${weekend.id}`, { timeout: 25_000 })
-  await checkbox.waitFor({ timeout: 25_000 })
-
-  const manage = () =>
-    page
-      .getByRole('button', { name: '管理 Project 與 Board', exact: true })
-      .click()
+  await switchBoard()
+  await page.getByRole('button', { name: weekend.name, exact: true }).tap()
+  await complete.waitFor({ timeout: 25_000 })
+  await openProjects()
   const editProject = (name) =>
     page
-      .getByRole('button', { name: `編輯 Project ${name}`, exact: true })
+      .getByRole('button', { name: `編輯 Project：${name}`, exact: true })
       .click()
   const editBoard = (name) =>
     page
-      .getByRole('button', { name: `編輯 Board ${name}`, exact: true })
+      .getByRole('button', { name: `編輯 Board：${name}`, exact: true })
       .click()
   const save = () =>
     page.getByRole('button', { name: '儲存', exact: true }).click()
-  await manage()
   await editProject('Errands')
   await page.getByLabel('Project 名稱', { exact: true }).fill('Out and about')
-  await page.getByLabel('Project 顏色', { exact: true }).fill('#993355')
+  await page.getByRole('radio', { name: '海藍', exact: true }).check()
   await save()
   await eventually('mobile Project rename on desktop', async () => {
     const project = await deskProject(errands.id)
     if (project?.name !== 'Out and about') return false
-    assert.equal(project.color, '#993355')
+    assert.equal(project.color, '#4F87CC')
     assert.equal(project.workspace_dir, errands.workspace_dir)
     assert.equal(project.workspace_prompt, errands.workspace_prompt)
     return true
   })
-
-  const screenshot = process.argv[2]
-  if (screenshot) {
-    const output = resolve(screenshot)
-    await mkdir(dirname(output), { recursive: true })
-    await page
-      .getByRole('button', { name: '編輯 Project Out and about', exact: true })
-      .waitFor()
-    await page.screenshot({ path: output })
-  }
 
   online = false
   const localBoard = await deskBoard(weekend.id)
@@ -481,9 +502,12 @@ try {
     project_ids: localBoard.project_ids,
     version: localBoard.version,
   })
+  await openBoards()
+  await switchBoard()
   await editBoard('Weekend')
   await page.getByLabel('Board 名稱', { exact: true }).fill('Weekend plans')
-  await page.getByLabel('Board 圖示', { exact: true }).selectOption('briefcase')
+  await page.getByRole('button', { name: /^Board 圖示/ }).click()
+  await page.getByRole('option', { name: '公事包', exact: true }).click()
   await page.getByRole('checkbox', { name: home.name, exact: true }).check()
   await save()
   await eventually('mobile Board update on Worker', async () =>
@@ -520,9 +544,16 @@ try {
     return true
   })
 
+  await openProjects()
   await editProject('Out and about')
-  await page.getByRole('button', { name: '刪除 Project', exact: true }).click()
-  await page.getByRole('button', { name: '確認刪除', exact: true }).click()
+  await page
+    .getByRole('dialog')
+    .getByRole('button', { name: '刪除', exact: true })
+    .click()
+  await page
+    .getByRole('alertdialog')
+    .getByRole('button', { name: '永久刪除', exact: true })
+    .click()
   await eventually(
     'Project removal and Task/Board unlink on desktop',
     async () => {
@@ -536,8 +567,90 @@ try {
     },
   )
 
+  // Capture two tasks from the same Board and reschedule only one on the phone.
+  await openBoards()
+  await page
+    .getByRole('button', { name: '切換 Board：Weekend plans' })
+    .waitFor()
+  await openCapture()
+  const captureProject = capture.getByRole('button', { name: '任務 Project' })
+  await captureProject.tap()
+  await capture.getByRole('option', { name: home.name, exact: true }).tap()
+  await captureTitle.fill('Return the library books')
+  await captureTitle.press('Enter')
+  await captureTitle.fill('Pick up groceries')
+  await addTask.tap()
+  await closeCapture()
+  const taskTitles = ['Return the library books', 'Pick up groceries']
+  await eventually(
+    'consecutive phone capture with Board defaults',
+    async () => {
+      const entries = (await listDesktopTasks()).filter(({ title }) =>
+        taskTitles.includes(title),
+      )
+      return (
+        entries.length === 2 &&
+        entries.every(
+          (entry) =>
+            entry.project_id === home.id && entry.scheduled_date === dateString,
+        )
+      )
+    },
+  )
+  await titleButton(taskTitles[0]).waitFor()
+  await titleButton(taskTitles[1]).waitFor()
+
+  const screenshot = process.argv[2]
+  if (screenshot) {
+    const output = resolve(screenshot)
+    await mkdir(dirname(output), { recursive: true })
+    await page.locator('[data-sync-status="synced"]').waitFor()
+    await page.screenshot({ path: output })
+  }
+
+  await titleButton(taskTitles[0]).tap()
+  const detail = page.getByRole('dialog', { name: taskTitles[0] })
+  await detail.getByRole('button', { name: /^任務日期/ }).tap()
+  const tomorrow = new Date(date)
+  tomorrow.setDate(date.getDate() + 1)
+  const nextDate = [
+    tomorrow.getFullYear(),
+    tomorrow.getMonth() + 1,
+    tomorrow.getDate(),
+  ]
+    .map((part) => String(part).padStart(2, '0'))
+    .join('-')
+  const day = detail.locator(`button[data-date="${nextDate}"]`)
+  if (tomorrow.getMonth() !== date.getMonth()) {
+    await detail.getByRole('button', { name: '下一個月' }).tap()
+  }
+  await day.tap()
+  await eventually(
+    'phone date change on desktop without mutating the second task',
+    async () => {
+      const entries = await listDesktopTasks()
+      const [first, second] = taskTitles.map((title) =>
+        entries.find((entry) => entry.title === title),
+      )
+      return (
+        first?.scheduled_date === nextDate &&
+        second?.scheduled_date === dateString &&
+        first.project_id === home.id &&
+        second.project_id === home.id
+      )
+    },
+  )
+  await detail.getByRole('button', { name: '清除日期', exact: true }).tap()
+  await eventually('phone date clear on desktop', async () => {
+    const entries = await listDesktopTasks()
+    return (
+      entries.find(({ title }) => title === taskTitles[0])?.scheduled_date ===
+      ''
+    )
+  })
+
   console.log(
-    'Passed task and collection sync, offline restarts, duplicate receipts, bidirectional edits, conflicts, and deletion.',
+    'Passed task and collection sync, offline restarts, duplicate receipts, bidirectional edits, conflicts, deletion, and consecutive mobile capture with date changes.',
   )
 } catch (error) {
   failure = error

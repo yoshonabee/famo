@@ -1,5 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { ApiError, request, type Board, type BoardInput } from '@/lib/api'
+import { isCloudWeb } from '@/lib/environment'
 
 export function useSaveBoard(board?: Pick<Board, 'id' | 'version'>) {
   const client = useQueryClient()
@@ -23,10 +24,14 @@ export function useSaveBoard(board?: Pick<Board, 'id' | 'version'>) {
           : [...previous, saved],
       )
       void client.invalidateQueries({ queryKey: ['boards'] })
+      if (isCloudWeb) void client.invalidateQueries({ queryKey: ['projects'] })
     },
     onError: (error) => {
-      if (error instanceof ApiError && error.status === 409)
+      if (error instanceof ApiError && error.status === 409) {
+        if (isCloudWeb)
+          void client.invalidateQueries({ queryKey: ['projects'] })
         return client.invalidateQueries({ queryKey: ['boards'] })
+      }
     },
   })
 }

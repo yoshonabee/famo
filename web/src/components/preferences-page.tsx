@@ -7,6 +7,7 @@ import { SyncPreferences } from '@/components/sync-preferences'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { isDesktop } from '@/lib/desktop'
+import { isCloudWeb } from '@/lib/environment'
 import { type ThemeController } from '@/lib/theme'
 import { languages, useLanguage, type Locale } from '@/lib/i18n'
 import { footerNavigation, type FooterNavItem } from '@/lib/sidebar-preferences'
@@ -93,10 +94,12 @@ export function PreferencesPage({
             </div>
           </section>
           {isDesktop() && <SyncPreferences />}
-          <section aria-labelledby="preferences-local-data-heading">
-            <h3 id="preferences-local-data-heading">{t('localData')}</h3>
-            <DataCleanupPreferences />
-          </section>
+          {!isCloudWeb && (
+            <section aria-labelledby="preferences-local-data-heading">
+              <h3 id="preferences-local-data-heading">{t('localData')}</h3>
+              <DataCleanupPreferences />
+            </section>
+          )}
         </div>
       ),
     },
@@ -113,6 +116,9 @@ export function PreferencesPage({
       content: <AgentPreferences />,
     },
   ] as const
+  const availableSections = sections.filter(
+    ({ id }) => !isCloudWeb || id !== 'agent',
+  )
 
   return (
     <div className="preferences-page">
@@ -121,7 +127,7 @@ export function PreferencesPage({
       </h1>
       <div className="preferences-layout">
         <nav className="preferences-nav" aria-label={t('settingsCategories')}>
-          {sections.map(({ id, icon: Icon, label }) => (
+          {availableSections.map(({ id, icon: Icon, label }) => (
             <Button
               key={id}
               variant="ghost"
@@ -140,7 +146,7 @@ export function PreferencesPage({
           ))}
         </nav>
         <div className="preferences-panels">
-          {sections.map(({ id, label, content }) => (
+          {availableSections.map(({ id, label, content }) => (
             <section
               key={id}
               className="preferences-panel"

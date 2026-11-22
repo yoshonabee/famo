@@ -1,10 +1,23 @@
 import { expect, test } from '@playwright/test'
 import type { Task } from '../src/lib/api'
-import type { Operation } from '../sync/sync-client'
+import type { Operation } from '../src/lib/cloud-transport'
 
 test.beforeEach(async ({ page }) => {
   await page.route('**/api/sync/collections', (route) =>
-    route.fulfill({ status: 404, json: { error: 'Not found' } }),
+    route.fulfill({
+      json: {
+        version: 1,
+        projects: [
+          {
+            id: 'project-from-desktop',
+            name: 'Planning',
+            color: '#64748B',
+            position: null,
+          },
+        ],
+        boards: [],
+      },
+    }),
   )
 })
 
@@ -44,20 +57,22 @@ test('retries an unconfirmed creation with the same operation after a reload', a
   })
 
   await page.goto('/')
-  await page.getByRole('textbox', { name: '新增任務' }).fill('Buy tomatoes')
-  await page.getByRole('button', { name: '新增', exact: true }).click()
-  await expect(page.getByRole('alert')).toHaveText(
+  await page.getByRole('button', { name: '快速新增任務', exact: true }).tap()
+  await page
+    .getByRole('textbox', { name: '快速新增任務名稱' })
+    .fill('Buy tomatoes')
+  await page.getByRole('button', { name: '新增這一列', exact: true }).click()
+  await expect(page.getByRole('alert')).toContainText(
     '目前無法連線同步，請再試一次。',
   )
   await page.reload()
-  await expect(page.getByRole('textbox', { name: '新增任務' })).toHaveValue(
-    'Buy tomatoes',
-  )
-  await page.getByRole('button', { name: '重試儲存' }).click()
   await expect(
-    page.getByRole('checkbox', { name: 'Buy tomatoes' }),
+    page.getByRole('checkbox', { name: '完成任務：Buy tomatoes' }),
   ).toBeVisible()
-  await expect(page.getByRole('textbox', { name: '新增任務' })).toHaveValue('')
+  await page.getByRole('button', { name: '快速新增任務', exact: true }).tap()
+  await expect(
+    page.getByRole('textbox', { name: '快速新增任務名稱' }),
+  ).toHaveValue('')
   expect(operations).toHaveLength(2)
   expect(operations[0].base_version).toBe(0)
   expect(operations[1]).toEqual(operations[0])
@@ -97,15 +112,23 @@ test('applies the current task on conflict, preserves fields on completion and h
   })
 
   await page.goto('/')
-  await page.getByRole('checkbox', { name: firstTask.title }).click()
-  await expect(page.getByRole('alert')).toContainText('已在其他裝置更新')
+  await page
+    .getByRole('checkbox', { name: `完成任務：${firstTask.title}` })
+    .click()
+  await expect(page.getByRole('alert')).toContainText('任務已被更新')
+  await expect(
+    page.getByRole('button', { name: '同步', exact: true }),
+  ).toHaveAttribute('data-sync-status', 'conflict')
   const checkbox = page.getByRole('checkbox', {
-    name: changedTitle,
+    name: `完成任務：${changedTitle}`,
     exact: true,
   })
   await expect(checkbox).not.toBeChecked()
   await checkbox.click()
-  await expect(checkbox).toBeChecked()
+  await page.getByRole('button', { name: /^切換 Board：/ }).click()
+  await page.getByRole('button', { name: '已完成', exact: true }).click()
+  const completed = page.getByRole('button', { name: new RegExp(changedTitle) })
+  await expect(completed).toBeVisible()
   expect(operations[1]).toMatchObject({
     base_version: 2,
     task: {
@@ -125,7 +148,7 @@ test('applies the current task on conflict, preserves fields on completion and h
     },
   })
   await page.getByRole('button', { name: '同步', exact: true }).click()
-  await expect(checkbox).toHaveCount(0)
+  await expect(completed).toHaveCount(0)
 })
 
 test('preserves a Project draft and shows the latest version on conflict', async ({
@@ -157,17 +180,19 @@ test('preserves a Project draft and shows the latest version on conflict', async
   })
 
   await page.goto('/')
-  await page.getByRole('button', { name: '管理 Project 與 Board' }).click()
-  await page.getByRole('button', { name: '編輯 Project Errands' }).click()
+  await page.getByRole('button', { name: 'Projects', exact: true }).click()
+  await page.getByRole('button', { name: '編輯 Project：Errands' }).click()
   const name = page.getByLabel('Project 名稱')
   const save = page.getByRole('button', { name: '儲存', exact: true })
   await name.fill('My errands')
   await save.click()
-  await expect(page.getByText('最新版本：Remote errands')).toBeVisible()
+  await expect(
+    page.getByRole('alert').filter({ hasText: 'Remote errands' }),
+  ).toBeVisible()
   await expect(name).toHaveValue('My errands')
   await save.click()
   await expect(
-    page.getByRole('button', { name: '編輯 Project My errands' }),
+    page.getByRole('button', { name: '編輯 Project：My errands' }),
   ).toBeVisible()
   expect(revisions).toEqual([1, 2])
 })

@@ -55,6 +55,7 @@ func Run(cfg Config) error {
 	// Single-instance handling happens before opening the database or API port.
 	var err error
 	cfg.onSyncTasksChanged = func() { app.Event.Emit("famo:tasks-changed") }
+	cfg.onSyncStatusChanged = func() { app.Event.Emit("famo:sync-status-changed") }
 	backend, err = Start(cfg, web.Assets())
 	if err != nil {
 		app.Dialog.Error().SetTitle("無法開啟 Famo").SetMessage(err.Error()).Show()
@@ -62,6 +63,7 @@ func Run(cfg Config) error {
 	}
 	agentTools.backend = backend
 	syncSettings.store = backend.store
+	syncSettings.backend = backend
 	defer backend.Close()
 	menu := app.NewMenu()
 	appMenu := menu.AddSubmenu("Famo")

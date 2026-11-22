@@ -3,6 +3,12 @@ import type { Locale } from './i18n'
 // API clients continue to receive the original error strings. Translate known
 // errors at the UI boundary and preserve any diagnostic text from the server.
 const errors = new Map([
+  [
+    '登入已失效或沒有存取權限，請重新載入頁面。',
+    'Your session expired or access was denied. Reload the page.',
+  ],
+  ['目前無法連線同步，請再試一次。', 'Could not connect to sync. Try again.'],
+  ['同步資料超過大小限制', 'The sync data exceeds the size limit'],
   ['操作失敗，請重試', 'Something went wrong. Try again.'],
   ['資料存取失敗，請重試', 'Could not access the data. Try again.'],
   ['伺服器發生錯誤，請重試', 'A server error occurred. Try again.'],

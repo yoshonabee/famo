@@ -1,4 +1,5 @@
 import type { Change, Operation } from './protocol'
+import { MAX_BATCH_BYTES } from './protocol'
 
 interface DocumentRow {
   sequence: number
@@ -102,6 +103,72 @@ export async function push(
   return {
     status: 409,
     body: { current: latest ? toChange(latest).task : null },
+  } as const
+}
+
+const batchInput = `
+  SELECT CAST(key AS INTEGER) AS ordinal,
+    json_extract(value, '$.operation_id') AS operation_id,
+    json_extract(value, '$.task_id') AS task_id,
+    json_extract(value, '$.base_version') AS base_version,
+    json_extract(value, '$.task.version') AS version,
+    json_extract(value, '$.task') AS document
+  FROM json_each(?2)
+`
+
+export async function pushBatch(
+  db: D1Database,
+  accountID: string,
+  operations: Operation[],
+) {
+  const input = JSON.stringify(operations)
+  if (new TextEncoder().encode(input).length > MAX_BATCH_BYTES)
+    return {
+      status: 413,
+      body: { error: 'Batch is too large to sync' },
+    } as const
+
+  // Materialize the checked rows before the publish trigger updates any task.
+  // A single JSON input keeps the parameter count constant for large selections.
+  const [, receipts] = await db.batch<DocumentRow & { matches: number }>([
+    db
+      .prepare(
+        `
+      WITH incoming AS MATERIALIZED (${batchInput}), eligible AS MATERIALIZED (
+        SELECT * FROM incoming WHERE NOT EXISTS (
+          SELECT 1 FROM incoming i
+          LEFT JOIN sync_tasks t ON t.account_id = ?1 AND t.task_id = i.task_id
+          LEFT JOIN sync_changes c ON c.account_id = ?1 AND c.operation_id = i.operation_id
+          WHERE COALESCE(t.version, 0) <> i.base_version OR c.sequence IS NOT NULL
+        )
+      )
+      INSERT INTO sync_changes (account_id, operation_id, task_id, version, document)
+      SELECT ?1, operation_id, task_id, version, document FROM eligible ORDER BY ordinal
+    `,
+      )
+      .bind(accountID, input),
+    db
+      .prepare(
+        `
+      WITH incoming AS (${batchInput})
+      SELECT c.sequence, c.document, c.document = i.document AS matches
+      FROM incoming i
+      JOIN sync_changes c ON c.account_id = ?1 AND c.operation_id = i.operation_id
+      ORDER BY i.ordinal
+    `,
+      )
+      .bind(accountID, input),
+  ])
+  if (receipts.results.some(({ matches }) => !matches))
+    return {
+      status: 400,
+      body: { error: 'Operation ID already used' },
+    } as const
+  if (receipts.results.length !== operations.length)
+    return { status: 409, body: { error: 'Version conflict' } } as const
+  return {
+    status: 200,
+    body: { changes: receipts.results.map(toChange) },
   } as const
 }
 

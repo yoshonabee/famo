@@ -10,10 +10,13 @@ import {
 } from '@/components/ui/dialog'
 import { ApiError, request, type Project } from '@/lib/api'
 import { agentTool, isDesktop } from '@/lib/desktop'
+import { isCloudWeb } from '@/lib/environment'
 import { useLanguage } from '@/lib/i18n'
 
 type ProjectInput = Pick<Project, 'name'> &
-  Partial<Pick<Project, 'color' | 'workspace_dir' | 'workspace_prompt'>>
+  Partial<
+    Pick<Project, 'color' | 'version' | 'workspace_dir' | 'workspace_prompt'>
+  >
 
 export function ProjectEditor({
   project,
@@ -27,6 +30,7 @@ export function ProjectEditor({
   const { t, errorText } = useLanguage()
   const client = useQueryClient()
   const [name, setName] = useState(project?.name ?? '')
+  const [baseVersion, setBaseVersion] = useState(project?.version)
   const colorGroup = useId()
   const [choice, setChoice] = useState(() => {
     if (!project) return 'random'
@@ -41,14 +45,17 @@ export function ProjectEditor({
     choice === 'random' ? undefined : choice === 'custom' ? customColor : choice
   const validColor = color === undefined || /^#[0-9a-fA-F]{6}$/.test(color)
   const returnFocus = useRef<HTMLElement | null>(null)
+  const refreshCollections = () =>
+    client.invalidateQueries({
+      predicate: ({ queryKey: [key] }) =>
+        key === 'projects' || (isCloudWeb && key === 'boards'),
+    })
   const save = useMutation({
     mutationFn: (input: ProjectInput) =>
-      project
-        ? request<Project>(`/projects/${project.id}`, {
-            ...input,
-            version: project.version,
-          })
-        : request<Project>('/projects', input),
+      request<Project>(
+        project ? `/projects/${project.id}` : '/projects',
+        input,
+      ),
     onSuccess: async (saved) => {
       await client.cancelQueries({ queryKey: ['projects'] })
       client.setQueryData<Project[]>(['projects'], (old = []) =>
@@ -56,12 +63,13 @@ export function ProjectEditor({
           ? old.map((item) => (item.id === saved.id ? saved : item))
           : [...old, saved],
       )
-      void client.invalidateQueries({ queryKey: ['projects'] })
+      const refresh = refreshCollections()
+      if (isCloudWeb) await refresh
       onSaved(saved)
     },
     onError: (error) => {
       if (error instanceof ApiError && error.status === 409)
-        void client.invalidateQueries({ queryKey: ['projects'] })
+        return refreshCollections()
     },
   })
   const picker = useMutation({
@@ -74,10 +82,13 @@ export function ProjectEditor({
   const busy = save.isPending || picker.isPending
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (!busy && name.trim() && validColor)
+    if (!busy && name.trim() && validColor) {
+      const version = isCloudWeb && !conflict ? baseVersion : project?.version
+      setBaseVersion(version)
       save.mutate({
         name,
         color,
+        version,
         workspace_dir:
           workspaceDir === (project?.workspace_dir ?? '')
             ? undefined
@@ -87,6 +98,7 @@ export function ProjectEditor({
             ? undefined
             : workspacePrompt,
       })
+    }
   }
 
   return (
@@ -112,7 +124,11 @@ export function ProjectEditor({
         {project ? t('editProject') : t('addProject')}
       </DialogTitle>
       <DialogDescription className="sr-only">
-        {t('projectEditorDescription')}
+        {t(
+          isCloudWeb
+            ? 'cloudProjectEditorDescription'
+            : 'projectEditorDescription',
+        )}
       </DialogDescription>
       <form className="project-form" onSubmit={submit}>
         <label className="field">
@@ -188,45 +204,47 @@ export function ProjectEditor({
             </div>
           )}
         </fieldset>
-        <details className="project-workspace">
-          <summary>{t('agentWorkspace')}</summary>
-          <div className="project-workspace-fields">
-            <div className="project-workspace-path">
+        {!isCloudWeb && (
+          <details className="project-workspace">
+            <summary>{t('agentWorkspace')}</summary>
+            <div className="project-workspace-fields">
+              <div className="project-workspace-path">
+                <label className="field">
+                  <span>{t('workspacePath')}</span>
+                  <input
+                    value={workspaceDir ?? project?.workspace_dir ?? ''}
+                    placeholder="/path/to/project"
+                    disabled={busy}
+                    onChange={(event) => setWorkspaceDir(event.target.value)}
+                  />
+                </label>
+                {isDesktop() && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={busy}
+                    onClick={() => picker.mutate()}
+                  >
+                    {t('chooseFolder')}
+                  </Button>
+                )}
+              </div>
               <label className="field">
-                <span>{t('workspacePath')}</span>
-                <input
-                  value={workspaceDir ?? project?.workspace_dir ?? ''}
-                  placeholder="/path/to/project"
+                <span>{t('workspaceInstructions')}</span>
+                <textarea
+                  rows={2}
+                  maxLength={2000}
+                  value={workspacePrompt ?? project?.workspace_prompt ?? ''}
                   disabled={busy}
-                  onChange={(event) => setWorkspaceDir(event.target.value)}
+                  onChange={(event) => setWorkspacePrompt(event.target.value)}
                 />
               </label>
-              {isDesktop() && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  disabled={busy}
-                  onClick={() => picker.mutate()}
-                >
-                  {t('chooseFolder')}
-                </Button>
-              )}
+              <p className="project-workspace-description">
+                {t('projectWorkspaceDescription')}
+              </p>
             </div>
-            <label className="field">
-              <span>{t('workspaceInstructions')}</span>
-              <textarea
-                rows={2}
-                maxLength={2000}
-                value={workspacePrompt ?? project?.workspace_prompt ?? ''}
-                disabled={busy}
-                onChange={(event) => setWorkspacePrompt(event.target.value)}
-              />
-            </label>
-            <p className="project-workspace-description">
-              {t('projectWorkspaceDescription')}
-            </p>
-          </div>
-        </details>
+          </details>
+        )}
         {picker.isError && (
           <p className="inline-edit-error" role="alert">
             {errorText(picker.error)}
@@ -235,7 +253,9 @@ export function ProjectEditor({
         {save.isError && (
           <p className="inline-edit-error" role="alert">
             {conflict
-              ? t('projectConflict', project?.name ?? '')
+              ? isCloudWeb && !project
+                ? t('projectCloudCreateConflict')
+                : t('projectConflict', project?.name ?? '')
               : errorText(save.error)}
           </p>
         )}

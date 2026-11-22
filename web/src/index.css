@@ -1191,6 +1191,28 @@ button:disabled {
 .sidebar-collapsed .sidebar-resize-handle {
   display: none;
 }
+.app-sync-status:empty {
+  display: none;
+}
+.sidebar-heading:has(.app-sync-status:not(:empty)) {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  row-gap: 6px;
+}
+.sidebar-collapsed .sidebar-heading:has(.app-sync-status:not(:empty)) {
+  grid-template-columns: 1fr;
+  justify-items: center;
+}
+.app-sync-status {
+  grid-column: 1 / -1;
+  padding: 0 8px 6px;
+}
+.sidebar-collapsed .app-sync-status {
+  padding-inline: 0;
+}
+.sidebar-collapsed .app-sync-status button > span:last-child {
+  display: none;
+}
 .sidebar-heading {
   display: flex;
   align-items: center;

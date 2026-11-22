@@ -4,6 +4,7 @@ import { CornerDownLeft, LoaderCircle, Square } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { request, type Task } from '@/lib/api'
+import { isCloudWeb } from '@/lib/environment'
 import { useLanguage } from '@/lib/i18n'
 
 type Draft = {
@@ -34,6 +35,7 @@ export function useQuickCapture(
   const create = useMutation({
     mutationFn: (draft: Draft) =>
       request<Task>('/tasks', {
+        ...(isCloudWeb ? { draft_id: draft.id } : {}),
         title: draft.title,
         scheduled_date: draft.scheduled_date,
         project_id: draft.project_id,

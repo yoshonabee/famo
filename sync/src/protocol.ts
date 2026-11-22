@@ -24,6 +24,9 @@ export interface Change {
   task: Task
 }
 
+// D1 limits an individual bound string to 2,000,000 bytes.
+export const MAX_BATCH_BYTES = 2_000_000
+
 export function parseOperation(value: unknown): Operation | null {
   if (
     !isRecord(value) ||
@@ -77,6 +80,26 @@ export function parseOperation(value: unknown): Operation | null {
       links: task.links.map(({ url }) => ({ url })),
     },
   }
+}
+
+export function parseOperations(value: unknown): Operation[] | null {
+  if (!isRecord(value) || !Array.isArray(value.operations)) return null
+  const operations: Operation[] = []
+  const taskIDs = new Set<string>()
+  const operationIDs = new Set<string>()
+  for (const entry of value.operations) {
+    const operation = parseOperation(entry)
+    if (
+      !operation ||
+      taskIDs.has(operation.task_id) ||
+      operationIDs.has(operation.operation_id)
+    )
+      return null
+    operations.push(operation)
+    taskIDs.add(operation.task_id)
+    operationIDs.add(operation.operation_id)
+  }
+  return operations.length ? operations : null
 }
 
 export function parseCursor(value: string): number | null {

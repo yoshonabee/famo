@@ -422,11 +422,12 @@ function applyTheme(theme: Theme) {
     ?.setAttribute('content', theme.colors.canvas)
 }
 
-export function initializeTheme() {
-  applyTheme(resolveTheme(readAppearance(), matchMedia(darkModeQuery).matches))
+export function initializeTheme(useDefault = false) {
+  const appearance = useDefault ? defaultAppearance : readAppearance()
+  applyTheme(resolveTheme(appearance, matchMedia(darkModeQuery).matches))
 }
 
-export function useTheme() {
+export function useTheme(useDefault = false) {
   const { t } = useLanguage()
   const [appearance, setAppearance] = useState(readAppearance)
   const appearanceRef = useRef(appearance)
@@ -437,7 +438,10 @@ export function useTheme() {
   const [storageError, setStorageError] = useState<
     '' | 'themeStorageFailed' | 'themePreferenceStorageFailed'
   >('')
-  const theme = resolveTheme(appearance, systemDark)
+  const theme = resolveTheme(
+    useDefault ? defaultAppearance : appearance,
+    systemDark,
+  )
 
   useLayoutEffect(() => applyTheme(theme), [theme])
   useEffect(() => {

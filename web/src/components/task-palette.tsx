@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { CalendarDays, ChevronDown, Search } from 'lucide-react'
 import { DatePicker } from '@/components/date-picker'
 import { ProjectPicker } from '@/components/project-picker'
@@ -54,6 +54,7 @@ export function TaskSearch({
 
 export function TaskPalette({
   mode,
+  mobile,
   tasks,
   tasksLoading,
   tasksError,
@@ -70,6 +71,7 @@ export function TaskPalette({
   onSearchChange,
 }: {
   mode: 'capture' | 'search' | 'global-search' | null
+  mobile: boolean
   tasks: Task[]
   tasksLoading: boolean
   tasksError: string
@@ -96,13 +98,37 @@ export function TaskPalette({
     if (mode !== 'capture') input?.select()
   }, [mode])
 
+  useLayoutEffect(() => {
+    const sheet = content.current
+    const viewport = window.visualViewport
+    if (!mobile || !isCapture || !sheet || !viewport) return
+    function fitKeyboard() {
+      if (!sheet || !viewport) return
+      const inset = Math.max(
+        0,
+        window.innerHeight - viewport.height - viewport.offsetTop,
+      )
+      sheet.style.setProperty('--keyboard-inset', `${inset}px`)
+      sheet.style.setProperty('--visible-height', `${viewport.height}px`)
+    }
+    fitKeyboard()
+    viewport.addEventListener('resize', fitKeyboard)
+    viewport.addEventListener('scroll', fitKeyboard)
+    return () => {
+      viewport.removeEventListener('resize', fitKeyboard)
+      viewport.removeEventListener('scroll', fitKeyboard)
+      sheet.style.removeProperty('--keyboard-inset')
+      sheet.style.removeProperty('--visible-height')
+    }
+  }, [mobile, isCapture])
+
   return (
     <Dialog open={mode !== null} onOpenChange={(open) => !open && onClose()}>
       {mode && (
         <DialogContent
           ref={content}
-          className="task-palette"
-          showCloseButton={!isCapture}
+          className={`task-palette ${mobile && isCapture ? 'mobile-sheet mobile-capture-sheet' : ''}`}
+          showCloseButton={!isCapture || mobile}
           onEscapeKeyDown={(event) => {
             if (
               event.target instanceof Element &&
@@ -124,7 +150,9 @@ export function TaskPalette({
             returnFocus.current?.focus({ preventScroll: true })
           }}
         >
-          <DialogTitle className="sr-only">
+          <DialogTitle
+            className={mobile && isCapture ? 'dialog-title' : 'sr-only'}
+          >
             {isCapture
               ? t('quickCapture')
               : mode === 'global-search'

@@ -22,12 +22,19 @@ import {
   PanelLeftOpen,
   Plus,
   PanelRightOpen,
+  ChevronRight,
   Settings,
   Trash2,
 } from 'lucide-react'
 import { BoardEditor } from '@/components/board-editor'
 import { BoardHeading } from '@/components/board-heading'
 import { getBoardIcon } from '@/components/board-icons'
+import {
+  MobileHeading,
+  MobileNavigation,
+  MobileProjects,
+  type MobileList,
+} from '@/components/mobile-workspace'
 import { PreferencesPage } from '@/components/preferences-page'
 import {
   NavigationButton,
@@ -45,6 +52,12 @@ import {
   useTodayProjectFilter,
 } from '@/components/today-project-filter'
 import { useTheme } from '@/lib/theme'
+import { SyncStatusIndicator } from '@/components/sync-status-indicator'
+import {
+  appRefetchInterval,
+  isCloudWeb,
+  mobileCloudQuery,
+} from '@/lib/environment'
 import {
   isDesktop,
   openBoardEvent,
@@ -144,14 +157,25 @@ function Links({ task, onOpen }: { task: Task; onOpen: () => void }) {
 function App() {
   const { t, errorText, locale } = useLanguage()
   const client = useQueryClient()
-  const theme = useTheme()
+  const [narrowCloud, setNarrowCloud] = useState(
+    () => isCloudWeb && window.matchMedia(mobileCloudQuery).matches,
+  )
+  useEffect(() => {
+    if (!isCloudWeb) return
+    const viewport = window.matchMedia(mobileCloudQuery)
+    const update = () => setNarrowCloud(viewport.matches)
+    viewport.addEventListener('change', update)
+    return () => viewport.removeEventListener('change', update)
+  }, [])
+  const theme = useTheme(narrowCloud)
+  const mobileList = useRef<MobileList>('board')
   const [dragging, setDragging] = useState(false)
   const [ordering, setOrdering] = useState(false)
   const tasks = useQuery({
     queryKey: ['tasks'],
     queryFn: ({ signal }) => request<Task[]>('/tasks', undefined, signal),
     enabled: !dragging && !ordering,
-    refetchInterval: 30_000,
+    refetchInterval: appRefetchInterval,
   })
   const [requestedView, setView] = useState<
     | 'active'
@@ -160,11 +184,14 @@ function App() {
     | 'recently-deleted'
     | 'preferences'
     | 'project'
+    | 'projects'
     | 'board'
     | 'menu-bar-today'
   >(
     initialBoardId === null
-      ? 'date'
+      ? narrowCloud
+        ? 'board'
+        : 'date'
       : initialBoardId
         ? 'board'
         : 'menu-bar-today',
@@ -172,7 +199,7 @@ function App() {
   const boards = useQuery({
     queryKey: ['boards'],
     queryFn: ({ signal }) => request<Board[]>('/boards', undefined, signal),
-    refetchInterval: 30_000,
+    refetchInterval: appRefetchInterval,
   })
   const boardList = boards.data ?? []
   const sidebar = useSidebarPreferences()
@@ -191,7 +218,7 @@ function App() {
   const projects = useQuery({
     queryKey: ['projects'],
     queryFn: ({ signal }) => request<Project[]>('/projects', undefined, signal),
-    refetchInterval: 30_000,
+    refetchInterval: appRefetchInterval,
   })
   const projectList = projects.data ?? []
   const [projectId, setProjectId] = useState<string>()
@@ -208,12 +235,23 @@ function App() {
   let view = requestedView === 'menu-bar-today' ? 'date' : requestedView
   let currentBoard =
     view === 'board' ? boardsByNavId.get(`board:${boardId}`) : undefined
+  if (view === 'board' && !currentBoard) {
+    if (narrowCloud) {
+      const first = orderedNavIds.find((id) => boardsByNavId.has(id))
+      currentBoard = first ? boardsByNavId.get(first) : undefined
+      if (!currentBoard) view = 'active'
+    } else view = 'date'
+  }
+  if (view === 'project' && !projectsById.has(projectId ?? ''))
+    view = narrowCloud ? 'projects' : 'date'
+  if (view === 'projects' && !narrowCloud) view = 'date'
+  if (view === 'preferences' && narrowCloud) view = 'active'
   if (
-    (view === 'board' && !currentBoard) ||
-    (view === 'project' && !projectsById.has(projectId ?? ''))
-  )
-    view = 'date'
-  if (view === 'date' && !showToday && requestedView !== 'menu-bar-today') {
+    view === 'date' &&
+    !showToday &&
+    !narrowCloud &&
+    requestedView !== 'menu-bar-today'
+  ) {
     const firstBoardId = orderedNavIds.find((id) => boardsByNavId.has(id))
     currentBoard = boardsByNavId.get(firstBoardId ?? '')
     view = currentBoard ? 'board' : 'active'
@@ -231,14 +269,16 @@ function App() {
   const projectFiltered = isToday && todayFilter.hidden.length > 0
   const [search, setSearch] = useState('')
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const compactSidebar = sidebarCollapsed && !narrowCloud
   const [palette, setPalette] = useState<
     'capture' | 'search' | 'global-search' | null
   >(null)
   const [paletteCaptureDate, setPaletteCaptureDate] = useState('')
   const [paletteCaptureProjectId, setPaletteCaptureProjectId] = useState('')
-  const captureProjects = boardProjectIds
-    ? projectList.filter((project) => boardProjectIds.has(project.id))
-    : projectList
+  const captureProjects =
+    boardProjectIds && (!narrowCloud || boardProjectIds.size)
+      ? projectList.filter((project) => boardProjectIds.has(project.id))
+      : projectList
   const selectedCaptureProjectId = captureProjects.some(
     (project) => project.id === paletteCaptureProjectId,
   )
@@ -267,17 +307,40 @@ function App() {
   })
   const [selected, setSelected] = useState<string | null>(null)
   function openCapture() {
-    if (currentBoard && !requireCaptureProject)
-      setView(showToday ? 'date' : 'active')
+    if (currentBoard && !requireCaptureProject) {
+      if (narrowCloud) goToMobileList('active')
+      else setView(showToday ? 'date' : 'active')
+    }
     if (palette !== 'capture') {
-      setPaletteCaptureDate(isCalendarView ? date : today)
+      setPaletteCaptureDate(
+        isCalendarView &&
+          (!narrowCloud || !currentBoard || requireCaptureProject)
+          ? date
+          : today,
+      )
       setPaletteCaptureProjectId(defaultCaptureProjectId ?? '')
     }
     setPalette('capture')
   }
   function goToBoard(id: string) {
+    mobileList.current = 'board'
     setBoardId(id)
     setView('board')
+    setSelected(null)
+    setPalette(null)
+    setSearch('')
+    window.scrollTo(0, 0)
+  }
+  function goToMobileList(next: MobileList) {
+    mobileList.current = next
+    setView(next)
+    setSelected(null)
+    setPalette(null)
+    setSearch('')
+    window.scrollTo(0, 0)
+  }
+  function goToMobileProjects() {
+    setView('projects')
     setSelected(null)
     setPalette(null)
     setSearch('')
@@ -292,11 +355,12 @@ function App() {
     window.scrollTo(0, 0)
   }
   function goToToday(fromMenuBar = false) {
+    if (narrowCloud) mobileList.current = 'date'
     setDate(localDate())
     if (fromMenuBar) {
       setView('menu-bar-today')
       setSearch('')
-    } else if (!showToday && currentBoard) {
+    } else if (!narrowCloud && !showToday && currentBoard) {
       setBoardId(currentBoard.id)
       setView('board')
     } else setView('date')
@@ -318,7 +382,7 @@ function App() {
     if (projectEditor !== null || boardEditor !== null) return
     switch (action) {
       case 'sidebar':
-        setSidebarCollapsed((collapsed) => !collapsed)
+        if (!narrowCloud) setSidebarCollapsed((collapsed) => !collapsed)
         break
       case 'capture':
         openCapture()
@@ -330,6 +394,10 @@ function App() {
         setPalette('global-search')
         break
       case 'search':
+        if (narrowCloud) {
+          setPalette('global-search')
+          break
+        }
         if (view === 'preferences') goToToday()
         setPalette('search')
         break
@@ -530,6 +598,7 @@ function App() {
   ) {
     return (
       <TaskRow
+        compact={narrowCloud}
         key={task.id}
         task={task}
         index={index}
@@ -561,11 +630,20 @@ function App() {
   }
   const isActiveList = view === 'active' || view === 'project'
   const detail = all.find((t) => t.id === selected)
+  const editBoard =
+    boardEditor && boardEditor !== 'new'
+      ? boardsByNavId.get(`board:${boardEditor.id}`)
+      : undefined
   const searchField = <TaskSearch value={search} onChange={setSearch} />
   const SidebarIcon = sidebarCollapsed ? PanelLeftOpen : PanelLeftClose
   const sidebarAction = sidebarCollapsed
     ? t('expandSidebar')
     : t('collapseSidebar')
+  function selectNavigation(
+    next: 'active' | 'completed' | 'recently-deleted' | 'preferences',
+  ) {
+    setView(next)
+  }
   const navItems = new Map<string, PrimaryNavItem>([
     [
       'date',
@@ -588,7 +666,7 @@ function App() {
         current: view === 'active',
         ariaLabel: t('taskList'),
         count: active.length,
-        onSelect: () => setView('active'),
+        onSelect: () => selectNavigation('active'),
       },
     ],
     [
@@ -599,7 +677,7 @@ function App() {
         icon: CheckCheck,
         current: view === 'completed',
         count: all.length - active.length,
-        onSelect: () => setView('completed'),
+        onSelect: () => selectNavigation('completed'),
       },
     ],
   ])
@@ -629,9 +707,73 @@ function App() {
       order: orderedNavIds.map((id) => (visible.has(id) ? ids[index++] : id)),
     })
   }
+  const sidebarNavigation = (
+    <>
+      <PrimaryNavigation
+        items={visibleNavItems}
+        collapsed={compactSidebar}
+        error={errorText(boards.error)}
+        onReorder={reorderNavigation}
+        onCreate={() => setBoardEditor('new')}
+        onRetry={() => void boards.refetch()}
+      />
+      <ProjectNavigation
+        projects={
+          projectOrder.isPending
+            ? orderSubset(projectList, projectOrder.variables)
+            : projectList
+        }
+        current={currentProjectId}
+        collapsed={compactSidebar}
+        reordering={projectOrder.isPending}
+        error={errorText(projects.error)}
+        onSelect={goToProject}
+        onExpand={() => setSidebarCollapsed(false)}
+        onCreate={() => setProjectEditor('new')}
+        onEdit={(id) => setProjectEditor(projectsById.get(id) ?? null)}
+        onReorder={(ids) => projectOrder.mutate(ids)}
+        onRetry={() => void projects.refetch()}
+      />
+      <SidebarResizeHandle
+        width={sidebarWidth}
+        onResize={setResizingWidth}
+        onSave={(width) => sidebar.save({ width })}
+      />
+      <div className="sidebar-footer">
+        {orderedNavIds
+          .filter((id) => footerNavIds.has(id))
+          .map((id) => (
+            <NavigationButton key={id} item={navItems.get(id)!} />
+          ))}
+        <button
+          className={
+            view === 'recently-deleted' ? 'nav-item active' : 'nav-item'
+          }
+          onClick={() => selectNavigation('recently-deleted')}
+          aria-current={view === 'recently-deleted' ? 'page' : undefined}
+          aria-label={t('recentlyDeleted')}
+          title={t('recentlyDeleted')}
+        >
+          <Trash2 size={17} />
+          <span className="nav-label">{t('recentlyDeleted')}</span>
+        </button>
+        <button
+          className={view === 'preferences' ? 'nav-item active' : 'nav-item'}
+          onClick={() => selectNavigation('preferences')}
+          aria-current={view === 'preferences' ? 'page' : undefined}
+          aria-label={t('settings')}
+          title={t('settings')}
+        >
+          <Settings size={17} />
+          <span className="nav-label">{t('settings')}</span>
+        </button>
+      </div>
+    </>
+  )
   return (
     <div
-      className={sidebarCollapsed ? 'app-shell sidebar-collapsed' : 'app-shell'}
+      className={compactSidebar ? 'app-shell sidebar-collapsed' : 'app-shell'}
+      data-mobile-workspace={narrowCloud || undefined}
       data-has-batch-selection={chosenTasks.length > 0 || undefined}
       data-resizing-sidebar={resizingWidth !== null || undefined}
       style={
@@ -639,128 +781,138 @@ function App() {
       }
     >
       <div className="window-titlebar" aria-hidden="true" />
-      <aside className="sidebar" id="app-sidebar">
-        <div className="sidebar-heading">
-          <a className="brand" href="/" aria-label="Famo">
-            <span className="brand-mark" aria-hidden="true" />
-            <span className="brand-name">famo</span>
-          </a>
-          <Button
-            className="sidebar-toggle"
-            variant="ghost"
-            size="icon"
-            aria-label={sidebarAction}
-            aria-expanded={!sidebarCollapsed}
-            aria-keyshortcuts="Meta+D Control+D"
-            title={`${sidebarAction} (⌘D)`}
-            onClick={() => setSidebarCollapsed((collapsed) => !collapsed)}
-          >
-            <SidebarIcon />
-          </Button>
-        </div>
-        <PrimaryNavigation
-          items={visibleNavItems}
-          collapsed={sidebarCollapsed}
-          error={errorText(boards.error)}
-          onReorder={reorderNavigation}
-          onCreate={() => setBoardEditor('new')}
-          onRetry={() => void boards.refetch()}
-        />
-        <ProjectNavigation
-          projects={
-            projectOrder.isPending
-              ? orderSubset(projectList, projectOrder.variables)
-              : projectList
-          }
-          current={currentProjectId}
-          collapsed={sidebarCollapsed}
-          reordering={projectOrder.isPending}
-          error={errorText(projects.error)}
-          onSelect={goToProject}
-          onExpand={() => setSidebarCollapsed(false)}
-          onCreate={() => setProjectEditor('new')}
-          onEdit={(id) => setProjectEditor(projectsById.get(id) ?? null)}
-          onReorder={(ids) => projectOrder.mutate(ids)}
-          onRetry={() => void projects.refetch()}
-        />
-        <SidebarResizeHandle
-          width={sidebarWidth}
-          onResize={setResizingWidth}
-          onSave={(width) => sidebar.save({ width })}
-        />
-        <div className="sidebar-footer">
-          {orderedNavIds
-            .filter((id) => footerNavIds.has(id))
-            .map((id) => (
-              <NavigationButton key={id} item={navItems.get(id)!} />
-            ))}
-          <button
-            className={
-              view === 'recently-deleted' ? 'nav-item active' : 'nav-item'
+      {!narrowCloud && (
+        <aside className="sidebar" id="app-sidebar">
+          <div className="sidebar-heading">
+            <a className="brand" href="/" aria-label="Famo">
+              <span className="brand-mark" aria-hidden="true" />
+              <span className="brand-name">famo</span>
+            </a>
+            <Button
+              className="sidebar-toggle"
+              variant="ghost"
+              size="icon"
+              aria-label={sidebarAction}
+              aria-expanded={!sidebarCollapsed}
+              aria-keyshortcuts="Meta+D Control+D"
+              title={`${sidebarAction} (⌘D)`}
+              onClick={() => setSidebarCollapsed((collapsed) => !collapsed)}
+            >
+              <SidebarIcon />
+            </Button>
+            <div className="app-sync-status">
+              <SyncStatusIndicator />
+            </div>
+          </div>
+          {sidebarNavigation}
+        </aside>
+      )}
+      <main onClick={narrowCloud ? undefined : selection.onBackgroundClick}>
+        {narrowCloud && (
+          <MobileHeading
+            title={
+              currentBoard?.name ??
+              currentProject?.name ??
+              (view === 'projects'
+                ? t('mobileProjects')
+                : view === 'date'
+                  ? t('today')
+                  : view === 'recently-deleted'
+                    ? t('recentlyDeleted')
+                    : (listTitle ?? t('tasks')))
             }
-            onClick={() => setView('recently-deleted')}
-            aria-current={view === 'recently-deleted' ? 'page' : undefined}
-            aria-label={t('recentlyDeleted')}
-            title={t('recentlyDeleted')}
-          >
-            <Trash2 size={17} />
-            <span className="nav-label">{t('recentlyDeleted')}</span>
-          </button>
-          <button
-            className={view === 'preferences' ? 'nav-item active' : 'nav-item'}
-            onClick={() => setView('preferences')}
-            aria-current={view === 'preferences' ? 'page' : undefined}
-            aria-label={t('settings')}
-            title={t('settings')}
-          >
-            <Settings size={17} />
-            <span className="nav-label">{t('settings')}</span>
-          </button>
-        </div>
-      </aside>
-      <main onClick={selection.onBackgroundClick}>
+            board={currentBoard}
+            boards={orderedNavIds.flatMap((id) => {
+              const board = boardsByNavId.get(id)
+              return board ? [board] : []
+            })}
+            boardError={errorText(boards.error)}
+            list={
+              view === 'project' ||
+              view === 'projects' ||
+              view === 'preferences'
+                ? undefined
+                : view
+            }
+            date={isCalendarView ? date : undefined}
+            onDateChange={setDate}
+            onBoard={goToBoard}
+            onEditBoard={setBoardEditor}
+            onAddBoard={() => setBoardEditor('new')}
+            onRetryBoards={() => void boards.refetch()}
+            onList={(next) =>
+              next === 'date' ? goToToday() : goToMobileList(next)
+            }
+            onProjects={currentProject ? goToMobileProjects : undefined}
+            onEditProject={
+              currentProject
+                ? () => setProjectEditor(currentProject)
+                : undefined
+            }
+          />
+        )}
+        {narrowCloud && view === 'projects' && (
+          <MobileProjects
+            projects={projectList}
+            loading={projects.isPending}
+            error={errorText(projects.error)}
+            onOpen={goToProject}
+            onEdit={setProjectEditor}
+            onAdd={() => setProjectEditor('new')}
+            onRetry={() => void projects.refetch()}
+          />
+        )}
         <div
           className="main-content"
           data-has-batch-selection={chosenTasks.length > 0 || undefined}
-          hidden={view === 'preferences' || view === 'recently-deleted'}
-          {...selection.handlers}
+          hidden={
+            view === 'preferences' ||
+            view === 'recently-deleted' ||
+            view === 'projects'
+          }
+          {...(narrowCloud ? {} : selection.handlers)}
         >
-          {isCalendarView ? (
-            <header className="calendar-heading">
-              {currentBoard ? (
-                <BoardHeading
-                  key={currentBoard.id}
-                  board={currentBoard}
-                  date={date}
-                />
-              ) : (
-                <h1>
-                  <CalendarDate date={date} />
-                </h1>
-              )}
-              <DateNavigation date={date} onChange={setDate} />
-              {searchField}
-            </header>
-          ) : (
-            <div className="list-toolbar">
-              <div className="list-title">
-                <h1>{listTitle}</h1>
-                <span className="list-count">{listCount}</span>
+          {!narrowCloud &&
+            (isCalendarView ? (
+              <header className="calendar-heading">
+                {currentBoard ? (
+                  <BoardHeading
+                    key={currentBoard.id}
+                    board={currentBoard}
+                    date={date}
+                  />
+                ) : (
+                  <h1>
+                    <CalendarDate date={date} />
+                  </h1>
+                )}
+                <DateNavigation date={date} onChange={setDate} />
+                {searchField}
+              </header>
+            ) : (
+              <div className="list-toolbar">
+                <div className="list-title">
+                  <h1>{listTitle}</h1>
+                  <span className="list-count">{listCount}</span>
+                </div>
+                {searchField}
               </div>
-              {searchField}
-            </div>
+            ))}
+          {!narrowCloud &&
+            isToday &&
+            (projectList.length > 0 || projectFiltered) && (
+              <TodayProjectFilter projects={projectList} filter={todayFilter} />
+            )}
+          {!narrowCloud && (
+            <QuickCapture
+              hidden={
+                !isActiveList && view !== 'date' && !defaultCaptureProjectId
+              }
+              onSubmit={capture.submit}
+              announcement={capture.announcement}
+            />
           )}
-          {isToday && (projectList.length > 0 || projectFiltered) && (
-            <TodayProjectFilter projects={projectList} filter={todayFilter} />
-          )}
-          <QuickCapture
-            hidden={
-              !isActiveList && view !== 'date' && !defaultCaptureProjectId
-            }
-            onSubmit={capture.submit}
-            announcement={capture.announcement}
-          />
-          {multiProjectBoard && (
+          {!narrowCloud && multiProjectBoard && (
             <button
               type="button"
               className="capture-entry board-capture-button"
@@ -774,6 +926,7 @@ function App() {
           {isCalendarView && (
             <CalendarPage
               date={date}
+              compact={narrowCloud}
               key={`${currentBoard?.id ?? 'date'}/${date}`}
               tasks={calendarTasks}
               projectFiltered={projectFiltered || !!currentBoard}
@@ -888,42 +1041,60 @@ function App() {
               {search ? t('noMatchingTasks') : t('noCompletedTasks')}
             </div>
           )}
-          <TaskProjectAssignment
-            projects={projectList}
-            selectedCount={chosenTasks.length}
-            allSelected={chosenTasks.length === selectableTasks.length}
-            busy={busy}
-            onSelectAll={() =>
-              selection.selectAll(selectableTasks.map((task) => task.id))
-            }
-            onClear={selection.clear}
-            onAssign={(projectId) =>
-              assignment.mutate({ projectId, items: chosenTasks })
-            }
-          />
+          {!narrowCloud && (
+            <TaskProjectAssignment
+              projects={projectList}
+              selectedCount={chosenTasks.length}
+              allSelected={chosenTasks.length === selectableTasks.length}
+              busy={busy}
+              onSelectAll={() =>
+                selection.selectAll(selectableTasks.map((task) => task.id))
+              }
+              onClear={selection.clear}
+              onAssign={(projectId) =>
+                assignment.mutate({ projectId, items: chosenTasks })
+              }
+            />
+          )}
         </div>
         {view === 'recently-deleted' && (
           <div className="main-content">
-            <RecentlyDeletedPage search={search} onSearchChange={setSearch} />
+            <RecentlyDeletedPage
+              compact={narrowCloud}
+              search={search}
+              onSearchChange={setSearch}
+            />
           </div>
         )}
-        <div className="main-content" hidden={view !== 'preferences'}>
-          <PreferencesPage
-            open={view === 'preferences'}
-            appearance={theme}
-            showToday={showToday}
-            footerItems={footerItems}
-            onShowTodayChange={(showToday) => sidebar.save({ showToday })}
-            onFooterChange={(id, move) => {
-              sidebar.save({
-                footerItems: move
-                  ? [...footerItems, id]
-                  : footerItems.filter((item) => item !== id),
-              })
-            }}
-          />
-        </div>
+        {!narrowCloud && (
+          <div className="main-content" hidden={view !== 'preferences'}>
+            <PreferencesPage
+              open={view === 'preferences'}
+              appearance={theme}
+              showToday={showToday}
+              footerItems={footerItems}
+              onShowTodayChange={(showToday) => sidebar.save({ showToday })}
+              onFooterChange={(id, move) => {
+                sidebar.save({
+                  footerItems: move
+                    ? [...footerItems, id]
+                    : footerItems.filter((item) => item !== id),
+                })
+              }}
+            />
+          </div>
+        )}
       </main>
+      {narrowCloud && (
+        <MobileNavigation
+          projects={view === 'projects' || view === 'project'}
+          searching={palette === 'global-search'}
+          onBoards={() => goToMobileList(mobileList.current)}
+          onProjects={goToMobileProjects}
+          onSearch={() => setPalette('global-search')}
+          onCapture={openCapture}
+        />
+      )}
       <Dialog
         open={!!detail}
         onOpenChange={(open) => {
@@ -934,6 +1105,7 @@ function App() {
           <Detail
             key={detail.id}
             task={detail}
+            compact={narrowCloud}
             projects={projects.data}
             act={act}
             busy={busy}
@@ -948,6 +1120,7 @@ function App() {
           <BoardEditor
             key={boardEditor === 'new' ? 'new' : boardEditor.id}
             board={boardEditor === 'new' ? undefined : boardEditor}
+            latestBoard={editBoard}
             projects={projects.data}
             projectsError={errorText(projects.error)}
             onRetryProjects={() => void projects.refetch()}
@@ -980,7 +1153,7 @@ function App() {
             }}
             onDeleted={(id) => {
               if (currentProjectId === id) {
-                setView('date')
+                setView(narrowCloud ? 'projects' : 'date')
                 setDate(localDate())
                 setSearch('')
               }
@@ -991,6 +1164,7 @@ function App() {
       </Dialog>
       <TaskPalette
         mode={palette}
+        mobile={narrowCloud}
         tasks={all}
         tasksLoading={tasks.isPending}
         tasksError={tasks.isError ? errorText(tasks.error) : ''}
@@ -1029,6 +1203,7 @@ function App() {
 }
 function TaskRow({
   task,
+  compact,
   dateKind,
   project,
   busy,
@@ -1041,6 +1216,7 @@ function TaskRow({
   selectedForBatch,
 }: {
   task: Task
+  compact: boolean
   project?: Project
   dateKind?: 'scheduled' | 'completed'
   busy: boolean
@@ -1066,8 +1242,47 @@ function TaskRow({
   const { ref, handleRef, isDragging } = useSortable({
     id: task.id,
     index,
-    disabled: completed || sortableDisabled,
+    disabled: compact || completed || sortableDisabled,
   })
+  if (compact) {
+    return (
+      <li
+        className={`task-row mobile-task-row ${completed ? 'is-completed' : ''}`}
+        data-task-id={task.id}
+      >
+        {!hideCompletion && (
+          <Checkbox
+            checked={completed}
+            disabled={busy}
+            aria-label={t(
+              completed ? 'reopenNamedTask' : 'completeNamedTask',
+              title,
+            )}
+            onCheckedChange={onComplete}
+          />
+        )}
+        <button type="button" className="mobile-task-details" onClick={onOpen}>
+          <span className="mobile-task-text">
+            <span className="mobile-task-title">{title}</span>
+            {(project || rowDate) && (
+              <span className="mobile-task-meta">
+                {project && <ProjectBadge project={project} />}
+                {rowDate && (
+                  <time
+                    className={overdue ? 'overdue-date' : undefined}
+                    dateTime={rowDate}
+                  >
+                    {formatListDate(rowDate, locale, today)}
+                  </time>
+                )}
+              </span>
+            )}
+          </span>
+          <ChevronRight size={15} aria-hidden="true" />
+        </button>
+      </li>
+    )
+  }
   return (
     <li
       ref={ref}
@@ -1153,11 +1368,13 @@ function TaskRow({
 }
 function Detail({
   task,
+  compact,
   projects,
   act,
   busy,
 }: {
   task: Task
+  compact: boolean
   projects?: Project[]
   act: Act
   busy: boolean
@@ -1201,7 +1418,7 @@ function Detail({
   return (
     <DialogContent
       ref={dialogRef}
-      className="task-detail-dialog max-w-3xl"
+      className={`task-detail-dialog max-w-3xl ${compact ? 'mobile-sheet' : ''}`}
       onOpenAutoFocus={(event) => {
         event.preventDefault()
         dialogRef.current?.focus({ preventScroll: true })
@@ -1232,7 +1449,9 @@ function Detail({
           <InlineContent task={task} field="title" busy={busy} />
         </DialogTitle>
         <DialogDescription className="sr-only">
-          {t('taskDetailsDescription')}
+          {t(
+            compact ? 'mobileTaskDetailsDescription' : 'taskDetailsDescription',
+          )}
         </DialogDescription>
       </div>
       <div className="detail-meta">
@@ -1274,78 +1493,85 @@ function Detail({
         <h3>{t('notes')}</h3>
         <InlineContent task={task} field="description" busy={busy} />
       </div>
-      <div className="detail-block">
-        <div className="block-heading">
-          <h3>{t('relatedLinks')}</h3>
-          <Button
-            variant="ghost"
-            size="sm"
-            disabled={busy}
-            aria-expanded={adding}
-            onClick={() => setAdding(!adding)}
-          >
-            <Plus />
-            {t('addLink')}
-          </Button>
-        </div>
-        {task.links.length ? (
-          <div className="detail-links">
-            {task.links.map((l, i) => (
-              <div className="detail-link" key={`${l.url}-${i}`}>
-                <a href={l.url} target="_blank" rel="noreferrer" title={l.url}>
-                  <span>{linkLabel(l.url)}</span>
-                  <span>{l.url}</span>
-                  <ExternalLink size={14} />
-                </a>
-                <button
-                  type="button"
-                  className="row-action-button remove-link-button"
-                  aria-label={t('deleteNamedLink', l.url)}
-                  title={t('deleteLink')}
-                  disabled={busy}
-                  onClick={() => removeLink(i)}
-                >
-                  <Trash2 size={15} />
-                </button>
-              </div>
-            ))}
+      {!compact && (
+        <div className="detail-block">
+          <div className="block-heading">
+            <h3>{t('relatedLinks')}</h3>
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={busy}
+              aria-expanded={adding}
+              onClick={() => setAdding(!adding)}
+            >
+              <Plus />
+              {t('addLink')}
+            </Button>
           </div>
-        ) : (
-          <p className="muted">{t('noLinks')}</p>
-        )}
-        {removeError && (
-          <p className="inline-edit-error" role="alert">
-            {errorText(removeError)}
-          </p>
-        )}
-        {adding && (
-          <form onSubmit={addLink}>
-            <div className="link-form">
-              <label className="field">
-                <span>{t('linkUrl')}</span>
-                <input
-                  name="url"
-                  aria-label={t('linkUrl')}
-                  type="url"
-                  pattern="https?://.*"
-                  placeholder={t('pasteUrl')}
-                  required
-                  autoFocus
-                  readOnly={busy}
-                />
-              </label>
-              <Button disabled={busy} size="sm">
-                {t('add')}
-              </Button>
+          {task.links.length ? (
+            <div className="detail-links">
+              {task.links.map((l, i) => (
+                <div className="detail-link" key={`${l.url}-${i}`}>
+                  <a
+                    href={l.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    title={l.url}
+                  >
+                    <span>{linkLabel(l.url)}</span>
+                    <span>{l.url}</span>
+                    <ExternalLink size={14} />
+                  </a>
+                  <button
+                    type="button"
+                    className="row-action-button remove-link-button"
+                    aria-label={t('deleteNamedLink', l.url)}
+                    title={t('deleteLink')}
+                    disabled={busy}
+                    onClick={() => removeLink(i)}
+                  >
+                    <Trash2 size={15} />
+                  </button>
+                </div>
+              ))}
             </div>
-            {linkError && (
-              <p className="inline-edit-error" role="alert">
-                {t('linkDraftError', errorText(linkError))}
-              </p>
-            )}
-          </form>
-        )}
-      </div>
+          ) : (
+            <p className="muted">{t('noLinks')}</p>
+          )}
+          {removeError && (
+            <p className="inline-edit-error" role="alert">
+              {errorText(removeError)}
+            </p>
+          )}
+          {adding && (
+            <form onSubmit={addLink}>
+              <div className="link-form">
+                <label className="field">
+                  <span>{t('linkUrl')}</span>
+                  <input
+                    name="url"
+                    aria-label={t('linkUrl')}
+                    type="url"
+                    pattern="https?://.*"
+                    placeholder={t('pasteUrl')}
+                    required
+                    autoFocus
+                    readOnly={busy}
+                  />
+                </label>
+                <Button disabled={busy} size="sm">
+                  {t('add')}
+                </Button>
+              </div>
+              {linkError && (
+                <p className="inline-edit-error" role="alert">
+                  {t('linkDraftError', errorText(linkError))}
+                </p>
+              )}
+            </form>
+          )}
+        </div>
+      )}
     </DialogContent>
   )
 }

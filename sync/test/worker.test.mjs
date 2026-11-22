@@ -32,7 +32,22 @@ async function start(t, options = {}) {
       modules: true,
       compatibilityDate: '2026-11-01',
       d1Databases: { DB: 'famo-test' },
-      serviceBindings: { ASSETS: () => new Response('Mobile Famo') },
+      serviceBindings: {
+        ASSETS: (request) => {
+          switch (new URL(request.url).pathname) {
+            case '/':
+              return new Response('<title>Famo</title>', {
+                headers: { 'Content-Type': 'text/html' },
+              })
+            case '/assets/app.js':
+              return new Response('export {}', {
+                headers: { 'Content-Type': 'text/javascript' },
+              })
+            default:
+              return new Response(null, { status: 404 })
+          }
+        },
+      },
       ...options,
     }),
   )
@@ -155,6 +170,151 @@ test('concurrent edits against the same version serialize to one new change', as
   await expectJSON(await commit(rebased), 200, {
     change: { sequence: 3, task: rebased.task },
   })
+})
+
+function taskOperation(id, baseVersion, patch = {}) {
+  return {
+    operation_id: `op-${id}-${baseVersion}`,
+    task_id: id,
+    base_version: baseVersion,
+    task: { ...fixture.create.task, id, version: baseVersion + 1, ...patch },
+  }
+}
+
+test('task batches apply atomically and replay original receipts in request order', async (t) => {
+  const { worker } = await start(t, {
+    bindings: { LOCAL_SYNC_TOKEN: localToken },
+  })
+  const batch = (operations) =>
+    request(worker, '/api/sync/push-batch', { operation: { operations } })
+  const first = taskOperation('task-z', 0, { description: '測試 "\\ \n' })
+  const second = taskOperation('task-a', 0)
+  const initial = [
+    { sequence: 1, task: first.task },
+    { sequence: 2, task: second.task },
+  ]
+  await expectJSON(await batch([first, second]), 200, { changes: initial })
+  await expectJSON(
+    await request(worker, '/api/sync/push', { operation: first }),
+    200,
+    { change: initial[0] },
+  )
+
+  const updateFirst = taskOperation(first.task_id, 1, {
+    project_id: 'project',
+  })
+  const staleSecond = { ...second, operation_id: 'stale' }
+  await expectJSON(await batch([updateFirst, staleSecond]), 409, {
+    error: 'Version conflict',
+  })
+  await expectJSON(await batch([updateFirst, second]), 409, {
+    error: 'Version conflict',
+  })
+  await expectJSON(await request(worker, '/api/sync/pull?after=2'), 200, {
+    changes: [],
+    cursor: 2,
+    has_more: false,
+  })
+
+  const updateSecond = taskOperation(second.task_id, 1, {
+    project_id: 'project',
+  })
+  const updates = [updateFirst, updateSecond]
+  const changes = updates.map(({ task }, i) => ({ sequence: 3 + i, task }))
+  await expectJSON(await batch(updates), 200, { changes })
+  await expectJSON(await batch([first, second]), 200, { changes: initial })
+  await expectJSON(
+    await batch([
+      { ...first, task: { ...first.task, title: 'Different' } },
+      second,
+    ]),
+    400,
+    { error: 'Operation ID already used' },
+  )
+  await expectJSON(await request(worker, '/api/sync/pull?after=2'), 200, {
+    changes,
+    cursor: 4,
+    has_more: false,
+  })
+})
+
+test('overlapping concurrent batches commit one full set of changes', async (t) => {
+  const { worker, db } = await start(t, {
+    bindings: { LOCAL_SYNC_TOKEN: localToken },
+  })
+  const batch = (operations) =>
+    request(worker, '/api/sync/push-batch', { operation: { operations } })
+  const [winner, loser] = (
+    await Promise.all([
+      batch([taskOperation('first', 0), taskOperation('shared', 0)]),
+      batch([
+        taskOperation('second', 0),
+        {
+          ...taskOperation('shared', 0),
+          operation_id: 'another-operation',
+        },
+      ]),
+    ])
+  ).sort((a, b) => a.status - b.status)
+  assert.equal(winner.status, 200)
+  assert.equal((await winner.json()).changes.length, 2)
+  await expectJSON(loser, 409, { error: 'Version conflict' })
+  assert.equal(
+    await db.prepare('SELECT count(*) FROM sync_changes').first('count(*)'),
+    2,
+  )
+})
+
+test('task batches allow large selections and enforce the D1 input limit', async (t) => {
+  const { worker } = await start(t, {
+    bindings: { LOCAL_SYNC_TOKEN: localToken },
+  })
+  const path = '/api/sync/push-batch'
+  const batch = (operations, options = {}) =>
+    request(worker, path, { operation: { operations }, ...options })
+  const first = taskOperation('task-1', 0)
+  const second = taskOperation('task-2', 0)
+  for (const operations of [
+    [],
+    [first, { ...first, operation_id: 'different-id' }],
+    [first, { ...second, operation_id: first.operation_id }],
+  ]) {
+    await expectJSON(await batch(operations), 400, {
+      error: 'Invalid operations',
+    })
+  }
+  await expectJSON(await batch([first], { local: false }), 403, {
+    error: 'Access denied',
+  })
+  const browser = {
+    local: false,
+    headers: { 'Sec-Fetch-Site': 'same-origin', Origin: localOrigin },
+  }
+  await expectJSON(
+    await batch([first], {
+      ...browser,
+      headers: { ...browser.headers, Origin: 'http://other.test' },
+    }),
+    403,
+    { error: 'Invalid origin' },
+  )
+  await expectJSON(
+    await batch([
+      taskOperation('large-1', 0, { description: 'x'.repeat(1_000_000) }),
+      taskOperation('large-2', 0, { description: 'x'.repeat(1_000_000) }),
+    ]),
+    413,
+    { error: 'Batch is too large to sync' },
+  )
+  const operations = Array.from({ length: 200 }, (_, i) =>
+    taskOperation(`task-${i}`, 0),
+  )
+  const response = await batch(operations, browser)
+  assert.equal(response.status, 200)
+  assert.deepEqual(
+    (await response.json()).changes.map(({ task }) => task.id),
+    operations.map(({ task }) => task.id),
+  )
 })
 
 test('pull cursor resumes across pages and skips changes from other accounts', async (t) => {
@@ -303,8 +463,20 @@ test('Access JWTs authorize the configured browser and service identities', asyn
 
   const browser = await token({ email })
   const service = await token({ common_name: clientID })
-  assert.equal(await (await hit('/', browser)).text(), 'Mobile Famo')
-  assert.equal((await hit('/', service)).status, 403)
+  const page = await hit('/', browser)
+  assert.equal(page.status, 200)
+  assert.equal(page.headers.get('Content-Type'), 'text/html')
+  assert.equal(page.headers.get('Cache-Control'), 'private, no-store')
+  assert.equal(await page.text(), '<title>Famo</title>')
+  const script = await hit('/assets/app.js', browser)
+  assert.equal(script.status, 200)
+  assert.equal(script.headers.get('Content-Type'), 'text/javascript')
+  assert.equal(await script.text(), 'export {}')
+  for (const path of ['/', '/assets/app.js']) {
+    assert.equal((await hit(path, service)).status, 403)
+    assert.equal((await hit(path, undefined)).status, 403)
+  }
+  assert.equal((await hit('/assets/missing.js', browser)).status, 404)
   assert.equal((await hit('/api/desktop/preferences', browser)).status, 404)
   assert.equal(
     (

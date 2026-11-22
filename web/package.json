@@ -8,9 +8,9 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "test:e2e": "npm run build && playwright test",
-    "format": "prettier --write src sync e2e *.ts *.json *.html",
-    "format:check": "prettier --check src sync e2e *.ts *.json *.html",
-    "build:sync": "tsc -b && vite build --config vite.sync.config.ts",
+    "format": "prettier --write src e2e *.ts *.json *.html",
+    "format:check": "prettier --check src e2e *.ts *.json *.html",
+    "build:sync": "tsc -b && vite build --mode sync",
     "test:e2e:sync": "npm run build:sync && playwright test --config playwright.sync.config.ts"
   },
   "dependencies": {

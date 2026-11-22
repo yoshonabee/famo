@@ -16,26 +16,37 @@ const appVersion = appInfo
 if (!appVersion)
   throw new Error('Missing CFBundleShortVersionString in Info.plist')
 
-export default defineConfig({
-  define: { 'import.meta.env.FAMO_VERSION': JSON.stringify(appVersion) },
-  plugins: [
-    react(),
-    tailwindcss(),
-    {
-      name: 'keep-embed-placeholder',
-      closeBundle() {
-        writeFileSync(new URL('./dist/.gitkeep', import.meta.url), '')
+export default defineConfig(({ mode }) => {
+  const cloud = mode === 'sync'
+  return {
+    define: { 'import.meta.env.FAMO_VERSION': JSON.stringify(appVersion) },
+    plugins: [
+      react(),
+      tailwindcss(),
+      !cloud && {
+        name: 'keep-embed-placeholder',
+        closeBundle() {
+          writeFileSync(new URL('./dist/.gitkeep', import.meta.url), '')
+        },
+      },
+    ],
+    resolve: {
+      alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
+    },
+    build: {
+      outDir: cloud ? 'dist-sync' : 'dist',
+      rolldownOptions: {
+        input: {
+          main: fileURLToPath(new URL('./index.html', import.meta.url)),
+          ...(!cloud && {
+            menuBar: fileURLToPath(new URL('./menu-bar.html', import.meta.url)),
+          }),
+        },
       },
     },
-  ],
-  resolve: { alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) } },
-  build: {
-    rolldownOptions: {
-      input: {
-        main: fileURLToPath(new URL('./index.html', import.meta.url)),
-        menuBar: fileURLToPath(new URL('./menu-bar.html', import.meta.url)),
-      },
+    server: {
+      strictPort: true,
+      ...(!cloud && { proxy: { '/api': 'http://127.0.0.1:8787' } }),
     },
-  },
-  server: { strictPort: true, proxy: { '/api': 'http://127.0.0.1:8787' } },
+  }
 })

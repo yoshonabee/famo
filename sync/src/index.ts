@@ -8,8 +8,14 @@ import {
   pushCollections,
 } from './collections'
 import type { AccessBindings } from './access'
-import { parseCursor, parseOperation } from './protocol'
-import { pull, push } from './store'
+import {
+  MAX_BATCH_BYTES,
+  parseCursor,
+  parseOperation,
+  parseOperations,
+} from './protocol'
+import type { Operation } from './protocol'
+import { pull, push, pushBatch } from './store'
 
 type Env = {
   Bindings: AccessBindings & { DB: D1Database; ASSETS?: Fetcher }
@@ -65,13 +71,33 @@ sync.post(
       await c.req.json<unknown>().catch(() => null),
     )
     if (!operation) return c.json({ error: 'Invalid operation' }, 400)
-    if (
-      new TextEncoder().encode(JSON.stringify(operation.task)).length >
-      1536 * 1024
-    ) {
+    if (taskTooLarge(operation)) {
       return c.json({ error: 'Task is too large to sync' }, 413)
     }
     const result = await push(c.env.DB, c.get('accountID'), operation)
+    return c.json(result.body, result.status)
+  },
+)
+
+sync.post(
+  '/push-batch',
+  requireAccess(true),
+  bodyLimit({
+    maxSize: MAX_BATCH_BYTES,
+    onError: (c) => c.json({ error: 'Batch is too large to sync' }, 413),
+  }),
+  async (c) => {
+    if (!isJSONContentType(c.req.header('Content-Type'))) {
+      return c.json({ error: 'Expected application/json' }, 415)
+    }
+    const operations = parseOperations(
+      await c.req.json<unknown>().catch(() => null),
+    )
+    if (!operations) return c.json({ error: 'Invalid operations' }, 400)
+    if (operations.some(taskTooLarge)) {
+      return c.json({ error: 'Task is too large to sync' }, 413)
+    }
+    const result = await pushBatch(c.env.DB, c.get('accountID'), operations)
     return c.json(result.body, result.status)
   },
 )
@@ -108,6 +134,10 @@ function isJSONContentType(contentType: string | undefined): boolean {
   return (
     contentType?.split(';', 1)[0].trim().toLowerCase() === 'application/json'
   )
+}
+
+function taskTooLarge({ task }: Operation): boolean {
+  return new TextEncoder().encode(JSON.stringify(task)).length > 1536 * 1024
 }
 
 sync.all('*', requireAccess(false), (c) => c.json({ error: 'Not found' }, 404))

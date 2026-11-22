@@ -9,10 +9,12 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"testing/fstest"
 	"time"
 
+	"famo/internal/syncclient"
 	"famo/internal/tasks"
 )
 
@@ -24,6 +26,9 @@ func TestNativeWindowAndAgentSharePersistentStore(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { b.Close() })
+	if status, err := b.syncStatus(t.Context()); err != nil || status != syncclient.StatusDisabled {
+		t.Fatalf("sync status without configuration = %q, %v", status, err)
+	}
 	call := func(method, path, body, contentType string) *httptest.ResponseRecorder {
 		t.Helper()
 		r := httptest.NewRequest(method, "wails://localhost"+path, strings.NewReader(body))
@@ -177,6 +182,9 @@ func TestInvalidDefaultSyncConfigKeepsLocalDesktopAvailable(t *testing.T) {
 	if err != nil || status.URL != "" {
 		t.Fatalf("invalid config tied the database to sync: %+v, %v", status, err)
 	}
+	if status, err := backend.syncStatus(t.Context()); err != nil || status != syncclient.StatusError {
+		t.Fatalf("sync status with invalid configuration = %q, %v", status, err)
+	}
 	if err := backend.Close(); err != nil {
 		t.Fatal(err)
 	}
@@ -190,6 +198,8 @@ func TestSyncWakesAfterDesktopAndAgentWrites(t *testing.T) {
 	t.Setenv("FAMO_SYNC_LOCAL_TOKEN", token)
 	pulls := make(chan struct{}, 4)
 	pushes := make(chan string, 4)
+	syncStatusChanged := make(chan struct{}, 1)
+	var rejectPull atomic.Bool
 	worker := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("Authorization") != "Bearer "+token {
 			w.WriteHeader(http.StatusForbidden)
@@ -199,6 +209,10 @@ func TestSyncWakesAfterDesktopAndAgentWrites(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		switch r.URL.Path {
 		case "/api/sync/pull":
+			if rejectPull.Load() {
+				w.WriteHeader(http.StatusServiceUnavailable)
+				return
+			}
 			io.WriteString(w, `{"changes":[],"cursor":0,"has_more":false}`)
 			pulls <- struct{}{}
 		case "/api/sync/push":
@@ -207,9 +221,14 @@ func TestSyncWakesAfterDesktopAndAgentWrites(t *testing.T) {
 				http.Error(w, err.Error(), http.StatusBadRequest)
 				return
 			}
-			json.NewEncoder(w).Encode(map[string]any{
-				"change": tasks.SyncChange{Sequence: 1, Task: op.Task},
-			})
+			if op.Task.Title == "Conflicting write" {
+				w.WriteHeader(http.StatusConflict)
+				io.WriteString(w, `{"current":null}`)
+			} else {
+				json.NewEncoder(w).Encode(map[string]any{
+					"change": tasks.SyncChange{Sequence: 1, Task: op.Task},
+				})
+			}
 			pushes <- op.Task.Title
 		default:
 			w.WriteHeader(http.StatusNotFound)
@@ -230,12 +249,37 @@ func TestSyncWakesAfterDesktopAndAgentWrites(t *testing.T) {
 	}
 	backend, err := Start(Config{
 		DBPath: filepath.Join(dir, "famo.db"), APIAddr: DefaultAPIAddr, SyncConfigPath: config,
+		onSyncStatusChanged: func() {
+			select {
+			case syncStatusChanged <- struct{}{}:
+			default:
+			}
+		},
 	}, fstest.MapFS{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer backend.Close()
 
+	settings := &SyncSettings{backend: backend}
+	waitForStatus := func(want syncclient.Status) {
+		t.Helper()
+		timeout := time.After(5 * time.Second)
+		for {
+			status, err := settings.RuntimeStatus(t.Context())
+			if err != nil {
+				t.Fatal(err)
+			}
+			if status == want {
+				return
+			}
+			select {
+			case <-syncStatusChanged:
+			case <-timeout:
+				t.Fatalf("sync status = %q, want %q", status, want)
+			}
+		}
+	}
 	waitForPull := func() {
 		t.Helper()
 		select {
@@ -257,6 +301,7 @@ func TestSyncWakesAfterDesktopAndAgentWrites(t *testing.T) {
 		waitForPull()
 	}
 	waitForPull()
+	waitForStatus(syncclient.StatusSynced)
 
 	request := httptest.NewRequest(http.MethodPost, "wails://localhost/api/tasks", strings.NewReader(`{"title":"Desktop write"}`))
 	request.Header.Set("Content-Type", "application/json")
@@ -266,6 +311,7 @@ func TestSyncWakesAfterDesktopAndAgentWrites(t *testing.T) {
 		t.Fatalf("embedded task create returned %d: %s", recorder.Code, recorder.Body)
 	}
 	expectPush("Desktop write")
+	waitForStatus(syncclient.StatusSynced)
 
 	response, err := http.Post(backend.APIURL()+"/tasks", "application/json", strings.NewReader(`{"title":"Agent write"}`))
 	if err != nil {
@@ -276,4 +322,21 @@ func TestSyncWakesAfterDesktopAndAgentWrites(t *testing.T) {
 		t.Fatalf("Agent task create returned %d", response.StatusCode)
 	}
 	expectPush("Agent write")
+	waitForStatus(syncclient.StatusSynced)
+
+	rejectPull.Store(true)
+	settings.RequestSync()
+	waitForStatus(syncclient.StatusError)
+
+	rejectPull.Store(false)
+	response, err = http.Post(backend.APIURL()+"/tasks", "application/json", strings.NewReader(`{"title":"Conflicting write"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	response.Body.Close()
+	if response.StatusCode != http.StatusCreated {
+		t.Fatalf("Agent task create returned %d", response.StatusCode)
+	}
+	expectPush("Conflicting write")
+	waitForStatus(syncclient.StatusConflict)
 }
