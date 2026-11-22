@@ -87,6 +87,11 @@
 - [x] 可設定預設 workspace dir 和選填的自訂 prompt。CLI 一併回傳路徑及 prompt，留空時 Agent 依 Skill 的預設方式查找脈絡。
 - [x] Project 功能加入後可設定各 Project 的 workspace dir 和選填 prompt。未歸類的任務使用預設 workspace，已歸類的任務使用所屬 Project 的 workspace。
 
+## 手機版 Famo
+
+- [ ] 考量 iOS App 上架成本，現階段先透過手機瀏覽器使用 Famo，逐步讓手機網頁的介面和主要操作與電腦版一致。
+- [ ] 日後提供可安裝的手機 App，功能與電腦版相當，包含任務、Project、Board 和跨裝置同步。
+
 ## 資料備份
 
 - [ ] 支援將 Famo 資料備份到 Google Drive。
