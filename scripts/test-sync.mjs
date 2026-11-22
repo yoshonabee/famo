@@ -267,7 +267,9 @@ try {
   })
   await page.goto(worker)
   online = true
-  await page.getByText(task.title, { exact: true }).waitFor({ timeout: 25_000 })
+  const titleField = (title) =>
+    page.getByRole('textbox', { name: `編輯任務標題：${title}`, exact: true })
+  await titleField(task.title).waitFor({ timeout: 25_000 })
   await eventually(
     'an idempotent retry after the dropped response',
     () => pushes.length >= 2,
@@ -275,8 +277,15 @@ try {
   assert.deepEqual(pushes[0], pushes[1])
   assert.equal((await pull()).changes.length, 1)
 
-  const checkbox = page.getByRole('checkbox', { name: task.title, exact: true })
-  await checkbox.click()
+  const complete = page.getByRole('checkbox', {
+    name: `完成任務：${task.title}`,
+    exact: true,
+  })
+  const reopen = page.getByRole('checkbox', {
+    name: `恢復任務：${task.title}`,
+    exact: true,
+  })
+  await complete.click()
   await eventually('phone completion on desktop', async () => {
     const remote = await get(`${desktop}/api/tasks/${task.id}`)
     if (!remote.completed_at) return false
@@ -293,7 +302,7 @@ try {
     version: 2,
     title: 'Desktop edited while offline',
   })
-  await checkbox.click()
+  await reopen.click()
   await eventually(
     'phone reopen',
     async () => (await pull()).changes.length === 3,
@@ -343,8 +352,8 @@ try {
   )
 
   const phoneTitle = 'Plan next week'
-  await page.getByRole('textbox', { name: '新增任務' }).fill(phoneTitle)
-  await page.getByRole('button', { name: '新增', exact: true }).click()
+  await page.getByRole('textbox', { name: '快速新增任務名稱' }).fill(phoneTitle)
+  await page.getByRole('button', { name: '新增這一列', exact: true }).click()
   const phoneTask = await eventually('phone creation on desktop', async () =>
     (await get(`${desktop}/api/tasks`)).find(
       (entry) => entry.title === phoneTitle,
@@ -354,9 +363,7 @@ try {
     op: 'delete_item',
     version: phoneTask.version,
   })
-  await page
-    .getByText(phoneTitle, { exact: true })
-    .waitFor({ state: 'hidden', timeout: 25_000 })
+  await titleField(phoneTitle).waitFor({ state: 'hidden', timeout: 25_000 })
   assert((await pull()).changes.at(-1).task.deleted_at)
 
   const collections = () => get(`${worker}/api/sync/collections`, { headers })
@@ -431,28 +438,28 @@ try {
   const refresh = () =>
     page.getByRole('button', { name: '同步', exact: true }).click()
   await refresh()
-  const scope = page.getByLabel('任務範圍')
-  await scope.selectOption(`board:${weekend.id}`, { timeout: 25_000 })
-  await checkbox.waitFor({ timeout: 25_000 })
-
-  const manage = () =>
-    page
-      .getByRole('button', { name: '管理 Project 與 Board', exact: true })
-      .click()
+  async function openMenu() {
+    const open = page.getByRole('button', { name: '展開側邊欄' })
+    if (await open.isVisible()) await open.click()
+  }
+  await openMenu()
+  await page.getByRole('button', { name: weekend.name, exact: true }).click()
+  await complete.waitFor({ timeout: 25_000 })
+  await openMenu()
   const editProject = (name) =>
     page
-      .getByRole('button', { name: `編輯 Project ${name}`, exact: true })
+      .getByRole('button', { name: `編輯 Project：${name}`, exact: true })
       .click()
   const editBoard = (name) =>
     page
-      .getByRole('button', { name: `編輯 Board ${name}`, exact: true })
+      .getByRole('button', { name: `編輯 Board：${name}`, exact: true })
       .click()
   const save = () =>
     page.getByRole('button', { name: '儲存', exact: true }).click()
-  await manage()
   await editProject('Errands')
   await page.getByLabel('Project 名稱', { exact: true }).fill('Out and about')
-  await page.getByLabel('Project 顏色', { exact: true }).fill('#993355')
+  await page.getByRole('radio', { name: '自訂', exact: true }).check()
+  await page.getByRole('textbox', { name: 'Project 色碼' }).fill('#993355')
   await save()
   await eventually('mobile Project rename on desktop', async () => {
     const project = await deskProject(errands.id)
@@ -468,7 +475,7 @@ try {
     const output = resolve(screenshot)
     await mkdir(dirname(output), { recursive: true })
     await page
-      .getByRole('button', { name: '編輯 Project Out and about', exact: true })
+      .getByRole('button', { name: '編輯 Project：Out and about', exact: true })
       .waitFor()
     await page.screenshot({ path: output })
   }
@@ -483,7 +490,8 @@ try {
   })
   await editBoard('Weekend')
   await page.getByLabel('Board 名稱', { exact: true }).fill('Weekend plans')
-  await page.getByLabel('Board 圖示', { exact: true }).selectOption('briefcase')
+  await page.getByRole('button', { name: /^Board 圖示/ }).click()
+  await page.getByRole('option', { name: '公事包', exact: true }).click()
   await page.getByRole('checkbox', { name: home.name, exact: true }).check()
   await save()
   await eventually('mobile Board update on Worker', async () =>
@@ -521,8 +529,14 @@ try {
   })
 
   await editProject('Out and about')
-  await page.getByRole('button', { name: '刪除 Project', exact: true }).click()
-  await page.getByRole('button', { name: '確認刪除', exact: true }).click()
+  await page
+    .getByRole('dialog')
+    .getByRole('button', { name: '刪除', exact: true })
+    .click()
+  await page
+    .getByRole('alertdialog')
+    .getByRole('button', { name: '永久刪除', exact: true })
+    .click()
   await eventually(
     'Project removal and Task/Board unlink on desktop',
     async () => {

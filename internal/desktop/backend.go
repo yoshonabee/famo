@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"famo/internal/agent"
@@ -32,6 +33,7 @@ type Config struct {
 	SyncConfigPath       string
 	UseDefaultSyncConfig bool
 	onSyncTasksChanged   func()
+	onSyncStatusChanged  func()
 	UseAPIPreference     bool // Used for the default desktop launch, without an explicit -addr.
 }
 
@@ -46,12 +48,14 @@ func DefaultDatabasePath() (string, error) {
 func DefaultAPIInfoPath() (string, error) { return agent.DefaultAPIInfoPath() }
 
 type Backend struct {
-	handler      http.Handler
-	external     http.Handler
-	store        *tasks.Store
-	apiAddr      string
-	apiInfoPath  string
-	syncActivity *syncclient.Activity
+	handler             http.Handler
+	external            http.Handler
+	store               *tasks.Store
+	apiAddr             string
+	apiInfoPath         string
+	syncActivity        *syncclient.Activity
+	syncPhase           atomic.Value
+	onSyncStatusChanged func()
 
 	mu       sync.Mutex
 	api      *runningAPI
@@ -109,6 +113,7 @@ func Start(cfg Config, assets fs.FS) (*Backend, error) {
 	b := &Backend{
 		store: store, syncActivity: syncclient.NewActivity(5 * time.Minute),
 		apiAddr: cfg.APIAddr, apiInfoPath: cfg.APIInfoPath,
+		onSyncStatusChanged: cfg.onSyncStatusChanged,
 	}
 	b.handler = b.observeSyncWrites(server.NewEmbedded(store, assets))
 	b.external = b.observeSyncWrites(server.NewDesktopAPI(store, assets))
@@ -140,6 +145,7 @@ func Start(cfg Config, assets fs.FS) (*Backend, error) {
 		return nil, fmt.Errorf("無法清除 Agent API 位址檔案：%w", err)
 	}
 	if err := b.startSync(cfg); err != nil {
+		b.setSyncPhase(syncclient.StatusError)
 		if cfg.SyncConfigPath != "" {
 			b.Close()
 			return nil, err
@@ -178,15 +184,49 @@ func (b *Backend) startSync(cfg Config) error {
 		return err
 	}
 	done := make(chan struct{})
+	b.setSyncPhase(syncclient.StatusPending)
 	go func() {
 		defer close(done)
-		runner.RunWhileActive(ctx, b.syncActivity, func(err error) { log.Printf("Sync: %v", err) })
+		runner.RunWhileActive(ctx, b.syncActivity, func(err error) { log.Printf("Sync: %v", err) }, b.setSyncPhase)
 	}()
 	b.stopSync = func() {
 		cancel()
 		<-done
 	}
 	return nil
+}
+
+func (b *Backend) setSyncPhase(phase syncclient.Status) {
+	b.syncPhase.Store(phase)
+	b.notifySyncStatus()
+}
+
+func (b *Backend) notifySyncStatus() {
+	if b.onSyncStatusChanged != nil {
+		b.onSyncStatusChanged()
+	}
+}
+
+func (b *Backend) syncStatus(ctx context.Context) (syncclient.Status, error) {
+	phase, ok := b.syncPhase.Load().(syncclient.Status)
+	if !ok {
+		return syncclient.StatusDisabled, nil
+	}
+	status, err := b.store.SyncStatus(ctx)
+	if err != nil {
+		return syncclient.StatusError, err
+	}
+	collections := status.Collections
+	switch {
+	case len(status.Conflicts) > 0 || (collections != nil && collections.Conflict != nil):
+		return syncclient.StatusConflict, nil
+	case len(status.Rejections) > 0 || (collections != nil && collections.Rejection != 0):
+		return syncclient.StatusError, nil
+	case phase == syncclient.StatusSynced && (status.Pending > 0 || (collections != nil && collections.Pending)):
+		return syncclient.StatusPending, nil
+	default:
+		return phase, nil
+	}
 }
 
 // Both the embedded window and the Agent API write through these handlers.
@@ -203,6 +243,9 @@ func (b *Backend) observeSyncWrites(next http.Handler) http.Handler {
 		next.ServeHTTP(response, r)
 		if status := response.Status(); status >= 200 && status < 300 {
 			b.syncActivity.RequestSync()
+			if b.syncPhase.Load() != nil {
+				b.notifySyncStatus()
+			}
 		}
 	})
 }

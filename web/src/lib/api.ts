@@ -1,4 +1,5 @@
 import { notifyTasksChanged } from '@/lib/desktop'
+import { isCloudWeb } from '@/lib/environment'
 import type { Locale } from '@/lib/i18n'
 
 export type Link = { url: string }
@@ -60,6 +61,10 @@ export async function request<T>(
   body?: unknown,
   signal?: AbortSignal,
 ): Promise<T> {
+  if (isCloudWeb) {
+    const { cloudRequest } = await import('./cloud-api')
+    return cloudRequest<T>(path, body)
+  }
   const res = await fetch(
     `/api${path}`,
     body === undefined

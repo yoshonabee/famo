@@ -22,6 +22,7 @@ import {
   PanelLeftOpen,
   Plus,
   PanelRightOpen,
+  Search,
   Settings,
   Trash2,
 } from 'lucide-react'
@@ -45,6 +46,8 @@ import {
   useTodayProjectFilter,
 } from '@/components/today-project-filter'
 import { useTheme } from '@/lib/theme'
+import { SyncStatusIndicator } from '@/components/sync-status-indicator'
+import { appRefetchInterval, isCloudWeb } from '@/lib/environment'
 import {
   isDesktop,
   openBoardEvent,
@@ -151,7 +154,7 @@ function App() {
     queryKey: ['tasks'],
     queryFn: ({ signal }) => request<Task[]>('/tasks', undefined, signal),
     enabled: !dragging && !ordering,
-    refetchInterval: 30_000,
+    refetchInterval: appRefetchInterval,
   })
   const [requestedView, setView] = useState<
     | 'active'
@@ -172,7 +175,7 @@ function App() {
   const boards = useQuery({
     queryKey: ['boards'],
     queryFn: ({ signal }) => request<Board[]>('/boards', undefined, signal),
-    refetchInterval: 30_000,
+    refetchInterval: appRefetchInterval,
   })
   const boardList = boards.data ?? []
   const sidebar = useSidebarPreferences()
@@ -191,7 +194,7 @@ function App() {
   const projects = useQuery({
     queryKey: ['projects'],
     queryFn: ({ signal }) => request<Project[]>('/projects', undefined, signal),
-    refetchInterval: 30_000,
+    refetchInterval: appRefetchInterval,
   })
   const projectList = projects.data ?? []
   const [projectId, setProjectId] = useState<string>()
@@ -231,6 +234,27 @@ function App() {
   const projectFiltered = isToday && todayFilter.hidden.length > 0
   const [search, setSearch] = useState('')
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [mobileNavOpen, setMobileNavOpen] = useState(false)
+  const [narrowCloud, setNarrowCloud] = useState(
+    () => isCloudWeb && window.matchMedia('(max-width: 700px)').matches,
+  )
+  useEffect(() => {
+    if (!isCloudWeb) return
+    const viewport = window.matchMedia('(max-width: 700px)')
+    const update = () => setNarrowCloud(viewport.matches)
+    viewport.addEventListener('change', update)
+    return () => viewport.removeEventListener('change', update)
+  }, [])
+  const compactSidebar = sidebarCollapsed && !narrowCloud
+  const mobileNavToggle = useRef<HTMLButtonElement>(null)
+  function closeMobileNav(restoreFocus = true) {
+    if (!mobileNavOpen) return
+    setMobileNavOpen(false)
+    if (mobileNavToggle.current?.getClientRects().length) {
+      if (restoreFocus) mobileNavToggle.current.focus({ preventScroll: true })
+      window.scrollTo(0, 0)
+    }
+  }
   const [palette, setPalette] = useState<
     'capture' | 'search' | 'global-search' | null
   >(null)
@@ -276,6 +300,7 @@ function App() {
     setPalette('capture')
   }
   function goToBoard(id: string) {
+    closeMobileNav()
     setBoardId(id)
     setView('board')
     setSelected(null)
@@ -284,6 +309,7 @@ function App() {
     window.scrollTo(0, 0)
   }
   function goToProject(id: string) {
+    closeMobileNav()
     setProjectId(id)
     setView('project')
     setSelected(null)
@@ -292,6 +318,7 @@ function App() {
     window.scrollTo(0, 0)
   }
   function goToToday(fromMenuBar = false) {
+    closeMobileNav()
     setDate(localDate())
     if (fromMenuBar) {
       setView('menu-bar-today')
@@ -318,7 +345,9 @@ function App() {
     if (projectEditor !== null || boardEditor !== null) return
     switch (action) {
       case 'sidebar':
-        setSidebarCollapsed((collapsed) => !collapsed)
+        if (mobileNavToggle.current?.getClientRects().length)
+          setMobileNavOpen((open) => !open)
+        else setSidebarCollapsed((collapsed) => !collapsed)
         break
       case 'capture':
         openCapture()
@@ -561,11 +590,23 @@ function App() {
   }
   const isActiveList = view === 'active' || view === 'project'
   const detail = all.find((t) => t.id === selected)
+  const editBoard =
+    boardEditor && boardEditor !== 'new'
+      ? boardsByNavId.get(`board:${boardEditor.id}`)
+      : undefined
   const searchField = <TaskSearch value={search} onChange={setSearch} />
   const SidebarIcon = sidebarCollapsed ? PanelLeftOpen : PanelLeftClose
   const sidebarAction = sidebarCollapsed
     ? t('expandSidebar')
     : t('collapseSidebar')
+  const mobileNavAction = t(mobileNavOpen ? 'collapseSidebar' : 'expandSidebar')
+  const MobileNavIcon = mobileNavOpen ? PanelLeftClose : PanelLeftOpen
+  function selectNavigation(
+    next: 'active' | 'completed' | 'recently-deleted' | 'preferences',
+  ) {
+    closeMobileNav()
+    setView(next)
+  }
   const navItems = new Map<string, PrimaryNavItem>([
     [
       'date',
@@ -588,7 +629,7 @@ function App() {
         current: view === 'active',
         ariaLabel: t('taskList'),
         count: active.length,
-        onSelect: () => setView('active'),
+        onSelect: () => selectNavigation('active'),
       },
     ],
     [
@@ -599,7 +640,7 @@ function App() {
         icon: CheckCheck,
         current: view === 'completed',
         count: all.length - active.length,
-        onSelect: () => setView('completed'),
+        onSelect: () => selectNavigation('completed'),
       },
     ],
   ])
@@ -629,9 +670,74 @@ function App() {
       order: orderedNavIds.map((id) => (visible.has(id) ? ids[index++] : id)),
     })
   }
+  const sidebarNavigation = (
+    <>
+      <PrimaryNavigation
+        items={visibleNavItems}
+        collapsed={compactSidebar}
+        error={errorText(boards.error)}
+        onReorder={reorderNavigation}
+        onCreate={() => setBoardEditor('new')}
+        onRetry={() => void boards.refetch()}
+      />
+      <ProjectNavigation
+        projects={
+          projectOrder.isPending
+            ? orderSubset(projectList, projectOrder.variables)
+            : projectList
+        }
+        current={currentProjectId}
+        collapsed={compactSidebar}
+        reordering={projectOrder.isPending}
+        error={errorText(projects.error)}
+        onSelect={goToProject}
+        onExpand={() => setSidebarCollapsed(false)}
+        onCreate={() => setProjectEditor('new')}
+        onEdit={(id) => setProjectEditor(projectsById.get(id) ?? null)}
+        onReorder={(ids) => projectOrder.mutate(ids)}
+        onRetry={() => void projects.refetch()}
+      />
+      <SidebarResizeHandle
+        width={sidebarWidth}
+        onResize={setResizingWidth}
+        onSave={(width) => sidebar.save({ width })}
+      />
+      <div className="sidebar-footer">
+        {orderedNavIds
+          .filter((id) => footerNavIds.has(id))
+          .map((id) => (
+            <NavigationButton key={id} item={navItems.get(id)!} />
+          ))}
+        <button
+          className={
+            view === 'recently-deleted' ? 'nav-item active' : 'nav-item'
+          }
+          onClick={() => selectNavigation('recently-deleted')}
+          aria-current={view === 'recently-deleted' ? 'page' : undefined}
+          aria-label={t('recentlyDeleted')}
+          title={t('recentlyDeleted')}
+        >
+          <Trash2 size={17} />
+          <span className="nav-label">{t('recentlyDeleted')}</span>
+        </button>
+        <button
+          className={view === 'preferences' ? 'nav-item active' : 'nav-item'}
+          onClick={() => selectNavigation('preferences')}
+          aria-current={view === 'preferences' ? 'page' : undefined}
+          aria-label={t('settings')}
+          title={t('settings')}
+        >
+          <Settings size={17} />
+          <span className="nav-label">{t('settings')}</span>
+        </button>
+      </div>
+    </>
+  )
   return (
     <div
-      className={sidebarCollapsed ? 'app-shell sidebar-collapsed' : 'app-shell'}
+      className={compactSidebar ? 'app-shell sidebar-collapsed' : 'app-shell'}
+      data-cloud-web={isCloudWeb || undefined}
+      data-mobile-nav-open={mobileNavOpen || undefined}
       data-has-batch-selection={chosenTasks.length > 0 || undefined}
       data-resizing-sidebar={resizingWidth !== null || undefined}
       style={
@@ -639,7 +745,17 @@ function App() {
       }
     >
       <div className="window-titlebar" aria-hidden="true" />
-      <aside className="sidebar" id="app-sidebar">
+      <aside
+        className="sidebar"
+        id="app-sidebar"
+        onKeyDown={(event) => {
+          if (
+            event.key === 'Escape' &&
+            mobileNavToggle.current?.getClientRects().length
+          )
+            closeMobileNav()
+        }}
+      >
         <div className="sidebar-heading">
           <a className="brand" href="/" aria-label="Famo">
             <span className="brand-mark" aria-hidden="true" />
@@ -657,66 +773,45 @@ function App() {
           >
             <SidebarIcon />
           </Button>
+          <div className="app-sync-status">
+            <SyncStatusIndicator />
+          </div>
+          {isCloudWeb && (
+            <div className="mobile-header-actions">
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                aria-label={t('searchAllTasks')}
+                onClick={() => {
+                  closeMobileNav(false)
+                  setPalette('global-search')
+                }}
+              >
+                <Search aria-hidden="true" />
+              </Button>
+              <Button
+                ref={mobileNavToggle}
+                type="button"
+                variant="ghost"
+                size="icon"
+                aria-label={mobileNavAction}
+                aria-controls="sidebar-navigation"
+                aria-expanded={mobileNavOpen}
+                onClick={() => setMobileNavOpen((open) => !open)}
+              >
+                <MobileNavIcon aria-hidden="true" />
+              </Button>
+            </div>
+          )}
         </div>
-        <PrimaryNavigation
-          items={visibleNavItems}
-          collapsed={sidebarCollapsed}
-          error={errorText(boards.error)}
-          onReorder={reorderNavigation}
-          onCreate={() => setBoardEditor('new')}
-          onRetry={() => void boards.refetch()}
-        />
-        <ProjectNavigation
-          projects={
-            projectOrder.isPending
-              ? orderSubset(projectList, projectOrder.variables)
-              : projectList
-          }
-          current={currentProjectId}
-          collapsed={sidebarCollapsed}
-          reordering={projectOrder.isPending}
-          error={errorText(projects.error)}
-          onSelect={goToProject}
-          onExpand={() => setSidebarCollapsed(false)}
-          onCreate={() => setProjectEditor('new')}
-          onEdit={(id) => setProjectEditor(projectsById.get(id) ?? null)}
-          onReorder={(ids) => projectOrder.mutate(ids)}
-          onRetry={() => void projects.refetch()}
-        />
-        <SidebarResizeHandle
-          width={sidebarWidth}
-          onResize={setResizingWidth}
-          onSave={(width) => sidebar.save({ width })}
-        />
-        <div className="sidebar-footer">
-          {orderedNavIds
-            .filter((id) => footerNavIds.has(id))
-            .map((id) => (
-              <NavigationButton key={id} item={navItems.get(id)!} />
-            ))}
-          <button
-            className={
-              view === 'recently-deleted' ? 'nav-item active' : 'nav-item'
-            }
-            onClick={() => setView('recently-deleted')}
-            aria-current={view === 'recently-deleted' ? 'page' : undefined}
-            aria-label={t('recentlyDeleted')}
-            title={t('recentlyDeleted')}
-          >
-            <Trash2 size={17} />
-            <span className="nav-label">{t('recentlyDeleted')}</span>
-          </button>
-          <button
-            className={view === 'preferences' ? 'nav-item active' : 'nav-item'}
-            onClick={() => setView('preferences')}
-            aria-current={view === 'preferences' ? 'page' : undefined}
-            aria-label={t('settings')}
-            title={t('settings')}
-          >
-            <Settings size={17} />
-            <span className="nav-label">{t('settings')}</span>
-          </button>
-        </div>
+        {narrowCloud ? (
+          <div className="sidebar-navigation" id="sidebar-navigation">
+            {sidebarNavigation}
+          </div>
+        ) : (
+          sidebarNavigation
+        )}
       </aside>
       <main onClick={selection.onBackgroundClick}>
         <div
@@ -948,6 +1043,7 @@ function App() {
           <BoardEditor
             key={boardEditor === 'new' ? 'new' : boardEditor.id}
             board={boardEditor === 'new' ? undefined : boardEditor}
+            latestBoard={editBoard}
             projects={projects.data}
             projectsError={errorText(projects.error)}
             onRetryProjects={() => void projects.refetch()}

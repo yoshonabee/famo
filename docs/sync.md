@@ -1,10 +1,12 @@
 # 跨裝置同步
 
-Mac 仍可離線使用 SQLite。設好同步後，Mac 背景會推送任務異動並拉取遠端結果。手機從同一個 HTTPS 網域開啟 Famo，可以看任務、新增任務、勾選完成和恢復待辦。同步涵蓋任務內容、日期、連結、完成狀態、刪除和還原，也包含 Project 的名稱、顏色、順序及 Board 的名稱、圖示和 Project 篩選。手機可用「任務範圍」切換檢視，在「管理 Project 與 Board」新增、編輯或刪除。刪除 Project 後，原本的任務會顯示為未分類，相關 Board 會移除該篩選。Mac 的 Project Agent 工作區路徑和提示詞、任務的手動排序、側欄順序和外觀偏好各自留在本機。
+Mac 仍可離線使用 SQLite。設好同步後，Mac 背景會推送任務異動並拉取遠端結果。手機從同一個 HTTPS 網域開啟共用的 Famo React 介面，使用「今日」、任務、已完成、最近刪除、Project、Board 和全域搜尋，也可編輯日期、備註和連結。同步涵蓋任務內容、日期、連結、完成狀態、刪除和還原，也包含 Project 的名稱、顏色、順序及 Board 的名稱、圖示和 Project 篩選。手機可從右上角展開側邊欄切換檢視，或新增、編輯和刪除 Project 與 Board。刪除 Project 後，原本的任務會顯示為未分類，相關 Board 會移除該篩選。Mac 的 Project Agent 工作區路徑和提示詞、任務的手動排序、側欄順序和外觀偏好各自留在本機。
 
 啟用同步會把這份 SQLite 中的任務、Project 和 Board 傳到所指定的 Worker 和 D1。D1 保留已接受的任務版本和刪除紀錄，本機「最近刪除」到期後仍可供其他裝置同步。建議先用測試資料庫驗證部署，再設定日常使用的資料庫。同一份資料庫的同步紀錄會綁定網址和帳號。搬到另一個 Worker 或帳號時，用另一份本機資料庫開始。
 
-Mac 活躍時預設每 30 秒同步一次，可在 `famo-sync.json` 設定 `interval_seconds`。Famo 閒置 5 分鐘後暫停輪詢。再次操作 Famo、切回視窗、開啟選單列面板，或透過 Famo 或 Agent API 寫入任務、Project 或 Board 時，Mac 會主動同步。閒置期間遠端變更會在下次同步時顯示。手機網頁在前景每 10 秒拉取一次，回到頁面、恢復連線或按「同步」也會拉取。
+Mac 活躍時預設每 30 秒同步一次，可在 `famo-sync.json` 設定 `interval_seconds`。Famo 閒置 5 分鐘後暫停輪詢。再次操作 Famo、切回視窗、開啟選單列面板，或透過 Famo 或 Agent API 寫入任務、Project 或 Board 時，Mac 會主動同步。閒置期間遠端變更會在下次同步時顯示。手機網頁在前景每 10 秒拉取一次，回到頁面、恢復連線或按「同步」也會拉取。網頁會在目前分頁保存尚未確認的寫入，重新載入時用相同的操作 ID 重試。網頁的手動任務排序、外觀和語言會保存在瀏覽器。
+
+Mac 主視窗和選單列面板以及手機網頁會顯示同步燈號與文字。綠燈表示最近同步成功且沒有待送異動。黃燈表示同步中、等待異動送出或等待連線。紅燈表示同步失敗或需處理版本衝突。按燈號可立即同步。
 
 ## 本機驗證
 
@@ -95,6 +97,7 @@ Project 和 Board 共用一個集合版本，讓 Board 的篩選關聯可與 Pro
 ## 協定 v1
 
 - `POST /api/sync/push` 接收 `operation_id`、`task_id`、`base_version` 和完整 `task`。新任務的 base version 為 0，其餘操作以最後讀到的版本為 base，提交版本為 base + 1。請求上限為 2 MiB，單筆任務文件上限為 1.5 MiB。重送同一個操作 ID 及內容會得到原本的 `{change:{sequence,task}}`。版本衝突回傳 HTTP 409 與 `{current}`，不新增變更或確認紀錄。
+- `POST /api/sync/push-batch` 接收 `{operations:[...]}`，一次提交多筆上述操作。批次內的任務 ID 和操作 ID 各自必須唯一。整批成功時，按原請求順序回傳 `{changes:[...]}`，完整重送會取得原本的結果。版本衝突或只有部分操作已有紀錄時，整批回傳 HTTP 409。請求上限為 2,000,000 位元組，單筆任務仍適用 1.5 MiB 上限。 [D1 限制](https://developers.cloudflare.com/d1/platform/limits/)
 - `GET /api/sync/pull?after=0` 依序回傳 `{changes,cursor,has_more}`，下一頁從回傳的 cursor 繼續。單頁最多 20 筆和 4 MiB 的任務內容。刪除以包含 `deleted_at` 的任務快照傳送，清空欄位代表還原。
 - `GET /api/sync/collections` 讀取 `{version,projects,boards}`。用 `POST` 送出 `{operation_id,base_version,projects,boards}` 原子更新集合，衝突回傳 `409 {current}`，重送同一操作會得到原始回應。
 - `X-Famo-Sync-Account` 可用來核對伺服器解析的內部帳號。Go 與 TypeScript 的共用案例見 [protocol-v1.json](../sync/protocol-v1.json)。

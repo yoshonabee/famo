@@ -55,14 +55,24 @@ func New(ctx context.Context, store *tasks.Store, cfg Config, onTasksChanged fun
 
 // Run polls continuously for headless callers.
 func (r *Runner) Run(ctx context.Context, report func(error)) {
-	r.RunWhileActive(ctx, nil, report)
+	r.RunWhileActive(ctx, nil, report, nil)
 }
 
 // RunWhileActive pauses polling while the desktop is idle.
-func (r *Runner) RunWhileActive(ctx context.Context, activity *Activity, report func(error)) {
+func (r *Runner) RunWhileActive(ctx context.Context, activity *Activity, report func(error), update func(Status)) {
 	var previous string
 	runPolling(ctx, r.interval, activity, func() {
-		if err := r.Sync(ctx); err != nil && err.Error() != previous && ctx.Err() == nil {
+		if update != nil {
+			update(StatusSyncing)
+		}
+		more, err := r.sync(ctx)
+		if ctx.Err() != nil {
+			return
+		}
+		if update != nil {
+			update(cycleStatus(more, err))
+		}
+		if err != nil && err.Error() != previous {
 			report(err)
 			previous = err.Error()
 		} else if err == nil {
@@ -98,13 +108,19 @@ func (r *Runner) credentials(ctx context.Context) (credentials, error) {
 }
 
 func (r *Runner) Sync(ctx context.Context) error {
+	_, err := r.sync(ctx)
+	return err
+}
+
+func (r *Runner) sync(ctx context.Context) (bool, error) {
 	auth, err := r.credentials(ctx)
 	if err != nil {
-		return err
+		return false, err
 	}
 	collectionsErr := r.syncCollections(ctx, auth)
 	pushErr := r.push(ctx, auth)
-	return errors.Join(collectionsErr, pushErr, r.pull(ctx, auth))
+	more, pullErr := r.pull(ctx, auth)
+	return more, errors.Join(collectionsErr, pushErr, pullErr)
 }
 
 // Limit work per poll so a large outbox does not starve remote changes.
@@ -172,19 +188,19 @@ func (r *Runner) pushOperation(ctx context.Context, auth credentials, op tasks.S
 	return fmt.Errorf("sync push for task %s returned HTTP %d", op.TaskID, resp.StatusCode)
 }
 
-func (r *Runner) pull(ctx context.Context, auth credentials) error {
+func (r *Runner) pull(ctx context.Context, auth credentials) (bool, error) {
 	cursor, err := r.store.SyncCursor(ctx)
 	if err != nil {
-		return err
+		return false, err
 	}
 	for range 10 {
 		next, more, err := r.pullPage(ctx, auth, cursor)
 		if err != nil || !more {
-			return err
+			return false, err
 		}
 		cursor = next
 	}
-	return nil
+	return true, nil
 }
 
 func (r *Runner) pullPage(ctx context.Context, auth credentials, cursor int64) (int64, bool, error) {

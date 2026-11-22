@@ -13,15 +13,24 @@ import (
 
 // SyncSettings lets the desktop UI edit the same file read on startup.
 type SyncSettings struct {
-	path   string
-	dbPath string
-	store  *tasks.Store
+	path    string
+	dbPath  string
+	store   *tasks.Store
+	backend *Backend
 }
 
 type SyncSettingsState struct {
 	Path                   string             `json:"path"`
 	Config                 *syncclient.Config `json:"config"`
 	DefaultIntervalSeconds int                `json:"default_interval_seconds"`
+}
+
+func (s *SyncSettings) RuntimeStatus(ctx context.Context) (syncclient.Status, error) {
+	return s.backend.syncStatus(ctx)
+}
+
+func (s *SyncSettings) RequestSync() {
+	s.backend.syncActivity.RequestSync()
 }
 
 func (s *SyncSettings) Status() (SyncSettingsState, error) {

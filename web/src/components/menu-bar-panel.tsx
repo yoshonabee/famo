@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ArrowUpRight, Circle, RefreshCw } from 'lucide-react'
 import { MenuBarBoardPicker } from '@/components/menu-bar-board-picker'
+import { SyncStatusIndicator } from '@/components/sync-status-indicator'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { ApiError, request, type Board, type Task } from '@/lib/api'
@@ -240,8 +241,9 @@ export function MenuBarPanel() {
           </ul>
         )}
       </div>
-      <footer className="menu-bar-version">
-        famo {import.meta.env.FAMO_VERSION}
+      <footer className="menu-bar-version flex items-center justify-end gap-2">
+        <SyncStatusIndicator />
+        <span>famo {import.meta.env.FAMO_VERSION}</span>
       </footer>
     </div>
   )

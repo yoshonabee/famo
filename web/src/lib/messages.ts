@@ -39,6 +39,19 @@ export const messages = {
     'Board 已更新。請重新開啟編輯視窗以取得最新設定。',
     'This Board has changed. Reopen the editor to see its latest settings.',
   ],
+  boardCloudConflict: [
+    '同步時 Board 已更新。請核對最新設定與草稿後再儲存。',
+    'This Board changed during sync. Review the latest settings and your draft before saving.',
+  ],
+  boardCloudCreateConflict: [
+    '同步時 Board 清單已更新。草稿已保留，可以再試一次。',
+    'The Board list changed during sync. Your draft is ready to retry.',
+  ],
+  latestBoardSettings: [
+    '最新名稱為「{1}」，顯示的 Projects 為 {2}。',
+    'The latest name is “{1}” and its Projects are {2}.',
+  ],
+  reviewBoardDraft: ['保留草稿', 'Keep draft'],
   boardEditorDescription: [
     '設定 Board 名稱、圖示和顯示的 Projects。',
     'Name the Board, choose an icon, and select which Projects it shows.',
@@ -275,6 +288,13 @@ export const messages = {
     'Could not load tasks. Try again.',
   ],
   syncSettings: ['跨裝置同步', 'Cross-device sync'],
+  syncNow: ['同步', 'Sync now'],
+  syncStatusPending: ['等待同步', 'Pending sync'],
+  syncStatusSyncing: ['同步中', 'Syncing'],
+  syncStatusOffline: ['等待連線', 'Offline'],
+  syncStatusSynced: ['已同步', 'Synced'],
+  syncStatusError: ['同步失敗', 'Sync failed'],
+  syncStatusConflict: ['同步衝突', 'Sync conflict'],
   syncURL: ['同步網址', 'Sync URL'],
   syncAccount: ['同步帳號', 'Sync account'],
   syncInterval: ['輪詢間隔（秒）', 'Polling interval (seconds)'],
@@ -408,6 +428,10 @@ export const messages = {
   projectColorPicker: ['Project 調色盤', 'Project color picker'],
   projectCompleted: ['Project 已完成', 'Completed Project tasks'],
   projectCompletedTasks: ['Project 已完成任務', 'Completed Project tasks'],
+  projectCloudCreateConflict: [
+    '同步時 Project 清單已更新。草稿已保留，可以再試一次。',
+    'The Project list changed during sync. Your draft is ready to retry.',
+  ],
   projectConflict: [
     'Project 已更新，目前名稱為「{1}」。請確認後再儲存。',
     'This Project has changed. Its current name is “{1}”. Review it before saving.',
@@ -415,6 +439,10 @@ export const messages = {
   projectEditorDescription: [
     '編輯 Project 名稱、顏色和 Agent 工作區。',
     'Edit the Project name, color, and Agent workspace.',
+  ],
+  cloudProjectEditorDescription: [
+    '編輯 Project 的名稱與顏色。',
+    'Edit the Project name and color.',
   ],
   projectFilterCaptureHint: [
     '直接在清單上方新增的任務會儲存為未分類，並依篩選隱藏。',

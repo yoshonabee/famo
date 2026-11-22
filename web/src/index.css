@@ -1191,6 +1191,29 @@ button:disabled {
 .sidebar-collapsed .sidebar-resize-handle {
   display: none;
 }
+.mobile-header-actions,
+.app-sync-status:empty {
+  display: none;
+}
+.sidebar-heading:has(.app-sync-status:not(:empty)) {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  row-gap: 6px;
+}
+.sidebar-collapsed .sidebar-heading:has(.app-sync-status:not(:empty)) {
+  grid-template-columns: 1fr;
+  justify-items: center;
+}
+.app-sync-status {
+  grid-column: 1 / -1;
+  padding: 0 8px 6px;
+}
+.sidebar-collapsed .app-sync-status {
+  padding-inline: 0;
+}
+.sidebar-collapsed .app-sync-status button > span:last-child {
+  display: none;
+}
 .sidebar-heading {
   display: flex;
   align-items: center;
@@ -2098,6 +2121,115 @@ input.todo-title {
   }
   .draft-row .todo-title {
     flex: 1;
+  }
+}
+
+@media (max-width: 700px) {
+  .app-shell[data-cloud-web] {
+    --sidebar-width: 0px;
+  }
+  [data-cloud-web] > .sidebar {
+    position: sticky;
+    z-index: 15;
+    inset: 0 auto auto;
+    display: block;
+    padding: 0;
+  }
+  [data-cloud-web] > .sidebar > .sidebar-heading {
+    display: flex;
+    gap: 4px;
+    min-height: 56px;
+    padding: 4px 8px;
+  }
+  [data-cloud-web] .sidebar-heading > .sidebar-toggle {
+    display: none;
+  }
+  [data-cloud-web] .brand {
+    font-size: 18px;
+    gap: 5px;
+    min-height: 44px;
+  }
+  [data-cloud-web] .brand-mark {
+    width: 24px;
+    height: 24px;
+  }
+  [data-cloud-web] .app-sync-status {
+    margin-left: auto;
+    padding: 0;
+  }
+  [data-cloud-web] .mobile-header-actions {
+    display: flex;
+    flex-shrink: 0;
+  }
+  .mobile-header-actions > button {
+    width: 44px;
+    height: 44px;
+  }
+  [data-cloud-web] .sidebar-navigation {
+    display: none;
+  }
+  [data-cloud-web][data-mobile-nav-open] .sidebar-navigation {
+    display: grid;
+    grid-auto-rows: max-content;
+    align-content: start;
+    gap: 8px;
+    max-height: min(60dvh, 540px);
+    overflow-y: auto;
+    border-top: 1px solid var(--border);
+    padding: 8px 12px 12px;
+    overscroll-behavior: contain;
+  }
+  [data-cloud-web] .sidebar-main-nav,
+  [data-cloud-web] .sidebar-collection,
+  [data-cloud-web] .sidebar-navigation > .sidebar-footer {
+    display: grid;
+    align-items: stretch;
+    margin: 0;
+  }
+  [data-cloud-web] .sidebar-nav-list,
+  [data-cloud-web] .sidebar-collection-list {
+    display: grid;
+    overflow: visible;
+  }
+  [data-cloud-web] .sidebar-navigation .nav-item {
+    width: 100%;
+    min-height: 44px;
+    max-width: none;
+  }
+  [data-cloud-web] .sidebar-navigation .sidebar-add-board .nav-label {
+    display: inline;
+  }
+  [data-cloud-web] .sidebar-navigation .sidebar-row-action {
+    flex-basis: 44px;
+  }
+  [data-cloud-web] .capture-entry input {
+    font-size: 16px;
+    min-width: 0;
+  }
+  [data-cloud-web] .capture-entry > button {
+    height: 44px;
+    min-width: 44px;
+  }
+  [data-cloud-web] .todo-line {
+    min-height: 48px;
+    grid-template-columns: 24px 28px minmax(0, 1fr) auto 36px;
+    column-gap: 2px;
+  }
+  [data-cloud-web] .todo-line > :is(.drag-handle, .row-detail-button),
+  [data-cloud-web] .todo-line > .date-picker > .row-action-button {
+    min-height: 36px;
+  }
+  [data-cloud-web] .todo-line > [role='checkbox'] {
+    position: relative;
+    justify-self: center;
+  }
+  [data-cloud-web] .todo-line > [role='checkbox']::after {
+    content: '';
+    position: absolute;
+    inset: -8px -5px;
+  }
+  [data-cloud-web] .row-detail-button {
+    width: 36px;
   }
 }
 

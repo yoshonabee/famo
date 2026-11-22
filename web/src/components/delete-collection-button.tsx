@@ -9,6 +9,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { ApiError, request } from '@/lib/api'
+import { isCloudWeb } from '@/lib/environment'
 import { useLanguage } from '@/lib/i18n'
 
 type Item = { id: string; name: string; version: number }
@@ -45,6 +46,8 @@ export function DeleteCollectionButton({
       if (collection === 'projects') {
         void client.invalidateQueries({ queryKey: ['boards'] })
         void client.invalidateQueries({ queryKey: ['tasks'] })
+      } else if (isCloudWeb) {
+        void client.invalidateQueries({ queryKey: ['projects'] })
       }
     },
     onError: (error) => {

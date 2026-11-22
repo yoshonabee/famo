@@ -4,7 +4,7 @@ const address = 'http://127.0.0.1:8796'
 
 export default defineConfig({
   testDir: './e2e',
-  testMatch: '**/sync-mobile.spec.ts',
+  testMatch: '**/sync-*.spec.ts',
   use: {
     ...devices['Pixel 7'],
     baseURL: address,
@@ -12,7 +12,7 @@ export default defineConfig({
   },
   webServer: {
     command:
-      'vite preview --config vite.sync.config.ts --host 127.0.0.1 --port 8796 --strictPort',
+      'vite preview --mode sync --host 127.0.0.1 --port 8796 --strictPort',
     url: address,
     reuseExistingServer: false,
   },
