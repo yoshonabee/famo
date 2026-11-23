@@ -39,6 +39,9 @@ test('手機可用鍵盤切換設定分類並保留兩處未儲存的草稿', as
     name: '一般',
     exact: true,
   })
+  await expect(
+    generalSettings.getByRole('checkbox', { name: '登入 Mac 時自動開啟 Famo' }),
+  ).toHaveCount(0)
   for (const name of ['語言', '側邊欄', '本機資料']) {
     await expect(generalSettings.getByRole('region', { name })).toBeVisible()
   }

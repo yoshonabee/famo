@@ -41,6 +41,7 @@ func Run(cfg Config) error {
 			application.NewService(agentTools),
 			application.NewService(syncSettings),
 			application.NewService(language),
+			application.NewService(&LoginItem{}),
 		},
 		SingleInstance: &application.SingleInstanceOptions{
 			UniqueID: "io.github.yoshonabee.famo",
@@ -116,10 +117,13 @@ func Run(cfg Config) error {
 	})
 	if backend.stopSync != nil {
 		app.Event.On("famo:sync-activity", func(*application.CustomEvent) { backend.syncActivity.Interacted() })
-		mainWindow.OnWindowEvent(events.Mac.WindowDidBecomeKey, func(*application.WindowEvent) {
-			backend.syncActivity.RequestSync()
-		})
 	}
+	mainWindow.OnWindowEvent(events.Mac.WindowDidBecomeKey, func(*application.WindowEvent) {
+		mainWindow.EmitEvent("famo:login-item-refresh")
+		if backend.stopSync != nil {
+			backend.syncActivity.RequestSync()
+		}
+	})
 	mainWindow.RegisterHook(events.Common.WindowClosing, func(event *application.WindowEvent) {
 		event.Cancel()
 		mainWindow.Hide()
