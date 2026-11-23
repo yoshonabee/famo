@@ -273,6 +273,29 @@ export const messages = {
   livePreview: ['即時預覽', 'Live preview'],
   loadBoardFailed: ['無法讀取 Board。', 'Could not load Board.'],
   loading: ['讀取中…', 'Loading…'],
+  loginItemStartup: ['啟動', 'Startup'],
+  loginItemAtLogin: ['登入 Mac 時自動開啟 Famo', 'Open Famo at login'],
+  loginItemUnavailable: [
+    '請從 Famo.app 開啟桌面版以使用此設定。',
+    'Open the desktop app from Famo.app to use this setting.',
+  ],
+  loginItemApproval: [
+    '請在 macOS 的「登入項目」中允許 Famo，才能在登入時自動開啟。',
+    'Allow Famo in macOS Login Items so it can open at login.',
+  ],
+  loginItemOpenSettings: ['開啟登入項目設定', 'Open Login Items Settings'],
+  loginItemLoadFailed: [
+    '無法讀取登入項目設定。',
+    'Could not read the login item setting.',
+  ],
+  loginItemSaveFailed: [
+    '無法變更登入項目設定。',
+    'Could not change the login item setting.',
+  ],
+  loginItemOpenFailed: [
+    '無法開啟登入項目設定。',
+    'Could not open Login Items Settings.',
+  ],
   loadingAgentTools: ['正在讀取 Agent 工具設定…', 'Loading Agent tools…'],
   loadingProjects: ['載入 Project 中…', 'Loading Projects…'],
   loadingToday: ['正在讀取今日任務…', "Loading today's tasks…"],

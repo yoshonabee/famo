@@ -29,6 +29,9 @@ export async function initializeDesktop(onTasksChanged: () => void) {
       passive: true,
     })
   }
+  Events.On(loginItemRefreshEvent, () => {
+    window.dispatchEvent(new Event(loginItemRefreshEvent))
+  })
   Events.On(openSettingsEvent, () => {
     window.dispatchEvent(new Event(openSettingsEvent))
   })
@@ -54,6 +57,7 @@ export async function initializeDesktop(onTasksChanged: () => void) {
     true,
   )
 }
+export const loginItemRefreshEvent = 'famo:login-item-refresh'
 export const openSettingsEvent = 'famo:open-settings'
 export const openBoardEvent = 'famo:open-board'
 export const shortcutEvent = 'famo:shortcut'
@@ -188,4 +192,23 @@ export async function copyText(text: string) {
   } else {
     await navigator.clipboard.writeText(text)
   }
+}
+
+export type LoginItemStatus = 'off' | 'on' | 'requiresApproval' | 'unavailable'
+
+export async function readLoginItemStatus() {
+  const { Call } = await import('@wailsio/runtime')
+  return (await Call.ByName(
+    'famo/internal/desktop.LoginItem.Status',
+  )) as LoginItemStatus
+}
+
+export async function setLoginItemEnabled(enabled: boolean) {
+  const { Call } = await import('@wailsio/runtime')
+  await Call.ByName('famo/internal/desktop.LoginItem.SetEnabled', enabled)
+}
+
+export async function openLoginItemSettings() {
+  const { Call } = await import('@wailsio/runtime')
+  await Call.ByName('famo/internal/desktop.LoginItem.OpenSettings')
 }

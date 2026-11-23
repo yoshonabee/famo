@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import { AgentPreferences } from '@/components/agent-preferences'
 import { AppearancePreferences } from '@/components/appearance-preferences'
 import { DataCleanupPreferences } from '@/components/data-cleanup-preferences'
+import { LoginItemPreferences } from '@/components/login-item-preferences'
 import { SyncPreferences } from '@/components/sync-preferences'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -63,6 +64,9 @@ export function PreferencesPage({
               )}
             </div>
           </section>
+          {isDesktop() && open && activeSection === 'general' && (
+            <LoginItemPreferences />
+          )}
           <section aria-labelledby="preferences-sidebar-heading">
             <h3 id="preferences-sidebar-heading">{t('sidebar')}</h3>
             <div className="preferences-card">
