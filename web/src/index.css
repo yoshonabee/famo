@@ -1210,9 +1210,6 @@ button:disabled {
 .sidebar-collapsed .app-sync-status {
   padding-inline: 0;
 }
-.sidebar-collapsed .app-sync-status .sync-status-action > span:last-child {
-  display: none;
-}
 .sync-status-indicator {
   position: relative;
   display: inline-flex;
@@ -1228,9 +1225,8 @@ button:disabled {
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 8px 10px;
-  background: var(--background);
-  color: var(--foreground);
-  box-shadow: 0 4px 14px rgb(0 0 0 / 14%);
+  background: var(--sidebar);
+  color: var(--muted-foreground);
   font-size: 12px;
   text-align: start;
 }

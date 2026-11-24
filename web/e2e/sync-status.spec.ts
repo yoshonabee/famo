@@ -23,41 +23,48 @@ test('reports initial sync, disconnection, failure, and manual recovery', async 
   })
 
   const status = page.getByRole('button', { name: '同步', exact: true })
-  const details = page.getByRole('button', { name: '同步詳細資訊' })
+  const details = page.getByRole('tooltip')
   try {
     await page.goto('/')
     await expect(status).toHaveAttribute('data-sync-status', 'syncing')
     await expect(status).toHaveAccessibleDescription('同步中')
-    await details.tap()
-    await expect(page.getByText('尚未成功同步')).toBeVisible()
-    await expect(page.getByText('待同步異動：0 筆')).toBeVisible()
-    await details.tap()
-    await expect(page.getByText('尚未成功同步')).toBeHidden()
+    await expect(details).toBeHidden()
+    await expect(status).toHaveText('')
+    await status.hover()
+    await expect(details).toContainText('同步中')
+    await expect(details).toContainText('尚未成功同步')
+    await expect(details).toContainText('待同步異動：0 筆')
+    await page.mouse.move(0, 0)
+    await expect(details).toBeHidden()
   } finally {
     releasePull()
   }
   await expect(status).toHaveAttribute('data-sync-status', 'synced')
   await expect(status).toHaveAccessibleDescription('已同步')
-  await details.tap()
+  await status.hover()
   await expect(page.getByText('上次同步：剛剛')).toBeVisible()
-  await details.tap()
+  await page.mouse.move(0, 0)
 
   await context.setOffline(true)
   await expect(status).toHaveAttribute('data-sync-status', 'offline')
   await expect(status).toHaveAccessibleDescription('離線')
+  await page.clock.fastForward(6000)
+  await status.hover()
+  await expect(details).toContainText(/上次同步：\d+ 秒前/)
+  await page.mouse.move(0, 0)
 
   await context.setOffline(false)
   failPull = true
   await status.tap()
   await expect(status).toHaveAttribute('data-sync-status', 'error')
-  await expect(status).toHaveAccessibleDescription('同步失敗')
+  await expect(details).toContainText('同步失敗')
 
   failPull = false
   await status.tap()
   await expect(status).toHaveAttribute('data-sync-status', 'synced')
 })
 
-test('updates the English relative time while sync details are open', async ({
+test('keeps the relative time fixed until sync details are reopened', async ({
   context,
   page,
 }) => {
@@ -70,22 +77,30 @@ test('updates the English relative time while sync details are open', async ({
     route.fulfill({ json: { changes: [], cursor: 0, has_more: false } }),
   )
   await page.goto('/')
-  await expect(page.locator('[data-sync-status]')).toHaveAttribute(
-    'data-sync-status',
-    'synced',
-  )
+  const status = page.getByRole('button', { name: 'Sync now' })
+  await expect(status).toHaveAttribute('data-sync-status', 'synced')
   await context.setOffline(true)
-  await page.getByRole('button', { name: 'Sync details' }).tap()
+  await status.hover()
   await expect(page.getByText('Last synced: just now')).toBeVisible()
   await expect(page.getByText('Unsynced changes: 0')).toBeVisible()
 
   await page.clock.fastForward(6000)
+  await expect(page.getByText('Last synced: just now')).toBeVisible()
+  await page.mouse.move(0, 0)
+  await status.hover()
   await expect(page.getByText('Last synced: 6 seconds ago')).toBeVisible()
   await page.clock.fastForward(54_000)
+  await expect(page.getByText('Last synced: 6 seconds ago')).toBeVisible()
+  await page.mouse.move(0, 0)
+  await status.hover()
   await expect(page.getByText('Last synced: 1 minute ago')).toBeVisible()
   await page.clock.fastForward(3_540_000)
+  await page.mouse.move(0, 0)
+  await status.hover()
   await expect(page.getByText('Last synced: 1 hour ago')).toBeVisible()
   await page.clock.fastForward(82_800_000)
+  await page.mouse.move(0, 0)
+  await status.hover()
   await expect(page.getByText('Last synced: 1 day ago')).toBeVisible()
 })
 

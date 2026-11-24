@@ -1,6 +1,60 @@
 import { expect, test, type WebSocketRoute } from '@playwright/test'
 import type { Change, Operation } from '../src/lib/cloud-transport'
 
+test('loads the startup history in one larger pull and defaults to smaller incremental pulls', async ({
+  page,
+}) => {
+  let socket: WebSocketRoute | undefined
+  const pulls: { after: number; limit: string | null }[] = []
+  let count = 320
+  await page.routeWebSocket('**/api/sync/events?protocol=1', (route) => {
+    socket = route
+  })
+  await page.route('**/api/sync/collections', (route) =>
+    route.fulfill({ json: { version: 0, projects: [], boards: [] } }),
+  )
+  await page.route('**/api/sync/pull?*', (route) => {
+    const query = new URL(route.request().url()).searchParams
+    const after = Number(query.get('after'))
+    const limit = query.get('limit')
+    pulls.push({ after, limit })
+    const cursor = Math.min(after + Number(limit ?? 20), count)
+    const changes = Array.from({ length: cursor - after }, (_, index) => {
+      const sequence = after + index + 1
+      return {
+        sequence,
+        task: {
+          id: 'remote-task',
+          title: `Remote version ${sequence}`,
+          scheduled_date: '',
+          description: '',
+          completed_at: null,
+          deleted_at: null,
+          created_at: '2026-01-01T00:00:00Z',
+          updated_at: '2026-01-01T00:00:00Z',
+          version: sequence,
+          links: [],
+        },
+      }
+    })
+    return route.fulfill({
+      json: { changes, cursor, has_more: cursor < count },
+    })
+  })
+
+  await page.goto('/')
+  await expect(page.getByText('Remote version 320')).toBeVisible()
+  expect(pulls).toEqual([{ after: 0, limit: '1000' }])
+
+  count++
+  socket?.send(JSON.stringify({ type: 'tasks', sequence: count }))
+  await expect(page.getByText('Remote version 321')).toBeVisible()
+  expect(pulls).toEqual([
+    { after: 0, limit: '1000' },
+    { after: 320, limit: null },
+  ])
+})
+
 test('keeps the background socket and catches up once when returning to the foreground', async ({
   page,
 }) => {

@@ -324,7 +324,6 @@ export const messages = {
   syncStatusSynced: ['已同步', 'Synced'],
   syncStatusError: ['同步失敗', 'Sync failed'],
   syncStatusConflict: ['同步衝突', 'Sync conflict'],
-  syncDetails: ['同步詳細資訊', 'Sync details'],
   syncLastSuccessfulAt: ['上次同步：{1}', 'Last synced: {1}'],
   syncJustNow: ['剛剛', 'just now'],
   syncNotYetSuccessful: ['尚未成功同步', 'No successful sync yet'],
