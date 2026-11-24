@@ -94,6 +94,7 @@ import {
   dateTime,
   orderSubset,
   request,
+  updateCloudTaskQueries,
   type Action,
   type Board,
   type Project,
@@ -491,6 +492,7 @@ function App() {
         version: t.version,
       }),
     onSuccess: (t) => {
+      if (isCloudWeb) return updateCloudTaskQueries(client)
       client.setQueryData<Task[]>(['tasks'], (old) =>
         t.deleted_at
           ? old?.filter((item) => item.id !== t.id)
@@ -515,6 +517,11 @@ function App() {
         tasks: items.map(({ id, version }) => ({ id, version })),
       }),
     onSuccess: async (updated) => {
+      if (isCloudWeb) {
+        await updateCloudTaskQueries(client)
+        selection.clear()
+        return
+      }
       await client.cancelQueries({ queryKey: ['tasks'] })
       const updatedById = new Map(updated.map((task) => [task.id, task]))
       client.setQueryData<Task[]>(['tasks'], (old) =>
@@ -529,7 +536,10 @@ function App() {
       setMessage({ error: error.message })
       void client.invalidateQueries({ queryKey: ['projects'] })
     },
-    onSettled: () => client.invalidateQueries({ queryKey: ['tasks'] }),
+    onSettled: (_data, error) => {
+      if (!isCloudWeb || error)
+        return client.invalidateQueries({ queryKey: ['tasks'] })
+    },
   })
   const all = tasks.data ?? []
   const active = all.filter((t) => !t.completed_at)

@@ -23,7 +23,7 @@ export function useSyncRefetchInterval() {
   return available ? 15 * 60_000 : appRefetchInterval
 }
 
-export function startCloudEvents(refresh: () => void) {
+export function startCloudEvents(refresh: (taskSequence?: number) => void) {
   let socket: WebSocket | undefined
   let retry: number | undefined
   let heartbeat: number | undefined
@@ -67,8 +67,11 @@ export function startCloudEvents(refresh: () => void) {
       else if (typeof data === 'string') {
         try {
           const event = JSON.parse(data)
-          if (event?.type === 'tasks' || event?.type === 'collections')
-            refresh()
+          if (event?.type === 'tasks')
+            refresh(
+              Number.isSafeInteger(event.sequence) ? event.sequence : undefined,
+            )
+          else if (event?.type === 'collections') refresh()
         } catch {
           // HTTP catch-up still runs if a notification is unreadable.
         }

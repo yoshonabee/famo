@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { ApiError, request, type Task } from '@/lib/api'
+import { ApiError, request, updateCloudTaskQueries, type Task } from '@/lib/api'
+import { isCloudWeb } from '@/lib/environment'
 import { LocalizedError, useLanguage } from '@/lib/i18n'
 
 export function InlineContent({
@@ -31,12 +32,13 @@ export function InlineContent({
         version: snapshot.version,
       }),
     onSuccess: (updated) => {
+      setEdit(null)
+      setError(null)
+      if (isCloudWeb) return updateCloudTaskQueries(client)
       client.setQueryData<Task[]>(['tasks'], (old) =>
         old?.map((t) => (t.id === updated.id ? updated : t)),
       )
       void client.invalidateQueries({ queryKey: ['tasks'] })
-      setEdit(null)
-      setError(null)
     },
     onError: (e) => {
       setError(e)

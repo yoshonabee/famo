@@ -22,7 +22,7 @@ Mac 主視窗和選單列面板以及手機網頁會顯示同步燈號與文字�
 4. 手機收到通知後，以最後已套用的游標呼叫 `GET /api/sync/pull?after=...`。Worker 從 D1 讀取游標之後的變更，手機套用資料並更新畫面和游標。如果回應還有分頁，手機會接著拉取。
 5. 如果手機錯過通知，重連時會依游標補拉。連線正常時也會每 15 分鐘校對一次。
 
-WebSocket 通知本身不會新增一次進入 Worker 的 HTTP 請求。原始寫入、WebSocket 握手和接收端後續的拉取都會計入 Worker invocations，Worker 呼叫 Durable Object 廣播則使用 Durable Objects 自己的額度。任務批次寫入走 `/api/sync/push-batch` 並送出一則通知。Projects 和 Boards 共用一個集合版本，接收端透過 `GET /api/sync/collections` 讀取最新集合。
+WebSocket 通知本身不會新增一次進入 Worker 的 HTTP 請求。原始寫入、WebSocket 握手和接收端後續的拉取都會計入 Worker invocations，Worker 呼叫 Durable Object 廣播則使用 Durable Objects 自己的額度。任務批次寫入走 `/api/sync/push-batch` 並送出一則通知。Projects 和 Boards 共用一個集合版本，接收端透過 `GET /api/sync/collections` 讀取最新集合。 網頁成功寫入任務時會用 HTTP 回應立即更新畫面，收到同一筆已確認的通知時會略過重新讀取。任務游標仍由拉取結果推進。
 
 ## 本機驗證
 

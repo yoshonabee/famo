@@ -93,6 +93,8 @@ let activeWrites = 0
 const writeProblems = new Map<string, 'error' | 'conflict'>()
 const failedReads = new Set<'tasks' | 'collections'>()
 let writes: Promise<unknown> = Promise.resolve()
+let pendingTaskWrite: Promise<WriteResult> | undefined
+const acknowledgedTaskSequences = new Set<number>()
 
 function publishStatus() {
   if ([...writeProblems.values()].includes('conflict'))
@@ -126,8 +128,16 @@ function applyCollections(snapshot: Collections) {
 }
 
 function applyWrite(result: WriteResult) {
-  if (result.change) applyTask(result.change.task)
-  for (const change of result.changes ?? []) applyTask(change.task)
+  const changes = result.change ? [result.change] : (result.changes ?? [])
+  for (const change of changes) {
+    applyTask(change.task)
+    acknowledgedTaskSequences.add(change.sequence)
+  }
+  // Keep recent acknowledgements for echoes that arrive after the HTTP reply.
+  for (const sequence of acknowledgedTaskSequences) {
+    if (acknowledgedTaskSequences.size <= 128) break
+    acknowledgedTaskSequences.delete(sequence)
+  }
   if (result.version !== undefined && result.projects && result.boards)
     applyCollections({
       version: result.version,
@@ -145,8 +155,14 @@ async function send(key: string, write: Write) {
         ? write.body.operations.map(({ task_id }) => `task:${task_id}`)
         : [`task:${write.body.task_id}`]
   try {
-    const result = await syncRequest<WriteResult>(write.endpoint, write.body)
-    applyWrite(result)
+    const response = syncRequest<WriteResult>(write.endpoint, write.body).then(
+      (result) => {
+        applyWrite(result)
+        return result
+      },
+    )
+    if (write.endpoint !== 'collections') pendingTaskWrite = response
+    const result = await response
     remember(key)
     for (const scope of scopes) writeProblems.delete(scope)
     return result
@@ -166,7 +182,15 @@ async function send(key: string, write: Write) {
       else applyCollections(error.current)
     }
     throw error
+  } finally {
+    if (write.endpoint !== 'collections') pendingTaskWrite = undefined
   }
+}
+
+export async function isAcknowledgedTaskWrite(sequence: number) {
+  // The WebSocket echo can arrive before the HTTP acknowledgement.
+  await pendingTaskWrite?.catch(() => {})
+  return acknowledgedTaskSequences.has(sequence)
 }
 
 function serialWrite<T>(run: () => Promise<T>) {
@@ -276,6 +300,18 @@ function listTasks() {
 
 function recent(task: Task) {
   return task.deleted_at && Date.parse(task.deleted_at) > Date.now() - retention
+}
+
+function listRecentlyDeletedTasks() {
+  return [...tasks.values()]
+    .filter(recent)
+    .sort((a, b) => Date.parse(b.deleted_at!) - Date.parse(a.deleted_at!))
+    .map(visibleTask)
+}
+
+export function getCloudTaskLists() {
+  if (receivedTasks)
+    return { tasks: listTasks(), recentlyDeleted: listRecentlyDeletedTasks() }
 }
 
 async function requireTask({ id, version }: TaskVersion, deleted = false) {
@@ -604,15 +640,7 @@ export async function cloudRequest<T>(
       path === '/projects' ? listProjects(collections) : listBoards(collections)
   } else if (path === '/tasks' || path === '/tasks/recently-deleted') {
     await Promise.all([refreshTasks(), refreshCollections().catch(() => {})])
-    result =
-      path === '/tasks'
-        ? listTasks()
-        : [...tasks.values()]
-            .filter(recent)
-            .sort(
-              (a, b) => Date.parse(b.deleted_at!) - Date.parse(a.deleted_at!),
-            )
-            .map(visibleTask)
+    result = path === '/tasks' ? listTasks() : listRecentlyDeletedTasks()
   } else {
     throw new ApiError('找不到 API', 404)
   }

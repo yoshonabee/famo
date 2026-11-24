@@ -3,7 +3,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { CornerDownLeft, LoaderCircle, Square } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
-import { request, type Task } from '@/lib/api'
+import { request, updateCloudTaskQueries, type Task } from '@/lib/api'
 import { isCloudWeb } from '@/lib/environment'
 import { useLanguage } from '@/lib/i18n'
 
@@ -42,6 +42,7 @@ export function useQuickCapture(
       }),
     retry: false,
     onSuccess: async (task) => {
+      if (isCloudWeb) return updateCloudTaskQueries(client)
       await client.cancelQueries({ queryKey: ['tasks'] })
       client.setQueryData<Task[]>(['tasks'], (old = []) => [
         ...old.filter((item) => item.id !== task.id),

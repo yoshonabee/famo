@@ -5,7 +5,14 @@ import { MenuBarBoardPicker } from '@/components/menu-bar-board-picker'
 import { SyncStatusIndicator } from '@/components/sync-status-indicator'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
-import { ApiError, request, type Board, type Task } from '@/lib/api'
+import {
+  ApiError,
+  request,
+  updateCloudTaskQueries,
+  type Board,
+  type Task,
+} from '@/lib/api'
+import { isCloudWeb } from '@/lib/environment'
 import { localDate } from '@/lib/calendar'
 import { hideMenuBar, openFamo, selectMenuBarBoard } from '@/lib/desktop'
 import {
@@ -27,6 +34,7 @@ function MenuBarTask({ task }: { task: Task }) {
         version: snapshot.version,
       }),
     onSuccess: async (updated) => {
+      if (isCloudWeb) return updateCloudTaskQueries(client)
       await client.cancelQueries({ queryKey: ['tasks'] })
       client.setQueryData<Task[]>(['tasks'], (items) =>
         items?.map((item) => (item.id === updated.id ? updated : item)),

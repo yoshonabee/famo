@@ -42,7 +42,14 @@ function CloudSync() {
       }
       refreshing = false
     }
-    const stop = startCloudEvents(() => void refresh())
+    async function handleEvent(taskSequence?: number) {
+      if (taskSequence !== undefined) {
+        const { isAcknowledgedTaskWrite } = await import('./lib/cloud-api')
+        if (await isAcknowledgedTaskWrite(taskSequence)) return
+      }
+      if (active) await refresh()
+    }
+    const stop = startCloudEvents((sequence) => void handleEvent(sequence))
     return () => {
       active = false
       stop()
