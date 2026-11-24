@@ -33,7 +33,7 @@ function CloudSync() {
         // a notification for a commit that happened after that read began.
         const { waitForCloudReads } = await import('./lib/cloud-api')
         await waitForCloudReads()
-        if (active) {
+        if (active && !document.hidden) {
           await client.invalidateQueries({
             predicate: ({ queryKey: [key] }) =>
               key === 'tasks' || key === 'projects' || key === 'boards',
@@ -66,8 +66,9 @@ export function renderApp(content: ReactNode, { panel = false } = {}) {
       queries: {
         staleTime: 10_000,
         retry: 1,
-        refetchOnWindowFocus: isCloudWeb ? 'always' : true,
-        refetchOnReconnect: isCloudWeb ? 'always' : true,
+        // Cloud sync coordinates catch-up with the WebSocket connection.
+        refetchOnWindowFocus: !isCloudWeb,
+        refetchOnReconnect: !isCloudWeb,
       },
     },
   })
