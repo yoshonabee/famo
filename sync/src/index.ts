@@ -16,7 +16,13 @@ import {
   parseOperations,
 } from './protocol'
 import type { Operation } from './protocol'
-import { pull, push, pushBatch } from './store'
+import {
+  DEFAULT_PULL_LIMIT,
+  MAX_PULL_LIMIT,
+  pull,
+  push,
+  pushBatch,
+} from './store'
 
 export { SyncEvents }
 
@@ -131,6 +137,9 @@ sync.get('/events', async (c) => {
 sync.get('/pull', requireAccess(true), async (c) => {
   const after = parseCursor(c.req.query('after') ?? '0')
   if (after === null) return c.json({ error: 'Invalid cursor' }, 400)
+  const limit = parseCursor(c.req.query('limit') ?? String(DEFAULT_PULL_LIMIT))
+  if (limit === null || limit < 1 || limit > MAX_PULL_LIMIT)
+    return c.json({ error: 'Invalid pull limit' }, 400)
   if (c.req.header('X-Famo-Web-Protocol') && c.env.ASSETS) {
     try {
       const build = await c.env.ASSETS.fetch(
@@ -142,7 +151,7 @@ sync.get('/pull', requireAccess(true), async (c) => {
       // A missing build ID should not interrupt sync.
     }
   }
-  return c.json(await pull(c.env.DB, c.get('accountID'), after))
+  return c.json(await pull(c.env.DB, c.get('accountID'), after, limit))
 })
 
 sync.post(

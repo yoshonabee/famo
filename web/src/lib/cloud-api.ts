@@ -24,6 +24,7 @@ import {
   type TaskAction,
   type TaskInput,
 } from './cloud-tasks'
+import { waitForInitialSubscription } from './cloud-events'
 import { setCloudSyncStatus } from './sync-status'
 
 type CollectionPath = 'boards' | 'projects'
@@ -44,6 +45,7 @@ const legacyPendingKey = 'famo.sync.pending.v1'
 const legacyCollectionsKey = 'famo.sync.collections.pending.v1'
 const orderKey = 'famo.sync.task-order.v1'
 const retention = 7 * 24 * 60 * 60 * 1000
+const initialPullLimit = 1000
 
 function readJournal(): Map<string, Write> {
   try {
@@ -261,9 +263,11 @@ export async function waitForCloudReads() {
 
 function refreshTasks() {
   return (taskPull ??= trackRead('tasks', async () => {
+    if (!receivedTasks) await waitForInitialSubscription()
+    const limit = receivedTasks ? undefined : initialPullLimit
     let more: boolean
     do {
-      const page = await pull(cursor)
+      const page = await pull(cursor, limit)
       for (const change of page.changes) applyTask(change.task)
       cursor = page.cursor
       more = page.has_more
@@ -276,6 +280,7 @@ function refreshTasks() {
 
 function refreshCollections() {
   return (collectionPull ??= trackRead('collections', async () => {
+    if (!receivedCollections) await waitForInitialSubscription()
     applyCollections(await syncRequest<Collections>('collections'))
     receivedCollections = true
   }).finally(() => {

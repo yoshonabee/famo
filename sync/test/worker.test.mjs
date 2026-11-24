@@ -322,7 +322,57 @@ test('task batches allow large selections and enforce the D1 input limit', async
   )
 })
 
-test('pull cursor resumes across pages and skips changes from other accounts', async (t) => {
+test('pull accepts a larger limit and keeps incremental pagination compatible', async (t) => {
+  const { worker, db } = await start(t, {
+    bindings: { LOCAL_SYNC_TOKEN: localToken },
+  })
+  await db
+    .prepare(
+      `WITH RECURSIVE ids(n) AS (
+        VALUES(1) UNION ALL SELECT n + 1 FROM ids WHERE n < 1001
+      )
+      INSERT INTO sync_changes (account_id, operation_id, task_id, version, document)
+      SELECT 'personal', 'op-' || n, 'task-' || n, 1,
+        json_set(?1, '$.id', 'task-' || n)
+      FROM ids ORDER BY n`,
+    )
+    .bind(JSON.stringify(fixture.create.task))
+    .run()
+
+  const getPage = async (query) => {
+    const response = await request(worker, `/api/sync/pull${query}`)
+    assert.equal(response.status, 200)
+    return response.json()
+  }
+  const regular = await getPage('?after=0')
+  assert.equal(regular.changes.length, 20)
+  assert.equal(regular.cursor, 20)
+  assert.equal(regular.has_more, true)
+
+  const initial = await getPage('?after=0&limit=1000')
+  assert.deepEqual(
+    initial.changes.map(({ sequence }) => sequence),
+    Array.from({ length: 1000 }, (_, index) => index + 1),
+  )
+  assert.equal(initial.cursor, 1000)
+  assert.equal(initial.has_more, true)
+
+  const final = await getPage(`?after=${initial.cursor}&limit=1000`)
+  assert.equal(final.changes.length, 1)
+  assert.equal(final.changes[0].task.id, 'task-1001')
+  assert.equal(final.cursor, 1001)
+  assert.equal(final.has_more, false)
+
+  for (const limit of ['', '0', '1001', '1.5']) {
+    await expectJSON(
+      await request(worker, `/api/sync/pull?limit=${limit}`),
+      400,
+      { error: 'Invalid pull limit' },
+    )
+  }
+})
+
+test('pull respects the byte limit across pages and skips changes from other accounts', async (t) => {
   const { worker, db } = await start(t, {
     bindings: { LOCAL_SYNC_TOKEN: localToken },
   })
@@ -344,7 +394,7 @@ test('pull cursor resumes across pages and skips changes from other accounts', a
     }),
   )
 
-  const first = await request(worker, '/api/sync/pull')
+  const first = await request(worker, '/api/sync/pull?limit=1000')
   assert.equal(first.status, 200)
   const data = await first.json()
   assert.deepEqual(

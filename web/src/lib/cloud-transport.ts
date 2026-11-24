@@ -101,8 +101,10 @@ export async function syncRequest<T>(endpoint: string, body?: object) {
   return data as T
 }
 
-export async function pull(after: number): Promise<Page> {
-  const page = await syncRequest<Page>(`pull?after=${after}`)
+export async function pull(after: number, limit?: number): Promise<Page> {
+  const query = new URLSearchParams({ after: String(after) })
+  if (limit !== undefined) query.set('limit', String(limit))
+  const page = await syncRequest<Page>(`pull?${query}`)
   let cursor = after
   for (const change of page.changes) {
     if (!Number.isSafeInteger(change.sequence) || change.sequence <= cursor)

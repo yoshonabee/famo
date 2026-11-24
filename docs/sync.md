@@ -10,7 +10,7 @@ Mac 程序執行時與手機網頁在前景時，會用 WebSocket 接收遠端�
 
 網頁會在目前分頁保存尚未確認的寫入，重新載入時用相同的操作 ID 重試。新版網頁上線後，開著的分頁會在下一次任務同步時看到重整提示。如果管理者提高最低相容版本，舊分頁會顯示必須重整才能繼續的對話框。網頁的手動任務排序、外觀和語言會保存在瀏覽器。
 
-Mac 主視窗、選單列面板和手機網頁都會顯示同步燈號。首次成功同步前顯示「同步中」。成功同步後，若後續同步在 3 秒內完成，燈號會維持綠色。待同步異動或同步作業持續至少 3 秒時，會切換為黃色「同步中」。灰燈表示離線，紅燈表示同步失敗或需處理版本衝突。按燈號可立即同步。將滑鼠移到燈號上、用鍵盤聚焦燈號，或按旁邊的資訊按鈕，可查看本次工作階段距上次成功同步多久，以及待送異動數。
+Mac 主視窗、選單列面板和手機網頁都會顯示同步燈號。首次成功同步前顯示黃燈。成功同步後，若後續同步在 3 秒內完成，燈號會維持綠色。待同步異動或同步作業持續至少 3 秒時，會切換為黃燈。灰燈表示離線，紅燈表示同步失敗或需處理版本衝突。將滑鼠移到燈號上、用鍵盤聚焦燈號，或在觸控螢幕上點一下，可查看狀態、開啟提示當下距上次成功同步多久，以及待送異動數。按燈號可立即同步。
 
 ## 資料更新流程
 
@@ -122,6 +122,6 @@ Project 和 Board 共用一個集合版本，讓 Board 的篩選關聯可與 Pro
 
 - `POST /api/sync/push` 接收 `operation_id`、`task_id`、`base_version` 和完整 `task`。新任務的 base version 為 0，其餘操作以最後讀到的版本為 base，提交版本為 base + 1。請求上限為 2 MiB，單筆任務文件上限為 1.5 MiB。重送同一個操作 ID 及內容會得到原本的 `{change:{sequence,task}}`。版本衝突回傳 HTTP 409 與 `{current}`，不新增變更或確認紀錄。
 - `POST /api/sync/push-batch` 接收 `{operations:[...]}`，一次提交多筆上述操作。批次內的任務 ID 和操作 ID 各自必須唯一。整批成功時，按原請求順序回傳 `{changes:[...]}`，完整重送會取得原本的結果。版本衝突或只有部分操作已有紀錄時，整批回傳 HTTP 409。請求上限為 2,000,000 位元組，單筆任務仍適用 1.5 MiB 上限。 [D1 限制](https://developers.cloudflare.com/d1/platform/limits/)
-- `GET /api/sync/pull?after=0` 依序回傳 `{changes,cursor,has_more}`，下一頁從回傳的 cursor 繼續。單頁最多 20 筆和 4 MiB 的任務內容。刪除以包含 `deleted_at` 的任務快照傳送，清空欄位代表還原。
+- `GET /api/sync/pull?after=0` 依序回傳 `{changes,cursor,has_more}`，下一頁從回傳的 cursor 繼續。通常單頁最多 20 筆。網頁首次載入或重整時用 `limit=1000` 批次拉取任務異動，後續的增量同步沿用預設值。API 接受 1 到 1,000 的整數 `limit`，每頁仍最多回傳 4 MiB 的任務內容。Projects 和 Boards 另走 `/collections`。刪除以包含 `deleted_at` 的任務快照傳送，清空欄位代表還原。
 - `GET /api/sync/collections` 讀取 `{version,projects,boards}`。用 `POST` 送出 `{operation_id,base_version,projects,boards}` 原子更新集合，衝突回傳 `409 {current}`，重送同一操作會得到原始回應。
 - `X-Famo-Sync-Account` 可用來核對伺服器解析的內部帳號。Go 與 TypeScript 的共用案例見 [protocol-v1.json](../sync/protocol-v1.json)。

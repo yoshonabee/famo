@@ -6,28 +6,39 @@ interface DocumentRow {
   document: string
 }
 
-const PAGE_SIZE = 20
+export const DEFAULT_PULL_LIMIT = 20
+export const MAX_PULL_LIMIT = 1000
 const PAGE_BYTES = 4 * 1024 * 1024
 
-export async function pull(db: D1Database, accountID: string, after: number) {
+export async function pull(
+  db: D1Database,
+  accountID: string,
+  after: number,
+  limit: number,
+) {
   const { results } = await db
     .prepare(
       `
     WITH candidates AS (
-      SELECT sequence, document FROM sync_changes
+      SELECT sequence, length(CAST(document AS BLOB)) AS document_bytes
+      FROM sync_changes
       WHERE account_id = ? AND sequence > ?
       ORDER BY sequence LIMIT ?
     ), sized AS (
-      SELECT sequence, document, count(*) OVER () AS candidate_count,
+      SELECT sequence, count(*) OVER () AS candidate_count,
         row_number() OVER (ORDER BY sequence) AS row_number,
-        sum(length(CAST(document AS BLOB))) OVER (ORDER BY sequence) AS cumulative_bytes
+        sum(document_bytes) OVER (ORDER BY sequence) AS cumulative_bytes
       FROM candidates
+    ), page AS (
+      SELECT sequence, candidate_count FROM sized
+      WHERE row_number <= ? AND cumulative_bytes <= ?
     )
-    SELECT sequence, document, candidate_count FROM sized
-    WHERE row_number <= ? AND cumulative_bytes <= ? ORDER BY sequence
+    SELECT changes.sequence, changes.document, page.candidate_count
+    FROM page JOIN sync_changes changes ON changes.sequence = page.sequence
+    ORDER BY changes.sequence
   `,
     )
-    .bind(accountID, after, PAGE_SIZE + 1, PAGE_SIZE, PAGE_BYTES)
+    .bind(accountID, after, limit + 1, limit, PAGE_BYTES)
     .all<DocumentRow & { candidate_count: number }>()
   const changes = results.map(toChange)
   return {

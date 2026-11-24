@@ -3,6 +3,8 @@ import { useCloudVersion, webProtocol } from './cloud-version'
 import { appRefetchInterval } from './environment'
 
 let connected = false
+let initialReadStarted = false
+let initialSubscription: Promise<void> | undefined
 const listeners = new Set<() => void>()
 
 function setConnected(value: boolean) {
@@ -14,6 +16,30 @@ function setConnected(value: boolean) {
 function subscribe(listener: () => void) {
   listeners.add(listener)
   return () => listeners.delete(listener)
+}
+
+export async function waitForInitialSubscription() {
+  if (
+    !initialReadStarted &&
+    !connected &&
+    !document.hidden &&
+    navigator.onLine
+  ) {
+    // Subscribe before reading when possible, without blocking HTTP fallback.
+    initialSubscription ??= new Promise((resolve) => {
+      const unsubscribe = subscribe(() => {
+        if (connected) finish()
+      })
+      const timer = window.setTimeout(finish, 500)
+      function finish() {
+        clearTimeout(timer)
+        unsubscribe()
+        resolve()
+      }
+    })
+    await initialSubscription
+  }
+  initialReadStarted = true
 }
 
 export function useSyncRefetchInterval() {
@@ -84,7 +110,7 @@ export function startCloudEvents(refresh: (taskSequence?: number) => void) {
       setConnected(true)
       if (document.hidden) return
       awaitingResume = false
-      refresh()
+      if (initialReadStarted) refresh()
       startHeartbeat(current)
     })
 
@@ -97,7 +123,11 @@ export function startCloudEvents(refresh: (taskSequence?: number) => void) {
           awaitingResume = false
           refresh()
         }
-      } else if (!awaitingResume && typeof data === 'string') {
+      } else if (
+        initialReadStarted &&
+        !awaitingResume &&
+        typeof data === 'string'
+      ) {
         try {
           const event = JSON.parse(data)
           if (event?.type === 'tasks')
