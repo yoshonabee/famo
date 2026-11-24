@@ -54,7 +54,7 @@ type Backend struct {
 	apiAddr             string
 	apiInfoPath         string
 	syncActivity        *syncclient.Activity
-	syncPhase           atomic.Value
+	syncPhase           atomic.Pointer[syncRuntime]
 	onSyncStatusChanged func()
 
 	mu       sync.Mutex
@@ -196,8 +196,24 @@ func (b *Backend) startSync(cfg Config) error {
 	return nil
 }
 
+type syncRuntime struct {
+	phase            syncclient.Status
+	lastSuccessfulAt *time.Time
+}
+
 func (b *Backend) setSyncPhase(phase syncclient.Status) {
-	b.syncPhase.Store(phase)
+	runtime := syncRuntime{phase: phase}
+	if previous := b.syncPhase.Load(); previous != nil {
+		runtime.lastSuccessfulAt = previous.lastSuccessfulAt
+	}
+	if phase == syncclient.StatusSynced {
+		details, err := b.readSyncDetails(context.Background(), runtime)
+		if err == nil && details.Status == syncclient.StatusSynced {
+			now := time.Now()
+			runtime.lastSuccessfulAt = &now
+		}
+	}
+	b.syncPhase.Store(&runtime)
 	b.notifySyncStatus()
 }
 
@@ -207,26 +223,36 @@ func (b *Backend) notifySyncStatus() {
 	}
 }
 
-func (b *Backend) syncStatus(ctx context.Context) (syncclient.Status, error) {
-	phase, ok := b.syncPhase.Load().(syncclient.Status)
-	if !ok {
-		return syncclient.StatusDisabled, nil
+func (b *Backend) syncDetails(ctx context.Context) (SyncRuntimeDetails, error) {
+	runtime := b.syncPhase.Load()
+	if runtime == nil {
+		return SyncRuntimeDetails{Status: syncclient.StatusDisabled}, nil
 	}
+	return b.readSyncDetails(ctx, *runtime)
+}
+
+func (b *Backend) readSyncDetails(ctx context.Context, runtime syncRuntime) (SyncRuntimeDetails, error) {
+	details := SyncRuntimeDetails{Status: runtime.phase, LastSuccessfulAt: runtime.lastSuccessfulAt}
 	status, err := b.store.SyncStatus(ctx)
 	if err != nil {
-		return syncclient.StatusError, err
+		details.Status = syncclient.StatusError
+		return details, err
 	}
+
 	collections := status.Collections
+	details.UnsyncedCount = status.Pending
+	if collections != nil && collections.Pending {
+		details.UnsyncedCount++
+	}
 	switch {
 	case len(status.Conflicts) > 0 || (collections != nil && collections.Conflict != nil):
-		return syncclient.StatusConflict, nil
+		details.Status = syncclient.StatusConflict
 	case len(status.Rejections) > 0 || (collections != nil && collections.Rejection != 0):
-		return syncclient.StatusError, nil
-	case phase == syncclient.StatusSynced && (status.Pending > 0 || (collections != nil && collections.Pending)):
-		return syncclient.StatusPending, nil
-	default:
-		return phase, nil
+		details.Status = syncclient.StatusError
+	case runtime.phase == syncclient.StatusSynced && details.UnsyncedCount > 0:
+		details.Status = syncclient.StatusPending
 	}
+	return details, nil
 }
 
 // Both the embedded window and the Agent API write through these handlers.

@@ -26,8 +26,8 @@ func TestNativeWindowAndAgentSharePersistentStore(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { b.Close() })
-	if status, err := b.syncStatus(t.Context()); err != nil || status != syncclient.StatusDisabled {
-		t.Fatalf("sync status without configuration = %q, %v", status, err)
+	if status, err := b.syncDetails(t.Context()); err != nil || status.Status != syncclient.StatusDisabled {
+		t.Fatalf("sync status without configuration = %q, %v", status.Status, err)
 	}
 	call := func(method, path, body, contentType string) *httptest.ResponseRecorder {
 		t.Helper()
@@ -182,8 +182,8 @@ func TestInvalidDefaultSyncConfigKeepsLocalDesktopAvailable(t *testing.T) {
 	if err != nil || status.URL != "" {
 		t.Fatalf("invalid config tied the database to sync: %+v, %v", status, err)
 	}
-	if status, err := backend.syncStatus(t.Context()); err != nil || status != syncclient.StatusError {
-		t.Fatalf("sync status with invalid configuration = %q, %v", status, err)
+	if status, err := backend.syncDetails(t.Context()); err != nil || status.Status != syncclient.StatusError {
+		t.Fatalf("sync status with invalid configuration = %q, %v", status.Status, err)
 	}
 	if err := backend.Close(); err != nil {
 		t.Fatal(err)
@@ -262,21 +262,22 @@ func TestSyncWakesAfterDesktopAndAgentWrites(t *testing.T) {
 	defer backend.Close()
 
 	settings := &SyncSettings{backend: backend}
-	waitForStatus := func(want syncclient.Status) {
+	waitForStatus := func(want syncclient.Status) SyncRuntimeDetails {
 		t.Helper()
 		timeout := time.After(5 * time.Second)
 		for {
-			status, err := settings.RuntimeStatus(t.Context())
+			details, err := settings.RuntimeDetails(t.Context())
 			if err != nil {
 				t.Fatal(err)
 			}
-			if status == want {
-				return
+			if details.Status == want {
+				return details
 			}
 			select {
 			case <-syncStatusChanged:
 			case <-timeout:
-				t.Fatalf("sync status = %q, want %q", status, want)
+				t.Fatalf("sync status = %q, want %q", details.Status, want)
+				return SyncRuntimeDetails{}
 			}
 		}
 	}
@@ -301,7 +302,10 @@ func TestSyncWakesAfterDesktopAndAgentWrites(t *testing.T) {
 		waitForPull()
 	}
 	waitForPull()
-	waitForStatus(syncclient.StatusSynced)
+	firstSync := waitForStatus(syncclient.StatusSynced)
+	if firstSync.LastSuccessfulAt == nil || firstSync.UnsyncedCount != 0 {
+		t.Fatalf("first successful sync details = %+v", firstSync)
+	}
 
 	request := httptest.NewRequest(http.MethodPost, "wails://localhost/api/tasks", strings.NewReader(`{"title":"Desktop write"}`))
 	request.Header.Set("Content-Type", "application/json")
@@ -322,11 +326,17 @@ func TestSyncWakesAfterDesktopAndAgentWrites(t *testing.T) {
 		t.Fatalf("Agent task create returned %d", response.StatusCode)
 	}
 	expectPush("Agent write")
-	waitForStatus(syncclient.StatusSynced)
+	latest := waitForStatus(syncclient.StatusSynced)
+	if latest.LastSuccessfulAt == nil || latest.LastSuccessfulAt.Before(*firstSync.LastSuccessfulAt) || latest.UnsyncedCount != 0 {
+		t.Fatalf("latest successful sync details = %+v", latest)
+	}
 
 	rejectPull.Store(true)
 	settings.RequestSync()
-	waitForStatus(syncclient.StatusError)
+	failed := waitForStatus(syncclient.StatusError)
+	if failed.LastSuccessfulAt == nil || !failed.LastSuccessfulAt.Equal(*latest.LastSuccessfulAt) {
+		t.Fatalf("failed sync changed the last successful time: %+v", failed)
+	}
 
 	rejectPull.Store(false)
 	response, err = http.Post(backend.APIURL()+"/tasks", "application/json", strings.NewReader(`{"title":"Conflicting write"}`))
@@ -338,5 +348,8 @@ func TestSyncWakesAfterDesktopAndAgentWrites(t *testing.T) {
 		t.Fatalf("Agent task create returned %d", response.StatusCode)
 	}
 	expectPush("Conflicting write")
-	waitForStatus(syncclient.StatusConflict)
+	conflict := waitForStatus(syncclient.StatusConflict)
+	if conflict.UnsyncedCount != 1 || conflict.LastSuccessfulAt == nil || !conflict.LastSuccessfulAt.Equal(*latest.LastSuccessfulAt) {
+		t.Fatalf("conflicting sync details = %+v", conflict)
+	}
 }
