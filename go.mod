@@ -3,13 +3,13 @@ module famo
 go 1.26.5
 
 require (
+	github.com/coder/websocket v1.8.14
 	github.com/go-chi/chi/v5 v5.5.0
 	github.com/wailsapp/wails/v3 v3.1.0
 	modernc.org/sqlite v1.61.1
 )
 
 require (
-	github.com/coder/websocket v1.8.14 // indirect
 	github.com/dustin/go-humanize v1.1.0 // indirect
 	github.com/ebitengine/purego v0.11.1 // indirect
 	github.com/go-ole/go-ole v1.3.0 // indirect

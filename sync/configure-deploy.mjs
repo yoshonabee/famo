@@ -10,6 +10,15 @@ const required = {
   FAMO_ACCESS_ACCOUNT_ID: /^[a-zA-Z\d][a-zA-Z\d_-]{0,63}$/,
 }
 
+const minimumWebProtocol = process.env.FAMO_MIN_WEB_PROTOCOL ?? '0'
+if (
+  !/^\d+$/.test(minimumWebProtocol) ||
+  !Number.isSafeInteger(Number(minimumWebProtocol))
+) {
+  console.error('FAMO_MIN_WEB_PROTOCOL must be a nonnegative safe integer')
+  process.exit(1)
+}
+
 const invalid = Object.entries(required).filter(
   ([name, pattern]) => !pattern.test(process.env[name] ?? ''),
 )
@@ -34,6 +43,7 @@ if (process.env.FAMO_D1_DATABASE_NAME) {
   config.d1_databases[0].database_name = process.env.FAMO_D1_DATABASE_NAME
 }
 config.vars = {
+  MIN_WEB_PROTOCOL: minimumWebProtocol,
   ACCESS_HOST: host,
   ACCESS_ISSUER: process.env.FAMO_ACCESS_ISSUER,
   ACCESS_AUDIENCE: process.env.FAMO_ACCESS_AUDIENCE,

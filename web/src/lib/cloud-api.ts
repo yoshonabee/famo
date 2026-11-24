@@ -220,6 +220,10 @@ async function trackRead(
   }
 }
 
+export async function waitForCloudReads() {
+  await Promise.allSettled([taskPull, collectionPull])
+}
+
 function refreshTasks() {
   return (taskPull ??= trackRead('tasks', async () => {
     let more: boolean

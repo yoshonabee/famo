@@ -4,7 +4,7 @@ import { LoaderCircle, RotateCcw, Trash2 } from 'lucide-react'
 import { TaskSearch } from '@/components/task-palette'
 import { Button } from '@/components/ui/button'
 import { ApiError, dateTime, request, type Task } from '@/lib/api'
-import { appRefetchInterval } from '@/lib/environment'
+import { useSyncRefetchInterval } from '@/lib/cloud-events'
 import { useLanguage } from '@/lib/i18n'
 import { formatListDate } from '@/lib/calendar'
 
@@ -29,7 +29,7 @@ export function RecentlyDeletedPage({
     queryFn: ({ signal }) =>
       request<Task[]>('/tasks/recently-deleted', undefined, signal),
     staleTime: 0,
-    refetchInterval: appRefetchInterval,
+    refetchInterval: useSyncRefetchInterval(),
   })
   const restore = useMutation({
     mutationFn: (task: Task) =>

@@ -31,6 +31,9 @@ async function start(t, options = {}) {
       script,
       modules: true,
       compatibilityDate: '2026-11-01',
+      durableObjects: {
+        SYNC_EVENTS: { className: 'SyncEvents', useSQLite: true },
+      },
       d1Databases: { DB: 'famo-test' },
       serviceBindings: {
         ASSETS: (request) => {
@@ -39,6 +42,8 @@ async function start(t, options = {}) {
               return new Response('<title>Famo</title>', {
                 headers: { 'Content-Type': 'text/html' },
               })
+            case '/famo-web-build.txt':
+              return new Response('a'.repeat(64))
             case '/assets/app.js':
               return new Response('export {}', {
                 headers: { 'Content-Type': 'text/javascript' },
@@ -683,4 +688,95 @@ test('collection writes reject invalid references and respect Access and same-or
   assert.equal((await request(worker, path, { local: false })).status, 403)
   assert.equal((await put({ padding: 'x'.repeat(1024 * 1024) })).status, 413)
   await expectJSON(await request(worker, path), 200, emptyCollections)
+})
+
+test(
+  'WebSocket publishes committed changes and accepts hibernating heartbeats',
+  { timeout: 5000 },
+  async (t) => {
+    const { worker } = await start(t, {
+      bindings: { LOCAL_SYNC_TOKEN: localToken },
+    })
+    const headers = { Upgrade: 'websocket' }
+    const denied = await request(worker, '/api/sync/events?protocol=1', {
+      local: false,
+      headers: {
+        ...headers,
+        'Sec-Fetch-Site': 'same-origin',
+        Origin: 'https://wrong.example',
+      },
+    })
+    assert.equal(denied.status, 403)
+
+    const response = await request(worker, '/api/sync/events?protocol=1', {
+      local: false,
+      headers: {
+        ...headers,
+        Origin: localOrigin,
+      },
+    })
+    assert.equal(response.status, 101)
+    assert.equal(response.headers.get('X-Famo-Sync-Account'), 'personal')
+    const socket = response.webSocket
+    assert.ok(socket)
+    socket.accept()
+    t.after(() => socket.close())
+
+    const nextMessage = () =>
+      new Promise((resolve) =>
+        socket.addEventListener('message', ({ data }) => resolve(data), {
+          once: true,
+        }),
+      )
+    const pong = nextMessage()
+    socket.send('ping')
+    assert.equal(await pong, 'pong')
+
+    const event = nextMessage()
+    const created = await request(worker, '/api/sync/push', {
+      operation: fixture.create,
+    })
+    assert.equal(created.status, 200)
+    assert.deepEqual(JSON.parse(await event), { type: 'tasks', sequence: 1 })
+    const pull = await request(worker, '/api/sync/pull')
+    assert.deepEqual((await pull.json()).changes, [fixture.changes[0]])
+  },
+)
+
+test('the web compatibility floor blocks stale writes and leaves service clients available', async (t) => {
+  const { worker, db } = await start(t, {
+    bindings: { LOCAL_SYNC_TOKEN: localToken, MIN_WEB_PROTOCOL: '2' },
+  })
+  const browser = {
+    local: false,
+    headers: {
+      'Sec-Fetch-Site': 'same-origin',
+      Origin: localOrigin,
+      'X-Famo-Web-Protocol': '1',
+    },
+  }
+  const response = await request(worker, '/api/sync/push', {
+    ...browser,
+    operation: fixture.create,
+  })
+  assert.equal(response.status, 412)
+  assert.equal(response.headers.get('X-Famo-Web-Min-Protocol'), '2')
+  assert.equal(
+    await db.prepare('SELECT count(*) FROM sync_changes').first('count(*)'),
+    0,
+  )
+  assert.equal((await request(worker, '/api/sync/pull')).status, 200)
+
+  const socket = await request(worker, '/api/sync/events?protocol=1', {
+    ...browser,
+    headers: { ...browser.headers, Upgrade: 'websocket' },
+  })
+  assert.equal(socket.status, 412)
+
+  const compatible = await request(worker, '/api/sync/pull', {
+    ...browser,
+    headers: { ...browser.headers, 'X-Famo-Web-Protocol': '2' },
+  })
+  assert.equal(compatible.status, 200)
+  assert.equal(compatible.headers.get('X-Famo-Web-Build'), 'a'.repeat(64))
 })

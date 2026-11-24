@@ -6,7 +6,9 @@ Mac 仍可離線使用 SQLite。設好同步後，Mac 背景會推送任務異�
 
 啟用同步會把這份 SQLite 中的任務、Project 和 Board 傳到所指定的 Worker 和 D1。D1 保留已接受的任務版本和刪除紀錄，本機「最近刪除」到期後仍可供其他裝置同步。建議先用測試資料庫驗證部署，再設定日常使用的資料庫。同一份資料庫的同步紀錄會綁定網址和帳號。搬到另一個 Worker 或帳號時，用另一份本機資料庫開始。
 
-Mac 活躍時預設每 30 秒同步一次，可在 `famo-sync.json` 設定 `interval_seconds`。Famo 閒置 5 分鐘後暫停輪詢。再次操作 Famo、切回視窗、開啟選單列面板，或透過 Famo 或 Agent API 寫入任務、Project 或 Board 時，Mac 會主動同步。閒置期間遠端變更會在下次同步時顯示。手機網頁在前景每 10 秒拉取一次，回到頁面、恢復連線或按「同步」也會拉取。網頁會在目前分頁保存尚未確認的寫入，重新載入時用相同的操作 ID 重試。網頁的手動任務排序、外觀和語言會保存在瀏覽器。
+Mac 程序執行時與手機網頁在前景時，會用 WebSocket 接收遠端異動通知，再透過同步 API 拉取資料。連線建立、重新連線時會補拉，連線正常時每 15 分鐘做一次校對。手機網頁切到背景會關閉連線，回到前景時重新連線。WebSocket 不可用時，Mac 活躍期間預設每 30 秒同步一次，閒置 5 分鐘後暫停輪詢。手機網頁在前景每 10 秒拉取一次。Mac 的備援輪詢間隔可在 `famo-sync.json` 設定 `interval_seconds`。本機寫入或按「同步」仍會立即觸發同步。
+
+網頁會在目前分頁保存尚未確認的寫入，重新載入時用相同的操作 ID 重試。新版網頁上線後，開著的分頁會在下一次任務同步時看到重整提示。如果管理者提高最低相容版本，舊分頁會顯示必須重整才能繼續的對話框。網頁的手動任務排序、外觀和語言會保存在瀏覽器。
 
 Mac 主視窗和選單列面板以及手機網頁會顯示同步燈號與文字。綠燈表示最近同步成功且沒有待送異動。黃燈表示同步中、等待異動送出或等待連線。紅燈表示同步失敗或需處理版本衝突。按燈號可立即同步。
 
@@ -51,6 +53,12 @@ npx wrangler dev --local --ip 127.0.0.1 --port 8789 --config wrangler.dev.jsonc 
 5. 在 Workers 的 **Domains & Routes** 確認只有正式自訂網域啟用。用手機登入測試；以登出或另一個帳號的瀏覽器確認無法取用。同一個 service token 應只可讀寫同步 API，開啟網頁路徑會被拒絕。完成 Mac 設定後，用測試任務跑一次離線新增、手機勾選和 Mac 收到結果的流程。 [Workers 預覽入口](https://developers.cloudflare.com/workers/previews/)
 
 CI 可從乾淨 checkout 執行 `node sync/configure-deploy.mjs` 產生同格式的 `sync/wrangler.local.jsonc`。設定 `FAMO_D1_DATABASE_ID`、`FAMO_SYNC_HOST`、`FAMO_ACCESS_ISSUER`、`FAMO_ACCESS_AUDIENCE`、`FAMO_ACCESS_EMAIL`、`FAMO_ACCESS_SERVICE_CLIENT_ID`、`FAMO_ACCESS_ACCOUNT_ID`，以及選填的 `FAMO_D1_DATABASE_NAME`。若 CI 使用 dotenv 檔，可以 `node --env-file=sync/.env.local sync/configure-deploy.mjs` 明確載入。部署步驟讓 Wrangler 從環境讀取 `CLOUDFLARE_ACCOUNT_ID` 與 `CLOUDFLARE_API_TOKEN`，後者放在 CI secret。部署用 API token 與 Mac 同步用 service token 各自獨立。
+
+### 啟用 WebSocket 與網頁版本門檻
+
+- 用 CI 產生設定的部署會自動加入 `SYNC_EVENTS` binding 和 `sync-events-v1` migration。手動維護 `sync/wrangler.local.jsonc` 的部署，請從範本合併 `durable_objects` 和 `migrations`，保留現有的網域、Access 設定和 D1 binding。執行 `make deploy-sync` 後，Wrangler 會建立 SQLite-backed Durable Object。這次更新使用現有的 D1 schema。 [Durable Object migrations](https://developers.cloudflare.com/durable-objects/reference/durable-objects-migrations/#legacy-migrations)
+- 在 Cloudflare 網域的 **Network → WebSockets** 確認開啟。現有整個主機名的 Access 保護也適用於 `/api/sync/events`。如果另外建立了僅供 Mac 使用的路徑政策，確認它涵蓋新端點，且同一端點也允許瀏覽器登入的身分。部署後用新版 Mac 與手機各改一筆任務，確認另一台裝置快速收到更新。 [Cloudflare WebSockets](https://developers.cloudflare.com/network/websockets/)
+- `vars.MIN_WEB_PROTOCOL` 預設為 `"0"`。CI 用 `FAMO_MIN_WEB_PROTOCOL` 設定同一個門檻。目前網頁協定版本是 1。先以預設門檻發布本版，讓既有分頁有機會載入支援提示的版本。日後遇到不相容變更，在 `web/src/lib/cloud-version.ts` 提高 `webProtocol`，確認相容的新網頁已可載入，再把最低門檻提高到該版本。低於門檻的網頁讀寫與 WebSocket 握手會收到 HTTP 412。支援提示的分頁會在同步時顯示強制重整，早於本功能的分頁則需手動重整。Mac service token 仍可正常同步。若需要復原門檻，降低變數後部署。
 
 ## Mac 設定與版本衝突
 

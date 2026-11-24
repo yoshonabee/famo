@@ -1,4 +1,5 @@
 import { defineConfig } from 'vite'
+import { createHash } from 'node:crypto'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { fileURLToPath, URL } from 'node:url'
@@ -23,6 +24,35 @@ export default defineConfig(({ mode }) => {
     plugins: [
       react(),
       tailwindcss(),
+      cloud && {
+        name: 'sync-web-build',
+        generateBundle: {
+          order: 'post',
+          handler(_, bundle) {
+            const html = bundle['index.html']
+            if (html?.type !== 'asset' || typeof html.source !== 'string')
+              throw new Error('Missing sync web HTML')
+            const hash = createHash('sha256')
+            for (const name of Object.keys(bundle).sort()) {
+              const output = bundle[name]
+              hash.update(name)
+              hash.update(output.type === 'asset' ? output.source : output.code)
+            }
+            const id = hash.digest('hex')
+            html.source = html.source.replace(
+              '<head>',
+              `<head>
+    <meta name="famo-web-build" content="${id}">`,
+            )
+            this.emitFile({
+              type: 'asset',
+              fileName: 'famo-web-build.txt',
+              source: `${id}
+`,
+            })
+          },
+        },
+      },
       !cloud && {
         name: 'keep-embed-placeholder',
         closeBundle() {

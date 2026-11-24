@@ -14,6 +14,7 @@ export interface AccessBindings {
 interface Identity {
   accountID: string
   service: boolean
+  expiresAt?: number
 }
 
 let keys:
@@ -42,7 +43,16 @@ export async function authorize(
         ? { accountID: 'personal', service: true }
         : null
     }
-    if (api && request.headers.get('Sec-Fetch-Site') !== 'same-origin')
+    // Chromium omits Sec-Fetch-Site on a loopback WebSocket handshake.
+    const sameOriginSocket =
+      url.pathname === '/api/sync/events' &&
+      request.headers.get('Upgrade')?.toLowerCase() === 'websocket' &&
+      request.headers.get('Origin') === url.origin
+    if (
+      api &&
+      request.headers.get('Sec-Fetch-Site') !== 'same-origin' &&
+      !sameOriginSocket
+    )
       return null
     return { accountID: 'personal', service: false }
   }
@@ -83,7 +93,8 @@ export async function authorize(
       algorithms: ['RS256'],
       requiredClaims: ['exp', 'iat'],
     })
-    if (payload.type !== 'app') return null
+    if (payload.type !== 'app' || payload.exp === undefined) return null
+    const expiresAt = payload.exp * 1000
     if (payload.common_name !== undefined) {
       if (
         !api ||
@@ -92,13 +103,13 @@ export async function authorize(
         (apiAudience && !hasAudience(payload.aud, apiAudience))
       )
         return null
-      return { accountID, service: true }
+      return { accountID, service: true, expiresAt }
     }
     if (
       typeof payload.email === 'string' &&
       payload.email.toLowerCase() === email.toLowerCase()
     ) {
-      return { accountID, service: false }
+      return { accountID, service: false, expiresAt }
     }
   } catch {
     // Requests with an invalid assertion or unavailable signing keys fail closed.

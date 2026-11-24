@@ -11,6 +11,8 @@ import (
 	"net/url"
 	"os"
 	"strconv"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"famo/internal/tasks"
@@ -26,6 +28,7 @@ type Runner struct {
 	http           *http.Client
 	onTasksChanged func()
 	access         credentials
+	accessMu       sync.Mutex
 }
 
 type credentials struct {
@@ -53,21 +56,24 @@ func New(ctx context.Context, store *tasks.Store, cfg Config, onTasksChanged fun
 	}, nil
 }
 
-// Run polls continuously for headless callers.
+// Run keeps sync enabled continuously for headless callers.
 func (r *Runner) Run(ctx context.Context, report func(error)) {
 	r.RunWhileActive(ctx, nil, report, nil)
 }
 
-// RunWhileActive pauses polling while the desktop is idle.
+// RunWhileActive pauses fallback polling while the desktop is idle.
 func (r *Runner) RunWhileActive(ctx context.Context, activity *Activity, report func(error), update func(Status)) {
 	var previous string
-	runPolling(ctx, r.interval, activity, func() {
+	var connected atomic.Bool
+	remote := make(chan struct{}, 1)
+	go r.watchEvents(ctx, &connected, remote)
+	runPolling(ctx, r.interval, activity, &connected, remote, func() time.Duration {
 		if update != nil {
 			update(StatusSyncing)
 		}
 		more, err := r.sync(ctx)
 		if ctx.Err() != nil {
-			return
+			return 0
 		}
 		if update != nil {
 			update(cycleStatus(more, err))
@@ -78,10 +84,19 @@ func (r *Runner) RunWhileActive(ctx context.Context, activity *Activity, report 
 		} else if err == nil {
 			previous = ""
 		}
+		if err != nil {
+			return r.interval
+		}
+		if more {
+			return syncSoon
+		}
+		return 0
 	})
 }
 
 func (r *Runner) credentials(ctx context.Context) (credentials, error) {
+	r.accessMu.Lock()
+	defer r.accessMu.Unlock()
 	if isLoopback(r.endpoint.Hostname()) {
 		token := os.Getenv("FAMO_SYNC_LOCAL_TOKEN")
 		if token == "" {
@@ -118,25 +133,25 @@ func (r *Runner) sync(ctx context.Context) (bool, error) {
 		return false, err
 	}
 	collectionsErr := r.syncCollections(ctx, auth)
-	pushErr := r.push(ctx, auth)
+	moreWrites, pushErr := r.push(ctx, auth)
 	more, pullErr := r.pull(ctx, auth)
-	return more, errors.Join(collectionsErr, pushErr, pullErr)
+	return more || moreWrites, errors.Join(collectionsErr, pushErr, pullErr)
 }
 
 // Limit work per poll so a large outbox does not starve remote changes.
-func (r *Runner) push(ctx context.Context, auth credentials) error {
+func (r *Runner) push(ctx context.Context, auth credentials) (bool, error) {
 	for range 10 {
 		ops, err := r.store.SyncOperations(ctx, 10)
 		if err != nil || len(ops) == 0 {
-			return err
+			return false, err
 		}
 		for _, op := range ops {
 			if err := r.pushOperation(ctx, auth, op); err != nil {
-				return err
+				return false, err
 			}
 		}
 	}
-	return nil
+	return true, nil
 }
 
 func (r *Runner) pushOperation(ctx context.Context, auth credentials, op tasks.SyncOperation) error {
@@ -249,12 +264,7 @@ func (r *Runner) request(ctx context.Context, auth credentials, method, path str
 	if raw != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
-	if auth.localToken != "" {
-		req.Header.Set("Authorization", "Bearer "+auth.localToken)
-	} else {
-		req.Header.Set("CF-Access-Client-Id", auth.clientID)
-		req.Header.Set("CF-Access-Client-Secret", auth.clientSecret)
-	}
+	auth.setHeaders(req.Header)
 	resp, err := r.http.Do(req)
 	if err != nil {
 		return nil, err
@@ -265,6 +275,15 @@ func (r *Runner) request(ctx context.Context, auth credentials, method, path str
 		return nil, errors.New("sync response account does not match configured account")
 	}
 	return resp, nil
+}
+
+func (auth credentials) setHeaders(headers http.Header) {
+	if auth.localToken != "" {
+		headers.Set("Authorization", "Bearer "+auth.localToken)
+	} else {
+		headers.Set("CF-Access-Client-Id", auth.clientID)
+		headers.Set("CF-Access-Client-Secret", auth.clientSecret)
+	}
 }
 
 func readResponse(reader io.Reader, value any) error {

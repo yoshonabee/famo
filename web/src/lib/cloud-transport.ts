@@ -1,4 +1,5 @@
 import { ApiError, type Task } from './api'
+import { observeCloudVersion, webProtocol } from './cloud-version'
 
 export type Operation = {
   operation_id: string
@@ -68,8 +69,10 @@ export async function syncRequest<T>(endpoint: string, body?: object) {
   try {
     response = await fetch(`/api/sync/${endpoint}`, {
       method: body === undefined ? 'GET' : 'POST',
-      headers:
-        body === undefined ? undefined : { 'Content-Type': 'application/json' },
+      headers: {
+        'X-Famo-Web-Protocol': String(webProtocol),
+        ...(body !== undefined && { 'Content-Type': 'application/json' }),
+      },
       body: body === undefined ? undefined : JSON.stringify(body),
       cache: 'no-store',
       redirect: 'manual',
@@ -80,6 +83,9 @@ export async function syncRequest<T>(endpoint: string, body?: object) {
       [401, 403].includes(response.status)
     )
       throw new ApiError('登入已失效或沒有存取權限，請重新載入頁面。', 401)
+    observeCloudVersion(response.headers)
+    if (response.status === 412)
+      throw new ApiError('請重新整理以繼續同步。', 412)
     data = await response.json()
   } catch (error) {
     if (error instanceof ApiError) throw error
