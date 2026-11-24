@@ -242,7 +242,7 @@ func (b *Backend) observeSyncWrites(next http.Handler) http.Handler {
 		response := middleware.NewWrapResponseWriter(w, r.ProtoMajor)
 		next.ServeHTTP(response, r)
 		if status := response.Status(); status >= 200 && status < 300 {
-			b.syncActivity.RequestSync()
+			b.syncActivity.LocalWrite()
 			if b.syncPhase.Load() != nil {
 				b.notifySyncStatus()
 			}

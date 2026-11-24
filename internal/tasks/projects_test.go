@@ -332,12 +332,12 @@ PRAGMA user_version=7;`)
 	if err != nil {
 		t.Fatalf("create Board on older v7 schema: %v", err)
 	}
-	// Earlier v7 binaries use explicit columns for creation and renaming.
+	// Exercise the column lists used by the original Project schema.
 	execSQL(t, store.db, "INSERT INTO projects(id,name,version) VALUES('old-app','Created by older app',1)")
 	execSQL(t, store.db, "UPDATE projects SET name='Renamed by older app' WHERE id='existing'")
 	version, err := databaseVersion(ctx, store.db)
-	if err != nil || version != 7 {
-		t.Fatalf("schema version changed: %d, %v", version, err)
+	if err != nil || version != schemaVersion {
+		t.Fatalf("schema version = %d, want %d: %v", version, schemaVersion, err)
 	}
 	if err := store.Close(); err != nil {
 		t.Fatal(err)
