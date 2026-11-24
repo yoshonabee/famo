@@ -3,10 +3,14 @@ package syncclient
 import (
 	"context"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
-const syncSoon = 250 * time.Millisecond
+const (
+	syncSoon              = 250 * time.Millisecond
+	connectedSyncInterval = 15 * time.Minute
+)
 
 // Activity tracks interaction with Famo and successful local writes.
 type Activity struct {
@@ -47,7 +51,14 @@ func (a *Activity) active() bool {
 	return time.Since(a.last) < a.idleAfter
 }
 
-func runPolling(ctx context.Context, interval time.Duration, activity *Activity, syncOnce func()) {
+func runPolling(
+	ctx context.Context,
+	interval time.Duration,
+	activity *Activity,
+	connected *atomic.Bool,
+	remote <-chan struct{},
+	syncOnce func() time.Duration,
+) {
 	var requests <-chan struct{}
 	if activity != nil {
 		requests = activity.requested
@@ -55,10 +66,17 @@ func runPolling(ctx context.Context, interval time.Duration, activity *Activity,
 	timer := time.NewTimer(0)
 	defer timer.Stop()
 	requested := false
+	remoteRequested := false
 	for ctx.Err() == nil {
 		select {
 		case <-ctx.Done():
 			return
+		case <-remote:
+			remoteRequested = true
+			if !requested {
+				requested = true
+				timer.Reset(min(interval, syncSoon))
+			}
 		case <-requests:
 			if !requested {
 				// Coalesce bursts without postponing the first requested sync.
@@ -70,15 +88,22 @@ func runPolling(ctx context.Context, interval time.Duration, activity *Activity,
 			if ctx.Err() != nil {
 				return
 			}
-			if activity != nil && !activity.active() {
+			if !remoteRequested && !connected.Load() && activity != nil && !activity.active() {
 				continue
 			}
+			remoteRequested = false
 			select {
 			case <-requests:
 			default:
 			}
-			syncOnce()
-			timer.Reset(interval)
+			delay := syncOnce()
+			if delay == 0 {
+				delay = interval
+				if connected.Load() {
+					delay = connectedSyncInterval
+				}
+			}
+			timer.Reset(delay)
 		}
 	}
 }

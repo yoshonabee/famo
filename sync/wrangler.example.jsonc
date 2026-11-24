@@ -11,6 +11,12 @@
     "binding": "ASSETS",
     "run_worker_first": true
   },
+  "durable_objects": {
+    "bindings": [{ "name": "SYNC_EVENTS", "class_name": "SyncEvents" }]
+  },
+  "migrations": [
+    { "tag": "sync-events-v1", "new_sqlite_classes": ["SyncEvents"] }
+  ],
   "d1_databases": [
     {
       "binding": "DB",
@@ -20,6 +26,7 @@
     }
   ],
   "vars": {
+    "MIN_WEB_PROTOCOL": "0",
     "ACCESS_HOST": "sync.example.com",
     "ACCESS_ISSUER": "https://your-team.cloudflareaccess.com",
     "ACCESS_AUDIENCE": "replace-with-access-application-aud",

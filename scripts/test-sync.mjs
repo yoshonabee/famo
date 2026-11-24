@@ -265,6 +265,14 @@ try {
     isMobile: true,
     hasTouch: true,
   })
+  const phoneNotifications = []
+  page.on('websocket', (socket) => {
+    if (new URL(socket.url()).pathname !== '/api/sync/events') return
+    socket.on('framereceived', ({ payload }) => {
+      if (typeof payload === 'string' && payload !== 'pong')
+        phoneNotifications.push(JSON.parse(payload))
+    })
+  })
   await page.goto(worker)
   online = true
   const titleButton = (title) =>
@@ -295,6 +303,11 @@ try {
       .tap()
   const listDesktopTasks = () => get(`${desktop}/api/tasks`)
   await titleButton(task.title).waitFor({ timeout: 25_000 })
+  await eventually('a task notification over the phone WebSocket', () =>
+    phoneNotifications.some(
+      ({ type, sequence }) => type === 'tasks' && sequence === 1,
+    ),
+  )
   await switchBoard()
   await page.getByRole('button', { name: '今日', exact: true }).tap()
   await eventually(

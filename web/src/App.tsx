@@ -1,3 +1,4 @@
+import { useSyncRefetchInterval } from '@/lib/cloud-events'
 import {
   useEffect,
   useEffectEvent,
@@ -53,11 +54,7 @@ import {
 } from '@/components/today-project-filter'
 import { useTheme } from '@/lib/theme'
 import { SyncStatusIndicator } from '@/components/sync-status-indicator'
-import {
-  appRefetchInterval,
-  isCloudWeb,
-  mobileCloudQuery,
-} from '@/lib/environment'
+import { isCloudWeb, mobileCloudQuery } from '@/lib/environment'
 import {
   isDesktop,
   openBoardEvent,
@@ -97,6 +94,7 @@ import {
   dateTime,
   orderSubset,
   request,
+  updateCloudTaskQueries,
   type Action,
   type Board,
   type Project,
@@ -171,11 +169,12 @@ function App() {
   const mobileList = useRef<MobileList>('board')
   const [dragging, setDragging] = useState(false)
   const [ordering, setOrdering] = useState(false)
+  const refetchInterval = useSyncRefetchInterval()
   const tasks = useQuery({
     queryKey: ['tasks'],
     queryFn: ({ signal }) => request<Task[]>('/tasks', undefined, signal),
     enabled: !dragging && !ordering,
-    refetchInterval: appRefetchInterval,
+    refetchInterval,
   })
   const [requestedView, setView] = useState<
     | 'active'
@@ -199,7 +198,7 @@ function App() {
   const boards = useQuery({
     queryKey: ['boards'],
     queryFn: ({ signal }) => request<Board[]>('/boards', undefined, signal),
-    refetchInterval: appRefetchInterval,
+    refetchInterval,
   })
   const boardList = boards.data ?? []
   const sidebar = useSidebarPreferences()
@@ -218,7 +217,7 @@ function App() {
   const projects = useQuery({
     queryKey: ['projects'],
     queryFn: ({ signal }) => request<Project[]>('/projects', undefined, signal),
-    refetchInterval: appRefetchInterval,
+    refetchInterval,
   })
   const projectList = projects.data ?? []
   const [projectId, setProjectId] = useState<string>()
@@ -493,6 +492,7 @@ function App() {
         version: t.version,
       }),
     onSuccess: (t) => {
+      if (isCloudWeb) return updateCloudTaskQueries(client)
       client.setQueryData<Task[]>(['tasks'], (old) =>
         t.deleted_at
           ? old?.filter((item) => item.id !== t.id)
@@ -517,6 +517,11 @@ function App() {
         tasks: items.map(({ id, version }) => ({ id, version })),
       }),
     onSuccess: async (updated) => {
+      if (isCloudWeb) {
+        await updateCloudTaskQueries(client)
+        selection.clear()
+        return
+      }
       await client.cancelQueries({ queryKey: ['tasks'] })
       const updatedById = new Map(updated.map((task) => [task.id, task]))
       client.setQueryData<Task[]>(['tasks'], (old) =>
@@ -531,7 +536,10 @@ function App() {
       setMessage({ error: error.message })
       void client.invalidateQueries({ queryKey: ['projects'] })
     },
-    onSettled: () => client.invalidateQueries({ queryKey: ['tasks'] }),
+    onSettled: (_data, error) => {
+      if (!isCloudWeb || error)
+        return client.invalidateQueries({ queryKey: ['tasks'] })
+    },
   })
   const all = tasks.data ?? []
   const active = all.filter((t) => !t.completed_at)

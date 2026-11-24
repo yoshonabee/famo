@@ -3,8 +3,15 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { LoaderCircle, RotateCcw, Trash2 } from 'lucide-react'
 import { TaskSearch } from '@/components/task-palette'
 import { Button } from '@/components/ui/button'
-import { ApiError, dateTime, request, type Task } from '@/lib/api'
-import { appRefetchInterval } from '@/lib/environment'
+import {
+  ApiError,
+  dateTime,
+  request,
+  updateCloudTaskQueries,
+  type Task,
+} from '@/lib/api'
+import { isCloudWeb } from '@/lib/environment'
+import { useSyncRefetchInterval } from '@/lib/cloud-events'
 import { useLanguage } from '@/lib/i18n'
 import { formatListDate } from '@/lib/calendar'
 
@@ -29,17 +36,20 @@ export function RecentlyDeletedPage({
     queryFn: ({ signal }) =>
       request<Task[]>('/tasks/recently-deleted', undefined, signal),
     staleTime: 0,
-    refetchInterval: appRefetchInterval,
+    refetchInterval: useSyncRefetchInterval(),
   })
   const restore = useMutation({
     mutationFn: (task: Task) =>
       request<Task>(`/tasks/${task.id}/restore`, { version: task.version }),
     onMutate: () => setRestoredTitle(''),
-    onSuccess: (task) => {
-      client.setQueryData<Task[]>(queryKey, (old) =>
-        old?.filter((item) => item.id !== task.id),
-      )
-      void client.invalidateQueries({ queryKey: ['tasks'] })
+    onSuccess: async (task) => {
+      if (isCloudWeb) await updateCloudTaskQueries(client)
+      else {
+        client.setQueryData<Task[]>(queryKey, (old) =>
+          old?.filter((item) => item.id !== task.id),
+        )
+        void client.invalidateQueries({ queryKey: ['tasks'] })
+      }
       setRestoredTitle(task.title)
       if (document.activeElement === document.body)
         (compact ? hint.current : heading.current)?.focus()

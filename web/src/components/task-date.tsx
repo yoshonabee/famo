@@ -2,7 +2,8 @@ import { useState } from 'react'
 import { CalendarDays } from 'lucide-react'
 import { DatePicker } from '@/components/date-picker'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { ApiError, request, type Task } from '@/lib/api'
+import { ApiError, request, updateCloudTaskQueries, type Task } from '@/lib/api'
+import { isCloudWeb } from '@/lib/environment'
 import { useLanguage } from '@/lib/i18n'
 import { formatTaskDate } from '@/lib/calendar'
 
@@ -20,11 +21,12 @@ export function TaskDate({ task, busy }: { task: Task; busy: boolean }) {
         version: snapshot.version,
       }),
     onSuccess: (updated) => {
+      setDraft(null)
+      if (isCloudWeb) return updateCloudTaskQueries(client)
       client.setQueryData<Task[]>(['tasks'], (old) =>
         old?.map((item) => (item.id === updated.id ? updated : item)),
       )
       void client.invalidateQueries({ queryKey: ['tasks'] })
-      setDraft(null)
     },
     onError: (error) => {
       if (error instanceof ApiError && error.status === 409)

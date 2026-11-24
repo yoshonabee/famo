@@ -1,3 +1,4 @@
+import type { QueryClient } from '@tanstack/react-query'
 import { notifyTasksChanged } from '@/lib/desktop'
 import { isCloudWeb } from '@/lib/environment'
 import type { Locale } from '@/lib/i18n'
@@ -81,6 +82,16 @@ export async function request<T>(
   if (body !== undefined && path.startsWith('/tasks')) void notifyTasksChanged()
   return data as T
 }
+export async function updateCloudTaskQueries(client: QueryClient) {
+  const { getCloudTaskLists } = await import('./cloud-api')
+  const lists = getCloudTaskLists()
+  if (!lists) return
+  client.setQueryData(['tasks'], lists.tasks)
+  client.setQueryData<Task[]>(['tasks', 'recently-deleted'], (cached) =>
+    cached ? lists.recentlyDeleted : undefined,
+  )
+}
+
 export function orderSubset<T extends { id: string }>(
   items: T[],
   ids: string[],

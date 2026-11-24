@@ -1,5 +1,12 @@
 // The first entry is Traditional Chinese, the second is English.
 export const messages = {
+  reloadWeb: ['重新整理', 'Reload'],
+  reloadWebAvailable: ['Famo 有新版', 'A new version of Famo is available'],
+  reloadWebRequired: ['請重新整理 Famo', 'Reload Famo to continue'],
+  reloadWebRequiredDescription: [
+    '目前的頁面版本已無法同步。重新整理會載入相容版本，並重試尚未確認的同步寫入。',
+    'This page version can no longer sync. Reload to get a compatible version and retry pending writes.',
+  ],
   add: ['加入', 'Add'],
   addBoard: ['新增 Board', 'Add Board'],
   addingNamedTask: ['正在新增任務：{1}', 'Adding task: {1}'],

@@ -1,6 +1,13 @@
 import { useRef, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { ApiError, request, type Action, type Task } from '@/lib/api'
+import {
+  ApiError,
+  request,
+  updateCloudTaskQueries,
+  type Action,
+  type Task,
+} from '@/lib/api'
+import { isCloudWeb } from '@/lib/environment'
 import { useLanguage } from '@/lib/i18n'
 
 type Edit = { task: Task; title: string }
@@ -39,6 +46,7 @@ export function TodoTitle({
         ...(op === 'rename' ? { title: updatedTitle } : {}),
       }),
     onSuccess: (updated) => {
+      if (isCloudWeb) return updateCloudTaskQueries(client)
       client.setQueryData<Task[]>(['tasks'], (old) =>
         old?.flatMap((t) =>
           t.id === updated.id ? (updated.deleted_at ? [] : [updated]) : [t],
