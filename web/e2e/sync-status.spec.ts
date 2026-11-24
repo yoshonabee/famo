@@ -39,7 +39,7 @@ test('reports initial sync, disconnection, failure, and manual recovery', async 
   await expect(status).toHaveAttribute('data-sync-status', 'synced')
   await expect(status).toHaveAccessibleDescription('已同步')
   await details.tap()
-  await expect(page.getByText(/^上次成功同步：/)).toBeVisible()
+  await expect(page.getByText('上次同步：剛剛')).toBeVisible()
   await details.tap()
 
   await context.setOffline(true)
@@ -55,6 +55,38 @@ test('reports initial sync, disconnection, failure, and manual recovery', async 
   failPull = false
   await status.tap()
   await expect(status).toHaveAttribute('data-sync-status', 'synced')
+})
+
+test('updates the English relative time while sync details are open', async ({
+  context,
+  page,
+}) => {
+  await page.clock.install()
+  await page.addInitScript(() => localStorage.setItem('famo.language', 'en'))
+  await page.route('**/api/sync/collections', (route) =>
+    route.fulfill({ json: { version: 0, projects: [], boards: [] } }),
+  )
+  await page.route('**/api/sync/pull?*', (route) =>
+    route.fulfill({ json: { changes: [], cursor: 0, has_more: false } }),
+  )
+  await page.goto('/')
+  await expect(page.locator('[data-sync-status]')).toHaveAttribute(
+    'data-sync-status',
+    'synced',
+  )
+  await context.setOffline(true)
+  await page.getByRole('button', { name: 'Sync details' }).tap()
+  await expect(page.getByText('Last synced: just now')).toBeVisible()
+  await expect(page.getByText('Unsynced changes: 0')).toBeVisible()
+
+  await page.clock.fastForward(6000)
+  await expect(page.getByText('Last synced: 6 seconds ago')).toBeVisible()
+  await page.clock.fastForward(54_000)
+  await expect(page.getByText('Last synced: 1 minute ago')).toBeVisible()
+  await page.clock.fastForward(3_540_000)
+  await expect(page.getByText('Last synced: 1 hour ago')).toBeVisible()
+  await page.clock.fastForward(82_800_000)
+  await expect(page.getByText('Last synced: 1 day ago')).toBeVisible()
 })
 
 test('keeps green during quick syncs and turns yellow during slow ones', async ({

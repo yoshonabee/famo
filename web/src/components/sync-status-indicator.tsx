@@ -1,4 +1,4 @@
-import { useId, useState } from 'react'
+import { useEffect, useId, useState } from 'react'
 import { Info } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 import { Button } from '@/components/ui/button'
@@ -24,8 +24,30 @@ const colors = {
   conflict: 'bg-red-500',
 } as const
 
-export function SyncStatusIndicator() {
+function LastSynced({ timestamp }: { timestamp: string }) {
   const { locale, t } = useLanguage()
+  const [now, setNow] = useState(Date.now)
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(timer)
+  }, [])
+
+  const seconds = Math.floor((now - Date.parse(timestamp)) / 1000)
+  const format = new Intl.RelativeTimeFormat(locale)
+  let ago = t('syncJustNow')
+  if (seconds >= 86_400)
+    ago = format.format(-Math.floor(seconds / 86_400), 'day')
+  else if (seconds >= 3600)
+    ago = format.format(-Math.floor(seconds / 3600), 'hour')
+  else if (seconds >= 60)
+    ago = format.format(-Math.floor(seconds / 60), 'minute')
+  else if (seconds >= 5) ago = format.format(-seconds, 'second')
+
+  return <time dateTime={timestamp}>{t('syncLastSuccessfulAt', ago)}</time>
+}
+
+export function SyncStatusIndicator() {
+  const { t } = useLanguage()
   const client = useQueryClient()
   const descriptionId = useId()
   const detailsId = useId()
@@ -35,12 +57,6 @@ export function SyncStatusIndicator() {
   if (status === 'disabled') return null
 
   const label = t(labels[status])
-  const lastSuccessful = last_successful_at
-    ? new Intl.DateTimeFormat(locale, {
-        dateStyle: 'medium',
-        timeStyle: 'medium',
-      }).format(new Date(last_successful_at))
-    : undefined
   const showDetails = detailsOpen || preview
   function refresh() {
     if (isDesktop()) {
@@ -112,9 +128,12 @@ export function SyncStatusIndicator() {
       </Button>
       <div className="sync-status-details" id={detailsId} hidden={!showDetails}>
         <div>
-          {lastSuccessful
-            ? t('syncLastSuccessfulAt', lastSuccessful)
-            : t('syncNotYetSuccessful')}
+          {showDetails &&
+            (last_successful_at ? (
+              <LastSynced timestamp={last_successful_at} />
+            ) : (
+              t('syncNotYetSuccessful')
+            ))}
         </div>
         <div>{t('syncUnsyncedCount', unsynced_count)}</div>
       </div>
