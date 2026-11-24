@@ -33,7 +33,9 @@ test('reports initial sync, disconnection, failure, and manual recovery', async 
     await status.hover()
     await expect(details).toContainText('同步中')
     await expect(details).toContainText('尚未成功同步')
-    await expect(details).toContainText('待同步異動：0 筆')
+    await expect(
+      details.getByText('待同步異動：0', { exact: true }),
+    ).toBeVisible()
     await page.mouse.move(0, 0)
     await expect(details).toBeHidden()
   } finally {

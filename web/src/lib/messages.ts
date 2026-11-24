@@ -327,7 +327,7 @@ export const messages = {
   syncLastSuccessfulAt: ['上次同步：{1}', 'Last synced: {1}'],
   syncJustNow: ['剛剛', 'just now'],
   syncNotYetSuccessful: ['尚未成功同步', 'No successful sync yet'],
-  syncUnsyncedCount: ['待同步異動：{1} 筆', 'Unsynced changes: {1}'],
+  syncUnsyncedCount: ['待同步異動：{1}', 'Unsynced changes: {1}'],
   syncURL: ['同步網址', 'Sync URL'],
   syncAccount: ['同步帳號', 'Sync account'],
   syncInterval: ['輪詢間隔（秒）', 'Polling interval (seconds)'],
