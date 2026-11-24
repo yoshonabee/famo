@@ -10,7 +10,8 @@ import (
 
 const (
 	activeTaskSchemaVersion = 6
-	schemaVersion           = 7
+	projectSchemaVersion    = 7
+	schemaVersion           = 8
 )
 
 const activeSchema = `
@@ -106,18 +107,52 @@ func migrateSchema(ctx context.Context, tx *sql.Tx) error {
 	if err := migrateTasksAndProjects(ctx, tx); err != nil {
 		return err
 	}
-	// Boards are additive and leave the v7 task and Project schema readable by older builds.
 	if _, err := tx.ExecContext(ctx, boardSchema+syncSchema+collectionSyncSchema); err != nil {
+		return err
+	}
+	if err := migrateSyncOutbox(ctx, tx); err != nil {
 		return err
 	}
 	var hasIcon bool
 	if err := tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM pragma_table_info('boards') WHERE name='icon')`).Scan(&hasIcon); err != nil {
 		return err
 	}
-	if hasIcon {
-		return nil
+	if !hasIcon {
+		if _, err := tx.ExecContext(ctx, "ALTER TABLE boards ADD COLUMN "+boardIconColumn); err != nil {
+			return err
+		}
 	}
-	_, err := tx.ExecContext(ctx, "ALTER TABLE boards ADD COLUMN "+boardIconColumn)
+	// Older sync clients cannot freeze a snapshot before transmitting it.
+	_, err := tx.ExecContext(ctx, fmt.Sprintf("PRAGMA user_version=%d", schemaVersion))
+	return err
+}
+
+func migrateSyncOutbox(ctx context.Context, tx *sql.Tx) error {
+	var hasAttempted bool
+	if err := tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM pragma_table_info('sync_outbox') WHERE name='attempted')`).Scan(&hasAttempted); err != nil {
+		return err
+	}
+	if !hasAttempted {
+		// Only the oldest queued snapshot for each task was eligible for
+		// upload. Preserve those heads and merge each never-sent tail.
+		if _, err := tx.ExecContext(ctx, `
+			ALTER TABLE sync_outbox ADD COLUMN attempted INTEGER NOT NULL DEFAULT 0;
+			UPDATE sync_outbox SET attempted=1
+			WHERE number IN (SELECT MIN(number) FROM sync_outbox GROUP BY task_id);
+			UPDATE sync_outbox AS head SET document=(
+				SELECT tail.document FROM sync_outbox tail WHERE tail.task_id=head.task_id
+				ORDER BY tail.number DESC LIMIT 1
+			) WHERE attempted=0
+				AND number IN (SELECT MIN(number) FROM sync_outbox WHERE attempted=0 GROUP BY task_id);
+			DELETE FROM sync_outbox WHERE attempted=0
+				AND number NOT IN (SELECT MIN(number) FROM sync_outbox WHERE attempted=0 GROUP BY task_id);
+			DROP TRIGGER IF EXISTS tasks_sync_insert;
+			DROP TRIGGER IF EXISTS tasks_sync_update;
+		`); err != nil {
+			return err
+		}
+	}
+	_, err := tx.ExecContext(ctx, syncTriggers)
 	return err
 }
 
@@ -126,7 +161,7 @@ func migrateTasksAndProjects(ctx context.Context, tx *sql.Tx) error {
 	if err != nil {
 		return err
 	}
-	if version == schemaVersion {
+	if version >= projectSchemaVersion {
 		return ensureProjectColumns(ctx, tx)
 	}
 	if version >= activeTaskSchemaVersion {
@@ -179,7 +214,7 @@ CREATE TABLE projects (
     version INTEGER NOT NULL,
     position INTEGER
 );
-`+fmt.Sprintf("PRAGMA user_version=%d;", schemaVersion))
+`)
 	return err
 }
 

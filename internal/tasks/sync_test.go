@@ -193,3 +193,63 @@ func TestSyncRejectedDraftCanBeRepairedWithoutBlockingAnotherTask(t *testing.T) 
 		t.Fatalf("repaired operation: %+v", repaired)
 	}
 }
+
+func TestSyncOutboxMigrationPreservesLegacyHeadAndCoalescesTail(t *testing.T) {
+	ctx := t.Context()
+	path := filepath.Join(t.TempDir(), "tasks.db")
+	store, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	bindSyncTest(t, store)
+	task := createTest(t, store)
+	if _, err := store.db.ExecContext(ctx, `
+		DROP TRIGGER tasks_sync_insert;
+		DROP TRIGGER tasks_sync_update;
+		ALTER TABLE sync_outbox DROP COLUMN attempted;
+		DELETE FROM sync_outbox;
+		PRAGMA user_version=7
+	`); err != nil {
+		t.Fatal(err)
+	}
+	for i, opID := range []string{"legacy-head", "legacy-tail-first", "legacy-tail-last"} {
+		task.Title = opID
+		raw, err := json.Marshal(task)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := store.db.ExecContext(ctx, `
+			INSERT INTO sync_outbox(operation_id,task_id,base_version,document)
+			VALUES(?,?,?,?)`, opID, task.ID, i, string(raw)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := store.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	store, err = Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	head := nextSyncOperation(t, store)
+	if !head.PreviouslyAttempted || head.OperationID != "legacy-head" || head.Task.Title != "legacy-head" || head.BaseVersion != 0 {
+		t.Fatalf("migration changed the operation eligible for earlier upload: %+v", head)
+	}
+	if _, err := store.AcknowledgeSync(ctx, head); err != nil {
+		t.Fatal(err)
+	}
+	tail := nextSyncOperation(t, store)
+	if tail.PreviouslyAttempted || tail.OperationID != "legacy-tail-first" || tail.Task.Title != "legacy-tail-last" || tail.BaseVersion != 1 {
+		t.Fatalf("migration did not retain the earliest base and latest unsent snapshot: %+v", tail)
+	}
+	if _, err := store.AcknowledgeSync(ctx, tail); err != nil {
+		t.Fatal(err)
+	}
+	status, err := store.SyncStatus(ctx)
+	if err != nil || status.Pending != 0 {
+		t.Fatalf("unexpected migrated tail after acknowledging both operations: %+v, %v", status, err)
+	}
+}

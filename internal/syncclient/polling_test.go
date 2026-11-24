@@ -14,7 +14,7 @@ func TestPollingPausesAndResumesWithActivity(t *testing.T) {
 		defer cancel()
 		activity := NewActivity(5 * time.Minute)
 		var calls atomic.Int32
-		go runPolling(ctx, 30*time.Second, activity, &atomic.Bool{}, nil, func() time.Duration { calls.Add(1); return 0 })
+		go runPolling(ctx, 30*time.Second, activity, &atomic.Bool{}, nil, func(bool) time.Duration { calls.Add(1); return 0 })
 		assertCalls := func(want int32) {
 			t.Helper()
 			synctest.Wait()
@@ -48,10 +48,10 @@ func TestPollingCoalescesRequestsAndKeepsWritesDuringSync(t *testing.T) {
 		activity := NewActivity(5 * time.Minute)
 		var calls atomic.Int32
 		var writeDuringSync atomic.Bool
-		go runPolling(ctx, 30*time.Second, activity, &atomic.Bool{}, nil, func() time.Duration {
+		go runPolling(ctx, 30*time.Second, activity, &atomic.Bool{}, nil, func(bool) time.Duration {
 			calls.Add(1)
 			if writeDuringSync.Swap(false) {
-				activity.RequestSync()
+				activity.LocalWrite()
 			}
 			return 0
 		})
@@ -61,15 +61,15 @@ func TestPollingCoalescesRequestsAndKeepsWritesDuringSync(t *testing.T) {
 		before := calls.Load()
 		writeDuringSync.Store(true)
 		for range 3 {
-			activity.RequestSync()
+			activity.LocalWrite()
 		}
-		time.Sleep(syncSoon)
+		time.Sleep(pushSoon)
 		synctest.Wait()
 		if got := calls.Load() - before; got != 1 {
 			t.Fatalf("expected one immediate sync, got %d", got)
 		}
 		// The write queued during sync must get its own cycle.
-		time.Sleep(syncSoon)
+		time.Sleep(pushSoon)
 		synctest.Wait()
 		if got := calls.Load() - before; got != 2 {
 			t.Fatalf("expected the later write to schedule sync, got %d", got)
@@ -86,7 +86,7 @@ func TestConnectedSyncReceivesEventsWhileIdleAndResumesFallback(t *testing.T) {
 		var connected atomic.Bool
 		connected.Store(true)
 		remote := make(chan struct{}, 1)
-		go runPolling(ctx, 30*time.Second, activity, &connected, remote, func() time.Duration {
+		go runPolling(ctx, 30*time.Second, activity, &connected, remote, func(bool) time.Duration {
 			calls.Add(1)
 			return 0
 		})
@@ -112,6 +112,49 @@ func TestConnectedSyncReceivesEventsWhileIdleAndResumesFallback(t *testing.T) {
 		synctest.Wait()
 		if got := calls.Load(); got != 5 {
 			t.Fatalf("polling did not resume on activity: %d cycles", got)
+		}
+	})
+}
+
+func TestLocalWritesUseFixedWindowAndManualSyncCanFlush(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		ctx, cancel := context.WithCancel(t.Context())
+		defer cancel()
+		activity := NewActivity(time.Minute)
+		remote := make(chan struct{}, 1)
+		var cycles []bool
+		go runPolling(ctx, 30*time.Second, activity, &atomic.Bool{}, remote, func(pushReady bool) time.Duration {
+			cycles = append(cycles, pushReady)
+			return 0
+		})
+		synctest.Wait()
+
+		activity.LocalWrite()
+		signalRemote(remote)
+		synctest.Wait()
+		time.Sleep(syncSoon)
+		synctest.Wait()
+		if len(cycles) != 2 || cycles[1] {
+			t.Fatalf("remote event should pull during the upload window: %v", cycles)
+		}
+		activity.LocalWrite()
+		time.Sleep(pushSoon - syncSoon)
+		synctest.Wait()
+		if len(cycles) != 3 || !cycles[2] {
+			t.Fatalf("second write moved the upload deadline: %v", cycles)
+		}
+
+		activity.LocalWrite()
+		time.Sleep(syncSoon)
+		activity.RequestSync()
+		synctest.Wait()
+		if len(cycles) != 4 || !cycles[3] {
+			t.Fatalf("manual sync did not flush early: %v", cycles)
+		}
+		time.Sleep(pushSoon)
+		synctest.Wait()
+		if len(cycles) != 4 {
+			t.Fatalf("manual sync left a redundant upload scheduled: %v", cycles)
 		}
 	})
 }

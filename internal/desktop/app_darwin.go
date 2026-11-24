@@ -121,7 +121,7 @@ func Run(cfg Config) error {
 	mainWindow.OnWindowEvent(events.Mac.WindowDidBecomeKey, func(*application.WindowEvent) {
 		mainWindow.EmitEvent("famo:login-item-refresh")
 		if backend.stopSync != nil {
-			backend.syncActivity.RequestSync()
+			backend.syncActivity.RequestRefresh()
 		}
 	})
 	mainWindow.RegisterHook(events.Common.WindowClosing, func(event *application.WindowEvent) {

@@ -12,10 +12,11 @@ import (
 // SyncOperation carries a full task snapshot with a cloud version independent
 // of the SQLite version used by local editing clients.
 type SyncOperation struct {
-	OperationID string `json:"operation_id"`
-	TaskID      string `json:"task_id"`
-	BaseVersion int    `json:"base_version"`
-	Task        Task   `json:"task"`
+	OperationID         string `json:"operation_id"`
+	TaskID              string `json:"task_id"`
+	BaseVersion         int    `json:"base_version"`
+	Task                Task   `json:"task"`
+	PreviouslyAttempted bool   `json:"-"`
 }
 
 type SyncChange struct {
@@ -64,7 +65,8 @@ CREATE TABLE IF NOT EXISTS sync_outbox (
     operation_id TEXT NOT NULL UNIQUE,
     task_id TEXT NOT NULL,
     base_version INTEGER NOT NULL,
-    document TEXT NOT NULL
+    document TEXT NOT NULL,
+    attempted INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS sync_outbox_task ON sync_outbox(task_id,number);
 CREATE TABLE IF NOT EXISTS sync_conflicts (
@@ -80,6 +82,9 @@ CREATE TABLE IF NOT EXISTS sync_rejections (
     task_id TEXT PRIMARY KEY NOT NULL,
     status INTEGER NOT NULL
 );
+`
+
+const syncTriggers = `
 CREATE TRIGGER IF NOT EXISTS tasks_sync_insert AFTER INSERT ON tasks
 WHEN (SELECT applying=0 FROM sync_binding WHERE id=1)
 BEGIN
@@ -93,14 +98,19 @@ END;
 `
 
 const enqueueTask = `
+    UPDATE sync_outbox SET document=NEW.document
+    WHERE task_id=NEW.id AND attempted=0
+      AND NOT EXISTS(SELECT 1 FROM sync_rejections WHERE task_id=NEW.id);
     INSERT INTO sync_outbox(operation_id,task_id,base_version,document)
-    VALUES(lower(hex(randomblob(16))),NEW.id,CASE
+    SELECT lower(hex(randomblob(16))),NEW.id,CASE
         WHEN EXISTS(SELECT 1 FROM sync_rejections WHERE task_id=NEW.id) THEN
             (SELECT base_version FROM sync_outbox WHERE task_id=NEW.id ORDER BY number LIMIT 1)
         ELSE COALESCE(
             (SELECT base_version+1 FROM sync_outbox WHERE task_id=NEW.id ORDER BY number DESC LIMIT 1),
             (SELECT version FROM sync_versions WHERE task_id=NEW.id),0)
-        END,NEW.document);
+        END,NEW.document
+    WHERE NOT EXISTS(SELECT 1 FROM sync_outbox WHERE task_id=NEW.id AND attempted=0)
+       OR EXISTS(SELECT 1 FROM sync_rejections WHERE task_id=NEW.id);
     DELETE FROM sync_outbox WHERE task_id=NEW.id
         AND EXISTS(SELECT 1 FROM sync_rejections WHERE task_id=NEW.id)
         AND number<(SELECT MAX(number) FROM sync_outbox WHERE task_id=NEW.id);
@@ -157,9 +167,18 @@ func (s *Store) BindSync(ctx context.Context, url, account string) error {
 	return tx.Commit()
 }
 
+// SyncOperations freezes the selected task heads before the caller can send
+// them. A later local edit can only replace an unclaimed snapshot.
 func (s *Store) SyncOperations(ctx context.Context, limit int) ([]SyncOperation, error) {
-	rows, err := s.db.QueryContext(ctx, `
-		SELECT o.operation_id,o.task_id,o.base_version,o.document
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+	rows, err := tx.QueryContext(ctx, `
+		SELECT o.operation_id,o.task_id,o.base_version,o.document,o.attempted
 		FROM sync_outbox o
 		WHERE NOT EXISTS (SELECT 1 FROM sync_conflicts c WHERE c.task_id=o.task_id)
 		  AND NOT EXISTS (SELECT 1 FROM sync_rejections r WHERE r.task_id=o.task_id)
@@ -173,7 +192,7 @@ func (s *Store) SyncOperations(ctx context.Context, limit int) ([]SyncOperation,
 	for rows.Next() {
 		var op SyncOperation
 		var raw string
-		if err := rows.Scan(&op.OperationID, &op.TaskID, &op.BaseVersion, &raw); err != nil {
+		if err := rows.Scan(&op.OperationID, &op.TaskID, &op.BaseVersion, &raw, &op.PreviouslyAttempted); err != nil {
 			return nil, err
 		}
 		if err := json.Unmarshal([]byte(raw), &op.Task); err != nil {
@@ -185,7 +204,20 @@ func (s *Store) SyncOperations(ctx context.Context, limit int) ([]SyncOperation,
 		}
 		out = append(out, op)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	for _, op := range out {
+		if !op.PreviouslyAttempted {
+			if _, err := tx.ExecContext(ctx, `UPDATE sync_outbox SET attempted=1 WHERE operation_id=?`, op.OperationID); err != nil {
+				return nil, err
+			}
+		}
+	}
+	return out, tx.Commit()
 }
 
 func (s *Store) SyncCursor(ctx context.Context) (int64, error) {
@@ -195,6 +227,10 @@ func (s *Store) SyncCursor(ctx context.Context) (int64, error) {
 }
 
 func (s *Store) AcknowledgeSync(ctx context.Context, op SyncOperation) (bool, error) {
+	return s.AcknowledgeSyncBatch(ctx, []SyncOperation{op})
+}
+
+func (s *Store) AcknowledgeSyncBatch(ctx context.Context, ops []SyncOperation) (bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	tx, err := s.db.BeginTx(ctx, nil)
@@ -202,20 +238,27 @@ func (s *Store) AcknowledgeSync(ctx context.Context, op SyncOperation) (bool, er
 		return false, err
 	}
 	defer tx.Rollback()
-	result, err := tx.ExecContext(ctx, `DELETE FROM sync_outbox WHERE operation_id=?`, op.OperationID)
-	if err != nil {
-		return false, err
-	}
-	count, err := result.RowsAffected()
-	if err != nil || count == 0 {
-		return false, err
-	}
-	if err := setSyncVersion(ctx, tx, op.TaskID, op.Task.Version); err != nil {
-		return false, err
-	}
-	changed, err := applyDeferredSyncChange(ctx, tx, op.TaskID)
-	if err != nil {
-		return false, err
+	var changed bool
+	for _, op := range ops {
+		result, err := tx.ExecContext(ctx, `DELETE FROM sync_outbox WHERE operation_id=?`, op.OperationID)
+		if err != nil {
+			return false, err
+		}
+		count, err := result.RowsAffected()
+		if err != nil {
+			return false, err
+		}
+		if count == 0 {
+			continue
+		}
+		if err := setSyncVersion(ctx, tx, op.TaskID, op.Task.Version); err != nil {
+			return false, err
+		}
+		applied, err := applyDeferredSyncChange(ctx, tx, op.TaskID)
+		if err != nil {
+			return false, err
+		}
+		changed = changed || applied
 	}
 	if err := tx.Commit(); err != nil {
 		return false, err

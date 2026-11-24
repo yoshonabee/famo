@@ -81,7 +81,7 @@ func setupMenuBar(app *application.App, backend *Backend, menuBar *MenuBar, lang
 	})
 	if backend.stopSync != nil {
 		panel.OnWindowEvent(events.Mac.WindowShow, func(*application.WindowEvent) {
-			backend.syncActivity.RequestSync()
+			backend.syncActivity.RequestRefresh()
 		})
 	}
 	panel.RegisterHook(events.Common.WindowClosing, func(event *application.WindowEvent) {
