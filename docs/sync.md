@@ -12,6 +12,18 @@ Mac 程序執行時與手機網頁在前景時，會用 WebSocket 接收遠端�
 
 Mac 主視窗和選單列面板以及手機網頁會顯示同步燈號與文字。綠燈表示最近同步成功且沒有待送異動。黃燈表示同步中、等待異動送出或等待連線。紅燈表示同步失敗或需處理版本衝突。按燈號可立即同步。
 
+## 資料更新流程
+
+[下載 HTML 流程圖](sync-flow.html)後可直接用瀏覽器開啟。以下以 Mac 修改任務、手機網頁收到異動為例。從手機編輯時，兩個 Client 交換角色。
+
+1. Mac 先將修改存入本機 SQLite，並排入待送佇列，再送出 `POST /api/sync/push`。Cloudflare Access 放行後，Worker 驗證 JWT 和同步帳號。
+2. Worker 在 D1 交易中檢查操作 ID 和任務版本。成功時，D1 保存新版本及變更序號。版本衝突會回傳 HTTP 409，該次寫入不會廣播通知。
+3. 提交成功後，Worker 回傳 HTTP 200 給 Mac，並在背景呼叫該帳號的 Durable Object。兩個 Client 已透過 Access 建立 WebSocket，Durable Object 沿用這些連線廣播變更類型和序號。
+4. 手機收到通知後，以最後已套用的游標呼叫 `GET /api/sync/pull?after=...`。Worker 從 D1 讀取游標之後的變更，手機套用資料並更新畫面和游標。如果回應還有分頁，手機會接著拉取。
+5. 如果手機錯過通知，重連時會依游標補拉。連線正常時也會每 15 分鐘校對一次。
+
+WebSocket 通知本身不會新增一次進入 Worker 的 HTTP 請求。原始寫入、WebSocket 握手和接收端後續的拉取都會計入 Worker invocations，Worker 呼叫 Durable Object 廣播則使用 Durable Objects 自己的額度。任務批次寫入走 `/api/sync/push-batch` 並送出一則通知。Projects 和 Boards 共用一個集合版本，接收端透過 `GET /api/sync/collections` 讀取最新集合。
+
 ## 本機驗證
 
 準備 Go 1.26.5、Node.js 24 和 Chromium，從專案根目錄執行：
