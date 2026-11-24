@@ -97,14 +97,24 @@ let pendingTaskWrite: Promise<WriteResult> | undefined
 const acknowledgedTaskSequences = new Set<number>()
 
 function publishStatus() {
+  const unsyncedCount = [...journal.values()].reduce(
+    (count, write) =>
+      count +
+      (write.endpoint === 'push-batch' ? write.body.operations.length : 1),
+    0,
+  )
   if ([...writeProblems.values()].includes('conflict'))
-    setCloudSyncStatus('conflict')
-  else if (failedReads.size || writeProblems.size) setCloudSyncStatus('error')
-  else if (activeReads || activeWrites) setCloudSyncStatus('syncing')
+    setCloudSyncStatus('conflict', unsyncedCount)
+  else if (failedReads.size || writeProblems.size)
+    setCloudSyncStatus('error', unsyncedCount)
+  else if (activeReads || activeWrites)
+    setCloudSyncStatus('syncing', unsyncedCount)
   else if (journal.size || !receivedTasks || !receivedCollections)
-    setCloudSyncStatus('pending')
-  else setCloudSyncStatus('synced')
+    setCloudSyncStatus('pending', unsyncedCount)
+  else setCloudSyncStatus('synced', unsyncedCount)
 }
+
+publishStatus()
 
 function remember(key: string, write?: Write) {
   if (write) journal.set(key, write)
@@ -116,6 +126,7 @@ function remember(key: string, write?: Write) {
   } catch {
     // The current tab can retry using the in-memory operation ID.
   }
+  publishStatus()
 }
 
 function applyTask(task: Task) {
@@ -163,8 +174,8 @@ async function send(key: string, write: Write) {
     )
     if (write.endpoint !== 'collections') pendingTaskWrite = response
     const result = await response
-    remember(key)
     for (const scope of scopes) writeProblems.delete(scope)
+    remember(key)
     return result
   } catch (error) {
     for (const scope of scopes)

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"time"
 
 	"famo/internal/syncclient"
 	"famo/internal/tasks"
@@ -26,7 +27,18 @@ type SyncSettingsState struct {
 }
 
 func (s *SyncSettings) RuntimeStatus(ctx context.Context) (syncclient.Status, error) {
-	return s.backend.syncStatus(ctx)
+	details, err := s.RuntimeDetails(ctx)
+	return details.Status, err
+}
+
+type SyncRuntimeDetails struct {
+	Status           syncclient.Status `json:"status"`
+	LastSuccessfulAt *time.Time        `json:"last_successful_at"`
+	UnsyncedCount    int               `json:"unsynced_count"`
+}
+
+func (s *SyncSettings) RuntimeDetails(ctx context.Context) (SyncRuntimeDetails, error) {
+	return s.backend.syncDetails(ctx)
 }
 
 func (s *SyncSettings) RequestSync() {
