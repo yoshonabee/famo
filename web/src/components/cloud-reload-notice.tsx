@@ -38,7 +38,7 @@ export function CloudReloadNotice() {
           <DialogDescription className="text-muted-foreground">
             {t('reloadWebRequiredDescription')}
           </DialogDescription>
-          {reload}
+          <div className="flex justify-end">{reload}</div>
         </DialogContent>
       </Dialog>
     )
