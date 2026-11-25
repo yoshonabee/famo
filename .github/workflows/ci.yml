@@ -1,0 +1,69 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tests:
+    name: Go, web, and sync tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: |
+            web/package-lock.json
+            sync/package-lock.json
+      - run: npm --prefix web ci
+      - run: npm --prefix sync ci
+      - run: npm --prefix web run format:check
+      - run: make test
+      - run: npm --prefix sync run typecheck
+      - run: npm --prefix sync test
+      - name: Install Chromium
+        working-directory: web
+        run: npx playwright install --with-deps chromium
+      - run: npm --prefix web run test:e2e:sync
+      - run: node scripts/test-sync.mjs
+
+  macos:
+    name: macOS build and local app tests
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: make desktop
+      - run: go test -race ./...
+      - name: Install Chromium
+        working-directory: web
+        run: npx playwright install chromium
+      - run: npm --prefix web run test:e2e
