@@ -203,7 +203,7 @@ test('內建與自訂主題可匯出、匯入，重名保留兩份，整包可�
   const bundle = await exportedJSON(page, '匯出全部自訂主題')
   expect(bundle.themes).toHaveLength(2)
   expect(bundle.themes[0].colors).toEqual(exported.themes[0].colors)
-  const freshContext = await browser.newContext()
+  const freshContext = await browser.newContext({ locale: 'zh-TW' })
   try {
     const fresh = await freshContext.newPage()
     await fresh.goto(page.url())

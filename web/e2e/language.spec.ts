@@ -33,7 +33,7 @@ test('switches language immediately across the main and menu bar windows and sav
   await expect(panel.getByRole('heading', { name: '今日任務' })).toBeVisible()
 
   const language = await showLanguageSettings(page)
-  await expect(language).toHaveValue('zh-TW')
+  await expect(language).toHaveValue('system')
   await language.selectOption('en')
   await expect(page.locator('html')).toHaveAttribute('lang', 'en')
   await expect(page).toHaveTitle('Famo · Personal task workspace')
@@ -92,6 +92,52 @@ test('switches language immediately across the main and menu bar windows and sav
   await expect(
     panel.getByRole('checkbox', { name: `完成任務：${taskName}` }),
   ).toBeVisible()
+})
+
+test('follows preferred languages in order until an explicit choice is made', async ({
+  page,
+  context,
+}) => {
+  await context.addInitScript(() => {
+    Object.defineProperty(navigator, 'languages', {
+      configurable: true,
+      value: ['ja-JP', 'en-GB', 'zh-Hant-TW'],
+    })
+  })
+  await page.goto('/')
+  await expect(page.locator('html')).toHaveAttribute('lang', 'en')
+  const language = await showLanguageSettings(page)
+  await expect(language).toHaveValue('system')
+  await expect(
+    language.getByRole('option', { name: 'Follow system' }),
+  ).toBeAttached()
+
+  async function changeSystemLanguages(languages: string[]) {
+    await page.evaluate((value) => {
+      Object.defineProperty(navigator, 'languages', {
+        configurable: true,
+        value,
+      })
+      window.dispatchEvent(new Event('languagechange'))
+    }, languages)
+  }
+
+  await changeSystemLanguages(['zh-Hant-HK', 'en-GB'])
+  await expect(page.locator('html')).toHaveAttribute('lang', 'zh-TW')
+  await language.selectOption('zh-TW')
+  await changeSystemLanguages(['en-US'])
+  await expect(page.locator('html')).toHaveAttribute('lang', 'zh-TW')
+
+  await page.reload()
+  const savedLanguage = await showLanguageSettings(page)
+  await expect(savedLanguage).toHaveValue('zh-TW')
+  await savedLanguage.selectOption('system')
+  await expect(page.locator('html')).toHaveAttribute('lang', 'en')
+  await changeSystemLanguages(['ja-JP'])
+  await expect(page.locator('html')).toHaveAttribute('lang', 'zh-TW')
+  await page.reload()
+  await expect(page.locator('html')).toHaveAttribute('lang', 'en')
+  await expect(await showLanguageSettings(page)).toHaveValue('system')
 })
 
 test('a language change in another tab translates a visible validation error and keeps the form draft', async ({
