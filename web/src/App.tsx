@@ -14,6 +14,7 @@ import { CheckCircleIcon as OutlineCheckCircle } from '@heroicons/react/24/outli
 import { CheckCircleIcon as SolidCheckCircle } from '@heroicons/react/24/solid'
 import {
   CalendarDays,
+  ChartNoAxesColumnIncreasing,
   CheckCheck,
   ExternalLink,
   GripVertical,
@@ -46,6 +47,7 @@ import { ProjectBadge } from '@/components/project-appearance'
 import { ProjectEditor } from '@/components/project-editor'
 import { ProjectPicker } from '@/components/project-picker'
 import { RecentlyDeletedPage } from '@/components/recently-deleted-page'
+import { TaskStatistics } from '@/components/task-statistics'
 import { ProjectNavigation } from '@/components/sidebar-collection'
 import { SidebarResizeHandle } from '@/components/sidebar-resize-handle'
 import {
@@ -181,6 +183,7 @@ function App() {
     | 'date'
     | 'completed'
     | 'recently-deleted'
+    | 'statistics'
     | 'preferences'
     | 'project'
     | 'projects'
@@ -397,7 +400,7 @@ function App() {
           setPalette('global-search')
           break
         }
-        if (view === 'preferences') goToToday()
+        if (view === 'preferences' || view === 'statistics') goToToday()
         setPalette('search')
         break
     }
@@ -648,7 +651,12 @@ function App() {
     ? t('expandSidebar')
     : t('collapseSidebar')
   function selectNavigation(
-    next: 'active' | 'completed' | 'recently-deleted' | 'preferences',
+    next:
+      | 'active'
+      | 'completed'
+      | 'recently-deleted'
+      | 'statistics'
+      | 'preferences',
   ) {
     setView(next)
   }
@@ -753,6 +761,15 @@ function App() {
           .map((id) => (
             <NavigationButton key={id} item={navItems.get(id)!} />
           ))}
+        <NavigationButton
+          item={{
+            id: 'statistics',
+            label: t('statistics'),
+            icon: ChartNoAxesColumnIncreasing,
+            current: view === 'statistics',
+            onSelect: () => selectNavigation('statistics'),
+          }}
+        />
         <button
           className={
             view === 'recently-deleted' ? 'nav-item active' : 'nav-item'
@@ -827,7 +844,9 @@ function App() {
                   ? t('today')
                   : view === 'recently-deleted'
                     ? t('recentlyDeleted')
-                    : (listTitle ?? t('tasks')))
+                    : view === 'statistics'
+                      ? t('statistics')
+                      : (listTitle ?? t('tasks')))
             }
             board={currentBoard}
             boards={orderedNavIds.flatMap((id) => {
@@ -876,6 +895,7 @@ function App() {
           hidden={
             view === 'preferences' ||
             view === 'recently-deleted' ||
+            view === 'statistics' ||
             view === 'projects'
           }
           {...(narrowCloud ? {} : selection.handlers)}
@@ -1065,6 +1085,50 @@ function App() {
             />
           )}
         </div>
+        {view === 'statistics' && (
+          <div className="main-content">
+            {!narrowCloud && (
+              <h1 className="page-heading">{t('statistics')}</h1>
+            )}
+            {(tasks.isPending || projects.isPending) && (
+              <div className="state">
+                <LoaderCircle className="animate-spin" />
+                {t('loading')}
+              </div>
+            )}
+            {tasks.isError && (
+              <div role="alert" className="state">
+                {t('loadTasksError', errorText(tasks.error))}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void tasks.refetch()}
+                >
+                  {t('reload')}
+                </Button>
+              </div>
+            )}
+            {projects.isError && (
+              <div role="alert" className="state">
+                {errorText(projects.error)}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void projects.refetch()}
+                >
+                  {t('reloadProjects')}
+                </Button>
+              </div>
+            )}
+            {tasks.isSuccess && projects.isSuccess && (
+              <TaskStatistics
+                tasks={all}
+                projects={projectList}
+                today={today}
+              />
+            )}
+          </div>
+        )}
         {view === 'recently-deleted' && (
           <div className="main-content">
             <RecentlyDeletedPage

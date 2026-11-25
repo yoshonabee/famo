@@ -1,5 +1,14 @@
 // The first entry is Traditional Chinese, the second is English.
 export const messages = {
+  statistics: ['統計', 'Statistics'],
+  statisticsAllProjects: ['所有任務', 'All tasks'],
+  statisticsOverview: ['任務總覽', 'Task overview'],
+  statisticsOpen: ['未完成', 'Open'],
+  statisticsOverdue: ['逾期', 'Overdue'],
+  statisticsRecentCompletions: [
+    '最近 7 天完成的任務',
+    'Tasks completed in the last 7 days',
+  ],
   reloadWeb: ['重新整理', 'Reload'],
   reloadWebAvailable: ['Famo 有新版', 'A new version of Famo is available'],
   reloadWebRequired: ['請重新整理 Famo', 'Reload Famo to continue'],

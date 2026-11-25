@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Trigger } from '@radix-ui/react-dialog'
 import {
   CalendarDays,
+  ChartNoAxesColumnIncreasing,
   CheckCheck,
   ChevronDown,
   ChevronRight,
@@ -29,7 +30,7 @@ import { formatTaskDate } from '@/lib/calendar'
 import { useLanguage } from '@/lib/i18n'
 
 export type MobileList =
-  'active' | 'board' | 'completed' | 'date' | 'recently-deleted'
+  'active' | 'board' | 'completed' | 'date' | 'recently-deleted' | 'statistics'
 
 export function MobileHeading({
   title,
@@ -69,6 +70,11 @@ export function MobileHeading({
     { id: 'date', label: t('today'), Icon: CalendarDays },
     { id: 'active', label: t('tasks'), Icon: Inbox },
     { id: 'completed', label: t('completed'), Icon: CheckCheck },
+    {
+      id: 'statistics',
+      label: t('statistics'),
+      Icon: ChartNoAxesColumnIncreasing,
+    },
     { id: 'recently-deleted', label: t('recentlyDeleted'), Icon: Trash2 },
   ] as const
   function choose(action: () => void) {
