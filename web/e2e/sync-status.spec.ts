@@ -176,7 +176,7 @@ test('places the sync indicator next to the desktop sidebar brand', async ({
   await expect(status).toHaveAttribute('data-sync-status', 'synced')
   const brandBox = (await brand.boundingBox())!
   const statusBox = (await status.boundingBox())!
-  expect(statusBox.x).toBeCloseTo(brandBox.x + brandBox.width, 0)
+  expect(statusBox.x - (brandBox.x + brandBox.width)).toBeCloseTo(4, 0)
   const sidebar = (await page.locator('.sidebar').boundingBox())!
   expect(statusBox.x + statusBox.width).toBeLessThan(sidebar.x + sidebar.width)
   expect(statusBox.y + statusBox.height / 2).toBeCloseTo(

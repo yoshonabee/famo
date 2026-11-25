@@ -1230,6 +1230,9 @@ button:disabled {
 .sidebar-heading > a.brand {
   padding-inline-end: 0;
 }
+.sidebar-heading > .sync-status-indicator {
+  margin-inline-start: 4px;
+}
 .sidebar-heading .sync-status-indicator > button {
   inline-size: 24px;
 }
