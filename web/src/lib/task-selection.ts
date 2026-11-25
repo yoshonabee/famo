@@ -19,12 +19,25 @@ type Gesture = {
   pointer: number
   root: HTMLDivElement
   row: HTMLElement
+  scroll: Element
   start: string
   end: string | null
   startedInEditor: boolean
   touch: boolean
   x: number
   y: number
+}
+
+function scrollContainer(element: HTMLElement) {
+  for (
+    let parent = element.parentElement;
+    parent;
+    parent = parent.parentElement
+  ) {
+    const { overflowY } = getComputedStyle(parent)
+    if (overflowY === 'auto' || overflowY === 'scroll') return parent
+  }
+  return document.scrollingElement ?? document.documentElement
 }
 
 export function useTaskSelection(
@@ -151,16 +164,22 @@ export function useTaskSelection(
     scrollFrame.current = 0
     const active = gesture.current
     if (!active?.end) return
-    const above = active.y - scrollEdge
-    const below = active.y - (window.innerHeight - scrollEdge)
+    const { scroll } = active
+    const documentScroll = scroll === document.scrollingElement
+    const top = documentScroll
+      ? 0
+      : scroll.getBoundingClientRect().top + scroll.clientTop
+    const height = documentScroll ? window.innerHeight : scroll.clientHeight
+    const above = active.y - (top + scrollEdge)
+    const below = active.y - (top + height - scrollEdge)
     const speed =
       Math.max(-scrollEdge, Math.min(above, 0)) +
       Math.min(scrollEdge, Math.max(below, 0))
     if (!speed) return
-    const before = window.scrollY
-    window.scrollBy(0, speed / 3)
+    const before = scroll.scrollTop
+    scroll.scrollBy(0, speed / 3)
     updateDrag(active)
-    if (window.scrollY !== before)
+    if (scroll.scrollTop !== before)
       scrollFrame.current = requestAnimationFrame(scrollWhileDragging)
   }
 
@@ -219,6 +238,7 @@ export function useTaskSelection(
           pointer: event.pointerId,
           root: event.currentTarget,
           row,
+          scroll: scrollContainer(row),
           start: rowID(row),
           end: null,
           startedInEditor,

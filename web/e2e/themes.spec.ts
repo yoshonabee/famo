@@ -70,7 +70,7 @@ test('設定提供 12 款主題，切換立即生效並在重開後保留', asyn
     'background-color',
     'rgb(49, 109, 155)',
   )
-  await page.evaluate(() => window.scrollTo(0, 0))
+  await page.getByRole('main').evaluate((el) => el.scrollTo(0, 0))
   await page.screenshot({
     path: '/private/tmp/famo-themes-light.png',
     fullPage: true,
@@ -90,7 +90,7 @@ test('設定提供 12 款主題，切換立即生效並在重開後保留', asyn
   const iconColor = await page.locator('.brand-mark').evaluate((icon) => {
     return getComputedStyle(icon).backgroundColor
   })
-  await page.evaluate(() => window.scrollTo(0, 0))
+  await page.getByRole('main').evaluate((el) => el.scrollTo(0, 0))
   await page.screenshot({
     path: '/private/tmp/famo-themes-dark.png',
     fullPage: true,

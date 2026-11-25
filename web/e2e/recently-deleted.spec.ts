@@ -12,12 +12,10 @@ test('最近刪除緊接在側欄底部的設定之前', async ({ page }) => {
     settingsBox.y,
   )
 
-  await page.getByRole('button', { name: '收合側邊欄' }).click()
   await recentlyDeleted.click()
   await expect(recentlyDeleted).toHaveAttribute('aria-current', 'page')
   await expect(page.getByRole('heading', { name: '最近刪除' })).toBeVisible()
 
-  await page.getByRole('button', { name: '展開側邊欄' }).click()
   await page.setViewportSize({ width: 390, height: 844 })
   await expect(recentlyDeleted).toBeInViewport()
   await settings.click()

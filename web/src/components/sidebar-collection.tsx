@@ -1,6 +1,6 @@
 import { DragDropProvider } from '@dnd-kit/react'
 import { isSortable, useSortable } from '@dnd-kit/react/sortable'
-import { Folder, GripVertical, Plus } from 'lucide-react'
+import { GripVertical, Plus } from 'lucide-react'
 import { SidebarEditButton } from '@/components/primary-navigation'
 import { ProjectColorDot } from '@/components/project-appearance'
 import { Button } from '@/components/ui/button'
@@ -10,11 +10,9 @@ import { useLanguage } from '@/lib/i18n'
 export function ProjectNavigation({
   projects,
   current,
-  collapsed,
   reordering,
   error,
   onSelect,
-  onExpand,
   onCreate,
   onEdit,
   onReorder,
@@ -22,34 +20,15 @@ export function ProjectNavigation({
 }: {
   projects: Project[]
   current?: string
-  collapsed: boolean
   reordering: boolean
   error?: string
   onSelect: (id: string) => void
-  onExpand: () => void
   onCreate: () => void
   onEdit: (id: string) => void
   onReorder: (ids: string[]) => void
   onRetry: () => void
 }) {
   const { t } = useLanguage()
-  if (collapsed)
-    return (
-      <button
-        type="button"
-        className={
-          current
-            ? 'nav-item collection-expand active'
-            : 'nav-item collection-expand'
-        }
-        onClick={onExpand}
-        aria-label={t('expandProjectNavigation')}
-        title={t('expandProjectNavigation')}
-      >
-        <Folder size={17} />
-      </button>
-    )
-
   return (
     <section className="sidebar-collection" aria-label={t('projectNavigation')}>
       <div className="sidebar-collection-heading">

@@ -20,23 +20,16 @@ test('桌面標題列隨側欄和主題調整，保留上方控制項的操作�
     )
 
   await expect(titlebar).toHaveCSS('height', '0px')
-  await page.getByRole('button', { name: '收合側邊欄' }).click()
-  await expect(sidebar).toHaveCSS('width', '56px')
-  await page.getByRole('button', { name: '展開側邊欄' }).click()
+  await expect(page.locator('.sidebar-heading button')).toHaveCount(0)
   await page.addStyleTag({
-    content:
-      ':root { --window-titlebar-height: 30px; --window-controls-width: 78px; }',
+    content: ':root { --window-titlebar-height: 30px; }',
   })
   await expect(titlebar).toHaveCSS('height', '30px')
   await expect(sidebar).toHaveCSS('padding-top', '50px')
-  await expect(main).toHaveCSS('padding-top', '30px')
+  await expect(main).toHaveCSS('margin-top', '30px')
   expect(await sidebarWidth()).toBe('168px')
   expect(await sidebarStrip()).not.toBe('none')
 
-  await page.getByRole('button', { name: '收合側邊欄' }).click()
-  expect(await sidebarStrip()).not.toBe('none')
-  expect(await sidebarWidth()).toBe('78px')
-  await expect(sidebar).toHaveCSS('width', '78px')
   await expect(sidebar).toHaveCSS('border-right-width', '1px')
   const light = await themeColours()
   await page.getByRole('button', { name: '設定', exact: true }).click()
@@ -50,7 +43,7 @@ test('桌面標題列隨側欄和主題調整，保留上方控制項的操作�
   await expect(page.locator('html')).toHaveCSS('background-color', dark.canvas)
 
   await page.setViewportSize({ width: 620, height: 500 })
-  await expect(main).toHaveCSS('padding-top', '0px')
+  await expect(main).toHaveCSS('margin-top', '0px')
   await expect(sidebar).toHaveCSS('padding-top', '42px')
   await expect(titlebar).toHaveCSS('background-color', dark.sidebar)
 })
@@ -73,7 +66,7 @@ test('側邊欄可拖曳或用鍵盤調整寬度，並保留調整結果', async
   await page.mouse.down()
   await page.mouse.move(x + dx, y)
   await expect(sidebar).toHaveCSS('width', `${newWidth}px`)
-  await expect(main).toHaveCSS('margin-left', `${newWidth}px`)
+  expect((await main.boundingBox())?.x).toBe(newWidth)
   expect(
     await titlebar.evaluate(
       (element) => getComputedStyle(element, '::before').width,
@@ -85,11 +78,8 @@ test('側邊欄可拖曳或用鍵盤調整寬度，並保留調整結果', async
   await expect(sidebar).toHaveCSS('width', `${newWidth}px`)
   await handle.press('ArrowRight')
   await expect(handle).toHaveAttribute('aria-valuenow', String(newWidth + 12))
-  await page.getByRole('button', { name: '收合側邊欄' }).click()
-  await expect(handle).toBeHidden()
-  await page.getByRole('button', { name: '展開側邊欄' }).click()
   await expect(sidebar).toHaveCSS('width', `${newWidth + 12}px`)
   await page.setViewportSize({ width: 620, height: 500 })
   await expect(handle).toBeHidden()
-  await expect(main).toHaveCSS('margin-left', '0px')
+  expect((await main.boundingBox())?.x).toBe(0)
 })

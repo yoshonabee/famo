@@ -13,14 +13,10 @@ async function expectCentered(dialog: Locator) {
   expect(Math.abs(offset.y)).toBeLessThanOrEqual(1)
 }
 
-test('⌘D 收合與展開側邊欄，⌘K 從其他頁面或日期返回今日', async ({ page }) => {
+test('⌘K 從其他頁面或日期返回今日', async ({ page }) => {
   await page.goto('/')
   const today = await page.locator('h1 time').getAttribute('datetime')
 
-  await page.keyboard.press('Meta+d')
-  const expand = page.getByRole('button', { name: '展開側邊欄' })
-  await expect(expand).toHaveAttribute('aria-expanded', 'false')
-  await expect(page.locator('.sidebar')).toHaveCSS('width', '56px')
   await page.getByRole('button', { name: '任務列表', exact: true }).click()
   await expect(
     page.getByRole('heading', { name: '任務', exact: true }),
@@ -32,11 +28,6 @@ test('⌘D 收合與展開側邊欄，⌘K 從其他頁面或日期返回今日'
   await expect(page.locator('h1 time')).not.toHaveAttribute('datetime', today!)
   await page.keyboard.press('Meta+k')
   await expect(page.locator('h1 time')).toHaveAttribute('datetime', today!)
-
-  await page.keyboard.press('Meta+d')
-  await expect(
-    page.getByRole('button', { name: '收合側邊欄' }),
-  ).toHaveAttribute('aria-expanded', 'true')
 })
 
 test('⌘T 浮窗沿用目前日期，儲存失敗可重試且不清除清單輸入', async ({

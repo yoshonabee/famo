@@ -155,3 +155,34 @@ test('keeps green during quick syncs and turns yellow during slow ones', async (
   }
   await expect(status).toHaveAttribute('data-sync-status', 'synced')
 })
+
+test('places the sync indicator next to the desktop sidebar brand', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1100, height: 780 })
+  await page.route('**/api/sync/collections', (route) =>
+    route.fulfill({ json: { version: 0, projects: [], boards: [] } }),
+  )
+  await page.route('**/api/sync/pull?*', (route) =>
+    route.fulfill({ json: { changes: [], cursor: 0, has_more: false } }),
+  )
+  await page.addInitScript(() =>
+    localStorage.setItem('famo.sidebar', JSON.stringify({ width: 144 })),
+  )
+  await page.goto('/')
+  const heading = page.locator('.sidebar-heading')
+  const brand = heading.getByRole('link', { name: 'Famo' })
+  const status = heading.getByRole('button', { name: '同步', exact: true })
+  await expect(status).toHaveAttribute('data-sync-status', 'synced')
+  const brandBox = (await brand.boundingBox())!
+  const statusBox = (await status.boundingBox())!
+  expect(statusBox.x).toBeCloseTo(brandBox.x + brandBox.width, 0)
+  const sidebar = (await page.locator('.sidebar').boundingBox())!
+  expect(statusBox.x + statusBox.width).toBeLessThan(sidebar.x + sidebar.width)
+  expect(statusBox.y + statusBox.height / 2).toBeCloseTo(
+    brandBox.y + brandBox.height / 2,
+    0,
+  )
+  await status.hover()
+  await expect(heading.getByRole('tooltip')).toContainText('已同步')
+})

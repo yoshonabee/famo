@@ -103,7 +103,6 @@ func Run(cfg Config) error {
 	addShortcut(editMenu, "搜尋任務…", "Search Tasks…", "f", "search")
 	addShortcut(editMenu, "搜尋所有任務…", "Search All Tasks…", "Shift+f", "global-search")
 	viewMenu := language.addSubmenu(menu, "顯示", "View")
-	addShortcut(viewMenu, "展開或收合側邊欄", "Toggle Sidebar", "d", "sidebar")
 	addShortcut(viewMenu, "返回今日", "Go to Today", "k", "today")
 	menu.AddRole(application.WindowMenu)
 	app.Menu.Set(menu)
@@ -113,7 +112,7 @@ func Run(cfg Config) error {
 		BackgroundColour: application.NewRGB(248, 247, 244),
 		Mac:              application.MacWindow{TitleBar: application.MacTitleBarHidden},
 		// Wails injects CSS as a JavaScript string literal on macOS.
-		CSS: ":root { --window-titlebar-height: 30px; --window-controls-width: 78px; }",
+		CSS: ":root { --window-titlebar-height: 30px; }",
 	})
 	if backend.stopSync != nil {
 		app.Event.On("famo:sync-activity", func(*application.CustomEvent) { backend.syncActivity.Interacted() })
