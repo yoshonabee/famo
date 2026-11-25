@@ -8,6 +8,7 @@ export default defineConfig({
   use: {
     ...devices['Pixel 7'],
     baseURL: address,
+    locale: 'zh-TW',
     trace: 'retain-on-failure',
   },
   webServer: {

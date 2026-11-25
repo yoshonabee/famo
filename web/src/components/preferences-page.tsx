@@ -10,7 +10,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { isDesktop } from '@/lib/desktop'
 import { isCloudWeb } from '@/lib/environment'
 import { type ThemeController } from '@/lib/theme'
-import { languages, useLanguage, type Locale } from '@/lib/i18n'
+import { languages, useLanguage, type LanguagePreference } from '@/lib/i18n'
 import { footerNavigation, type FooterNavItem } from '@/lib/sidebar-preferences'
 
 type Section = 'general' | 'appearance' | 'agent'
@@ -30,7 +30,7 @@ export function PreferencesPage({
   onShowTodayChange: (show: boolean) => void
   onFooterChange: (id: FooterNavItem, move: boolean) => void
 }) {
-  const { t, locale, setLocale, storageFailed } = useLanguage()
+  const { t, preference, setPreference, storageFailed } = useLanguage()
   const [activeSection, setActiveSection] = useState<Section>('general')
   const heading = useRef<HTMLHeadingElement>(null)
   useEffect(() => {
@@ -49,9 +49,12 @@ export function PreferencesPage({
               <label className="field">
                 <span>{t('displayLanguage')}</span>
                 <select
-                  value={locale}
-                  onChange={(event) => setLocale(event.target.value as Locale)}
+                  value={preference}
+                  onChange={(event) =>
+                    setPreference(event.target.value as LanguagePreference)
+                  }
                 >
+                  <option value="system">{t('followSystem')}</option>
                   {languages.map(({ code, label }) => (
                     <option key={code} lang={code} value={code}>
                       {label}

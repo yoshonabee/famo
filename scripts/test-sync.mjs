@@ -260,6 +260,7 @@ try {
 
   browser = await chromium.launch()
   const page = await browser.newPage({
+    locale: 'zh-TW',
     viewport: { width: 402, height: 874 },
     deviceScaleFactor: 2,
     isMobile: true,

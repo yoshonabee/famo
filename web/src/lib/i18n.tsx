@@ -15,16 +15,31 @@ export const languages = [
   { code: 'en', label: 'English' },
 ] as const
 export type Locale = (typeof languages)[number]['code']
+export type LanguagePreference = 'system' | Locale
 
 const defaultLocale: Locale = 'zh-TW'
 const storageKey = 'famo.language'
 
-function readLocale(): Locale {
+function readLanguagePreference(): LanguagePreference {
   try {
-    return localStorage.getItem(storageKey) === 'en' ? 'en' : defaultLocale
+    const preference = localStorage.getItem(storageKey)
+    if (preference === 'en' || preference === 'zh-TW') return preference
   } catch {
-    return defaultLocale
+    // Use the system preference when storage is unavailable.
   }
+  return 'system'
+}
+
+function readSystemLocale(): Locale {
+  const preferences = navigator.languages.length
+    ? navigator.languages
+    : [navigator.language]
+  for (const preference of preferences) {
+    const [language] = preference.toLowerCase().split('-')
+    if (language === 'zh') return 'zh-TW'
+    if (language === 'en') return 'en'
+  }
+  return defaultLocale
 }
 
 type MessageKey = keyof typeof messages
@@ -56,9 +71,10 @@ export class LocalizedError extends Error {
 
 type Language = {
   locale: Locale
+  preference: LanguagePreference
   t: Translator
   errorText: (error?: Error | string | null) => string
-  setLocale: (locale: Locale) => void
+  setPreference: (preference: LanguagePreference) => void
   storageFailed: boolean
 }
 const LanguageContext = createContext<Language | null>(null)
@@ -70,8 +86,10 @@ export function LanguageProvider({
   panel: boolean
   children: ReactNode
 }) {
-  const [locale, setCurrentLocale] = useState(readLocale)
+  const [preference, setCurrentPreference] = useState(readLanguagePreference)
+  const [systemLocale, setSystemLocale] = useState(readSystemLocale)
   const [storageFailed, setStorageFailed] = useState(false)
+  const locale = preference === 'system' ? systemLocale : preference
   const t = createTranslator(locale)
 
   useLayoutEffect(() => {
@@ -88,16 +106,23 @@ export function LanguageProvider({
         event.storageArea === localStorage &&
         (event.key === storageKey || event.key === null)
       ) {
-        setCurrentLocale(readLocale())
+        setCurrentPreference(readLanguagePreference())
         setStorageFailed(false)
       }
     }
+    function syncSystemLanguage() {
+      setSystemLocale(readSystemLocale())
+    }
     window.addEventListener('storage', syncLanguage)
-    return () => window.removeEventListener('storage', syncLanguage)
+    window.addEventListener('languagechange', syncSystemLanguage)
+    return () => {
+      window.removeEventListener('storage', syncLanguage)
+      window.removeEventListener('languagechange', syncSystemLanguage)
+    }
   }, [])
 
-  function setLocale(next: Locale) {
-    setCurrentLocale(next)
+  function setPreference(next: LanguagePreference) {
+    setCurrentPreference(next)
     try {
       localStorage.setItem(storageKey, next)
       setStorageFailed(false)
@@ -110,6 +135,7 @@ export function LanguageProvider({
     <LanguageContext.Provider
       value={{
         locale,
+        preference,
         t,
         errorText: (error) =>
           error instanceof LocalizedError
@@ -118,7 +144,7 @@ export function LanguageProvider({
                 locale,
                 typeof error === 'string' ? error : (error?.message ?? ''),
               ),
-        setLocale,
+        setPreference,
         storageFailed,
       }}
     >
