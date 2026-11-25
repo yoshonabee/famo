@@ -175,7 +175,7 @@ test('中文選字與空白 Enter 不送出；失敗保留原列，手機可重�
     ),
   ).toBe(true)
   await page.screenshot({
-    path: '/private/tmp/famo-quick-capture-mobile.png',
+    path: test.info().outputPath('famo-quick-capture-mobile.png'),
     fullPage: true,
   })
 })

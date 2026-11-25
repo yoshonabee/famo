@@ -218,6 +218,8 @@ npm run format:check
 
 瀏覽器驗收會啟動獨立的 `127.0.0.1:8788` 伺服器，使用暫存目錄中的 SQLite，不接觸個人資料庫。測試涵蓋資料升級、URL 連結、任務原子寫入、今日新增與完成紀錄、跨日保留脈絡、拖曳排序、直接編輯、版本衝突草稿，以及手機操作。
 
+GitHub Actions 會在開啟或更新 PR，以及推送至 `main` 時執行 CI。CI 使用 Linux runner 執行 Go 與 Worker 測試，以及本機版和同步版的 Chromium 驗收與[同步整合測試](docs/sync.md#本機驗證)。
+
 ## Agent API
 
 所有路徑同時支援 `/api` 前綴。僅供本機單一使用者使用；預設綁定 loopback，驗證 Host 與瀏覽器 Origin。寫入只接受 `application/json`，單次請求最多 1 MiB。

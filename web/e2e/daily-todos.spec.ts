@@ -114,7 +114,7 @@ test('先前未完成移到今日會保留連結與備註', async ({ page, reque
   expect(saved.completed_at).toBeTruthy()
   expect(saved.description).toBe('測試通過，接著準備上線')
   await page.screenshot({
-    path: '/private/tmp/famo-daily-todos-desktop.png',
+    path: test.info().outputPath('famo-daily-todos-desktop.png'),
     fullPage: true,
   })
   await page.setViewportSize({ width: 390, height: 844 })
@@ -124,7 +124,7 @@ test('先前未完成移到今日會保留連結與備註', async ({ page, reque
     ),
   ).toBe(true)
   await page.screenshot({
-    path: '/private/tmp/famo-daily-todos-mobile.png',
+    path: test.info().outputPath('famo-daily-todos-mobile.png'),
     fullPage: true,
   })
 })

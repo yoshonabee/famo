@@ -99,7 +99,7 @@ test('任務列表支援拖曳、鍵盤排序與失敗回復', async ({ page, re
   await expectTitles(['拖曳測試 A', '拖曳測試 C', '拖曳測試 B', '拖曳測試 D'])
   await page.getByRole('textbox', { name: '搜尋任務' }).fill('')
   await page.screenshot({
-    path: '/private/tmp/famo-compact-desktop.png',
+    path: test.info().outputPath('famo-compact-desktop.png'),
     fullPage: true,
   })
 })
