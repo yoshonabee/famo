@@ -39,7 +39,9 @@ test('dedicated panel entry stays compact after opening settings and reloading',
   await expect(
     page.getByRole('button', { name: 'Open Famo', exact: true }),
   ).toBeVisible()
-  await page.screenshot({ path: '/private/tmp/famo-menu-bar-entry.png' })
+  await page.screenshot({
+    path: test.info().outputPath('famo-menu-bar-entry.png'),
+  })
   await main.close()
 })
 
@@ -80,7 +82,9 @@ test('panel counts scheduled local tasks, reflects API edits and rolls over at m
     'border-radius',
     '3px',
   )
-  await page.screenshot({ path: '/private/tmp/famo-menu-bar-light.png' })
+  await page.screenshot({
+    path: test.info().outputPath('famo-menu-bar-light.png'),
+  })
   await request.post(`/api/tasks/${first.id}/actions`, {
     data: { op: 'complete_task', version: first.version },
   })
@@ -163,10 +167,14 @@ test('panel switches today’s tasks and progress by Board and remembers the sel
   await expect(list).toHaveText('整理工作')
   await list.getByRole('checkbox').click()
   await expect(page.getByRole('status')).toContainText('已完成 1 / 1 件')
-  await page.screenshot({ path: '/private/tmp/famo-menu-bar-board.png' })
+  await page.screenshot({
+    path: test.info().outputPath('famo-menu-bar-board.png'),
+  })
   await picker.click()
   await expect(choice('工作')).toHaveAttribute('aria-checked', 'true')
-  await page.screenshot({ path: '/private/tmp/famo-menu-bar-board-open.png' })
+  await page.screenshot({
+    path: test.info().outputPath('famo-menu-bar-board-open.png'),
+  })
   await page.locator('time').click()
   await expect(menu).toBeHidden()
 
@@ -363,7 +371,9 @@ test('empty panel follows theme changes and Open Famo returns to the main app', 
   await expect(
     page.getByRole('button', { name: 'Open Famo', exact: true }),
   ).toHaveCSS('background-color', 'rgb(145, 185, 242)')
-  await page.screenshot({ path: '/private/tmp/famo-menu-bar-dark.png' })
+  await page.screenshot({
+    path: test.info().outputPath('famo-menu-bar-dark.png'),
+  })
   await other.close()
   await page.getByRole('button', { name: 'Open Famo', exact: true }).click()
   await expect(page).toHaveURL('/?board=')

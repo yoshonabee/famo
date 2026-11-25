@@ -75,7 +75,7 @@ test('switches language immediately across the main and menu bar windows and sav
     page.getByRole('radio', { name: 'Moss', exact: true }),
   ).toBeChecked()
   await page.screenshot({
-    path: '/private/tmp/famo-language-settings-en.png',
+    path: test.info().outputPath('famo-language-settings-en.png'),
     fullPage: true,
   })
 

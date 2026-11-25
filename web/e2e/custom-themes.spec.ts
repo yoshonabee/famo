@@ -132,7 +132,9 @@ test('調色盤預覽、新增、重開、編輯及刪除自訂主題', async ({
   await expect(editor).toBeVisible()
   await expect(page.getByRole('radio')).toHaveCount(13)
   await editor.getByLabel('頁面背景色碼').fill('#182822')
-  await editor.screenshot({ path: '/private/tmp/famo-theme-palette.png' })
+  await editor.screenshot({
+    path: test.info().outputPath('famo-theme-palette.png'),
+  })
   await editor.getByRole('button', { name: '儲存主題', exact: true }).click()
   await expect(
     page.getByRole('radio', { name: '我的薄荷', exact: true }),
@@ -347,7 +349,7 @@ test('手機調色盤可操作，取消不套用配色且畫面不溢出', async
   }
   await page.setViewportSize({ width: 390, height: 844 })
   await editor.screenshot({
-    path: '/private/tmp/famo-theme-palette-mobile.png',
+    path: test.info().outputPath('famo-theme-palette-mobile.png'),
   })
   await editor.getByRole('button', { name: '取消', exact: true }).click()
   await expect(editor).toHaveCount(0)

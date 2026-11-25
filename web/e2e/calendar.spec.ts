@@ -130,7 +130,7 @@ test('前後一天、日曆選日、當地今日與手機版', async ({ page }) 
   await page.clock.setSystemTime(new Date('2026-11-03T16:30:00Z'))
   await page.getByRole('button', { name: '今日', exact: true }).click()
   await page.screenshot({
-    path: '/private/tmp/famo-calendar-desktop.png',
+    path: test.info().outputPath('famo-calendar-desktop.png'),
     fullPage: true,
   })
   await page.setViewportSize({ width: 390, height: 844 })
@@ -148,7 +148,7 @@ test('前後一天、日曆選日、當地今日與手機版', async ({ page }) 
     '2026-11-03',
   )
   await page.screenshot({
-    path: '/private/tmp/famo-calendar-mobile.png',
+    path: test.info().outputPath('famo-calendar-mobile.png'),
     fullPage: true,
   })
 })
@@ -522,7 +522,7 @@ test('日期標題與今日分段選單：月曆選日、鍵盤、關閉及手�
   )
   await trigger.click()
   await page.screenshot({
-    path: '/private/tmp/famo-date-picker-desktop.png',
+    path: test.info().outputPath('famo-date-picker-desktop.png'),
     fullPage: true,
   })
   await page.keyboard.press('Escape')
@@ -533,7 +533,7 @@ test('日期標題與今日分段選單：月曆選日、鍵盤、關閉及手�
   expect(box.x).toBeGreaterThanOrEqual(0)
   expect(box.x + box.width).toBeLessThanOrEqual(390)
   await page.screenshot({
-    path: '/private/tmp/famo-date-picker-mobile.png',
+    path: test.info().outputPath('famo-date-picker-mobile.png'),
     fullPage: true,
   })
   await calendar
@@ -707,7 +707,9 @@ test('任務列表用相對日期開啟月曆，可跨年切換月份並重新�
   await page.getByRole('button', { name: '任務列表', exact: true }).click()
   await page.getByLabel('搜尋任務').fill('跨年計畫')
   await expect(overdueDate).toHaveCSS('color', 'rgb(255, 156, 174)')
-  await page.screenshot({ path: '/private/tmp/famo-overdue-midnight.png' })
+  await page.screenshot({
+    path: test.info().outputPath('famo-overdue-midnight.png'),
+  })
   await trigger.click()
   const calendar = page.getByRole('dialog', { name: '選擇日期' })
   await calendar.getByRole('button', { name: '下一個月' }).click()
@@ -719,7 +721,7 @@ test('任務列表用相對日期開啟月曆，可跨年切換月份並重新�
     calendar.getByRole('button', { name: '2025 年 12 月' }),
   ).toBeVisible()
   await page.screenshot({
-    path: '/private/tmp/famo-task-list-relative-dates.png',
+    path: test.info().outputPath('famo-task-list-relative-dates.png'),
   })
   await calendar.getByRole('button', { name: '2025-12-28' }).click()
   await expect(trigger).toHaveText('2025-12-28')

@@ -72,7 +72,7 @@ test('設定提供 12 款主題，切換立即生效並在重開後保留', asyn
   )
   await page.evaluate(() => window.scrollTo(0, 0))
   await page.screenshot({
-    path: '/private/tmp/famo-themes-light.png',
+    path: test.info().outputPath('famo-themes-light.png'),
     fullPage: true,
   })
   await page.reload()
@@ -92,7 +92,7 @@ test('設定提供 12 款主題，切換立即生效並在重開後保留', asyn
   })
   await page.evaluate(() => window.scrollTo(0, 0))
   await page.screenshot({
-    path: '/private/tmp/famo-themes-dark.png',
+    path: test.info().outputPath('famo-themes-dark.png'),
     fullPage: true,
   })
   expect((await request.get('/api/settings')).status()).toBe(404)
@@ -218,7 +218,7 @@ test('手機可選主題並支援鍵盤操作，頁面無水平溢出', async ({
   await page.getByRole('radio', { name: '暮紫', exact: true }).check()
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'plum')
   await page.screenshot({
-    path: '/private/tmp/famo-themes-mobile.png',
+    path: test.info().outputPath('famo-themes-mobile.png'),
     fullPage: true,
   })
   for (const width of [390, 320]) {
