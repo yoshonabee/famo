@@ -3,7 +3,11 @@ import { expect, test } from '@playwright/test'
 test('最近刪除緊接在側欄底部的設定之前', async ({ page }) => {
   await page.goto('/')
   const footer = page.locator('.sidebar > .sidebar-footer:last-child')
-  await expect(footer.getByRole('button')).toHaveText(['最近刪除', '設定'])
+  await expect(footer.getByRole('button')).toHaveText([
+    '統計',
+    '最近刪除',
+    '設定',
+  ])
   const recentlyDeleted = footer.getByRole('button', { name: '最近刪除' })
   const settings = footer.getByRole('button', { name: '設定' })
   const recentlyDeletedBox = (await recentlyDeleted.boundingBox())!

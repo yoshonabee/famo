@@ -81,7 +81,11 @@ test('可分別將任務及已完成移到側欄底部，重新開啟後沿用',
   await expect(
     navigation.getByRole('button', { name: '已完成', exact: true }),
   ).toBeVisible()
-  await expect(footer.getByRole('button')).toHaveText(['最近刪除', '設定'])
+  await expect(footer.getByRole('button')).toHaveText([
+    '統計',
+    '最近刪除',
+    '設定',
+  ])
 
   await settings.click()
   await general.click()
@@ -90,6 +94,7 @@ test('可分別將任務及已完成移到側欄底部，重新開啟後沿用',
   await moveCompleted.check()
   await expect(footer.getByRole('button')).toHaveText([
     /^已完成/,
+    '統計',
     '最近刪除',
     '設定',
   ])
@@ -97,6 +102,7 @@ test('可分別將任務及已完成移到側欄底部，重新開啟後沿用',
   await expect(footer.getByRole('button')).toHaveText([
     /^任務/,
     /^已完成/,
+    '統計',
     '最近刪除',
     '設定',
   ])

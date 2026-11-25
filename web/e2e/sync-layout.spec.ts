@@ -110,6 +110,22 @@ test('switches Boards, browses Projects and searches without exposing mobile URL
   expect(sizes.contentWidth).toBe(sizes.viewportWidth)
 })
 
+test('opens statistics from the mobile Board picker', async ({ page }) => {
+  await page.route('**/api/sync/collections', (route) =>
+    route.fulfill({ json: collections }),
+  )
+  await page.clock.setFixedTime(new Date('2024-06-07T12:00:00'))
+  await page.goto('/')
+  await page.getByRole('button', { name: '切換 Board：Home' }).tap()
+  await page.getByRole('button', { name: '統計', exact: true }).tap()
+  await expect(
+    page.getByRole('button', { name: '切換 Board：統計' }),
+  ).toBeVisible()
+  await expect(
+    page.getByRole('region', { name: '任務總覽' }).locator('dd'),
+  ).toHaveText(['1', '0', '1'])
+})
+
 test('retains a Board draft while the user reviews updated settings', async ({
   page,
 }) => {
