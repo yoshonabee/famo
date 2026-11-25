@@ -18,14 +18,12 @@ export type PrimaryNavItem = {
 
 export function PrimaryNavigation({
   items,
-  collapsed,
   error,
   onReorder,
   onCreate,
   onRetry,
 }: {
   items: PrimaryNavItem[]
-  collapsed: boolean
   error?: string
   onReorder: (ids: string[]) => void
   onCreate: () => void
@@ -49,12 +47,7 @@ export function PrimaryNavigation({
       >
         <ul className="sidebar-nav-list">
           {items.map((item, index) => (
-            <NavigationRow
-              key={item.id}
-              item={item}
-              index={index}
-              collapsed={collapsed}
-            />
+            <NavigationRow key={item.id} item={item} index={index} />
           ))}
         </ul>
       </DragDropProvider>
@@ -68,7 +61,7 @@ export function PrimaryNavigation({
         <Plus size={16} aria-hidden="true" />
         <span className="nav-label">{t('addBoard')}</span>
       </button>
-      {error && !collapsed && (
+      {error && (
         <div className="sidebar-collection-error" role="alert">
           {error}
           <Button variant="outline" size="sm" onClick={onRetry}>
@@ -83,36 +76,31 @@ export function PrimaryNavigation({
 function NavigationRow({
   item,
   index,
-  collapsed,
 }: {
   item: PrimaryNavItem
   index: number
-  collapsed: boolean
 }) {
   const { t } = useLanguage()
   const { ref, handleRef, isDragging } = useSortable({
     id: item.id,
     index,
-    disabled: collapsed,
   })
   return (
     <li
-      ref={collapsed ? undefined : ref}
+      ref={ref}
       className={`sidebar-nav-row ${item.current ? 'is-current' : ''} ${isDragging ? 'sidebar-nav-dragging' : ''}`}
     >
-      {!collapsed && (
-        <button
-          ref={handleRef}
-          type="button"
-          className="sidebar-row-action sidebar-sort-handle"
-          aria-label={t('reorderNavigation', item.label)}
-          title={t('dragToReorder')}
-        >
-          <GripVertical size={13} aria-hidden="true" />
-        </button>
-      )}
+      <button
+        ref={handleRef}
+        type="button"
+        className="sidebar-row-action sidebar-sort-handle"
+        aria-label={t('reorderNavigation', item.label)}
+        title={t('dragToReorder')}
+      >
+        <GripVertical size={13} aria-hidden="true" />
+      </button>
       <NavigationButton item={item} />
-      {item.onEdit && !collapsed && (
+      {item.onEdit && (
         <SidebarEditButton
           name={item.label}
           kind="Board"

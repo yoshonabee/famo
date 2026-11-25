@@ -126,7 +126,9 @@ test('拖曳到畫面底部時會捲動並延伸任務選取', async ({ page, re
   await page.mouse.down()
   await page.mouse.move(x, 410, { steps: 10 })
   await expect
-    .poll(() => page.evaluate(() => window.scrollY))
+    .poll(() =>
+      page.locator('.app-shell > main').evaluate((el) => el.scrollTop),
+    )
     .toBeGreaterThan(100)
   await expect
     .poll(() => page.locator('[data-batch-selected]').count())

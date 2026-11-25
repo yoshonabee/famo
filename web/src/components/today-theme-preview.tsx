@@ -3,7 +3,6 @@ import {
   CheckCheck,
   GripVertical,
   Inbox,
-  PanelLeftClose,
   PanelRightOpen,
   Settings,
 } from 'lucide-react'
@@ -31,7 +30,6 @@ export function TodayThemePreview({ theme }: { theme: ThemeDraft }) {
               <span className="brand-mark" />
               famo
             </span>
-            <PanelLeftClose className="palette-preview-sidebar-toggle" />
           </div>
           <div className="palette-preview-nav">
             <span className="nav-item active">

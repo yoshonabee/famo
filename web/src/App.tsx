@@ -1,5 +1,6 @@
 import { useSyncRefetchInterval } from '@/lib/cloud-events'
 import {
+  useCallback,
   useEffect,
   useEffectEvent,
   useRef,
@@ -20,8 +21,6 @@ import {
   GripVertical,
   Inbox,
   LoaderCircle,
-  PanelLeftClose,
-  PanelLeftOpen,
   Plus,
   PanelRightOpen,
   ChevronRight,
@@ -112,7 +111,6 @@ type Act = (
   failed?: (message: string) => void,
 ) => void
 const shortcuts = new Map([
-  ['d', 'sidebar'],
   ['t', 'capture'],
   ['k', 'today'],
   ['f', 'search'],
@@ -169,6 +167,11 @@ function App() {
   }, [])
   const theme = useTheme(narrowCloud)
   const mobileList = useRef<MobileList>('board')
+  const mainContent = useRef<HTMLElement>(null)
+  const resetContentScroll = useCallback(() => {
+    if (window.matchMedia(mobileCloudQuery).matches) window.scrollTo(0, 0)
+    else mainContent.current?.scrollTo(0, 0)
+  }, [])
   const [dragging, setDragging] = useState(false)
   const [ordering, setOrdering] = useState(false)
   const refetchInterval = useSyncRefetchInterval()
@@ -270,8 +273,6 @@ function App() {
   const isToday = view === 'date' && date === today
   const projectFiltered = isToday && todayFilter.hidden.length > 0
   const [search, setSearch] = useState('')
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
-  const compactSidebar = sidebarCollapsed && !narrowCloud
   const [palette, setPalette] = useState<
     'capture' | 'search' | 'global-search' | null
   >(null)
@@ -331,7 +332,7 @@ function App() {
     setSelected(null)
     setPalette(null)
     setSearch('')
-    window.scrollTo(0, 0)
+    resetContentScroll()
   }
   function goToMobileList(next: MobileList) {
     mobileList.current = next
@@ -339,14 +340,14 @@ function App() {
     setSelected(null)
     setPalette(null)
     setSearch('')
-    window.scrollTo(0, 0)
+    resetContentScroll()
   }
   function goToMobileProjects() {
     setView('projects')
     setSelected(null)
     setPalette(null)
     setSearch('')
-    window.scrollTo(0, 0)
+    resetContentScroll()
   }
   function goToProject(id: string) {
     setProjectId(id)
@@ -354,7 +355,7 @@ function App() {
     setSelected(null)
     setPalette(null)
     setSearch('')
-    window.scrollTo(0, 0)
+    resetContentScroll()
   }
   function goToToday(fromMenuBar = false) {
     if (narrowCloud) mobileList.current = 'date'
@@ -368,7 +369,7 @@ function App() {
     } else setView('date')
     setSelected(null)
     setPalette(null)
-    window.scrollTo(0, 0)
+    resetContentScroll()
   }
   const openBoard = useEffectEvent((id: unknown) => {
     if (typeof id !== 'string') return
@@ -383,9 +384,6 @@ function App() {
   const runShortcut = useEffectEvent((action: unknown) => {
     if (projectEditor !== null || boardEditor !== null) return
     switch (action) {
-      case 'sidebar':
-        if (!narrowCloud) setSidebarCollapsed((collapsed) => !collapsed)
-        break
       case 'capture':
         openCapture()
         break
@@ -417,11 +415,11 @@ function App() {
       setSelected(null)
       setPalette(null)
       setView('preferences')
-      window.scrollTo(0, 0)
+      resetContentScroll()
     }
     window.addEventListener(openSettingsEvent, openSettings)
     return () => window.removeEventListener(openSettingsEvent, openSettings)
-  }, [])
+  }, [resetContentScroll])
   useEffect(() => {
     function onShortcut(event: Event) {
       runShortcut((event as CustomEvent<unknown>).detail)
@@ -646,10 +644,6 @@ function App() {
       ? boardsByNavId.get(`board:${boardEditor.id}`)
       : undefined
   const searchField = <TaskSearch value={search} onChange={setSearch} />
-  const SidebarIcon = sidebarCollapsed ? PanelLeftOpen : PanelLeftClose
-  const sidebarAction = sidebarCollapsed
-    ? t('expandSidebar')
-    : t('collapseSidebar')
   function selectNavigation(
     next:
       | 'active'
@@ -659,6 +653,7 @@ function App() {
       | 'preferences',
   ) {
     setView(next)
+    resetContentScroll()
   }
   const navItems = new Map<string, PrimaryNavItem>([
     [
@@ -725,31 +720,30 @@ function App() {
   }
   const sidebarNavigation = (
     <>
-      <PrimaryNavigation
-        items={visibleNavItems}
-        collapsed={compactSidebar}
-        error={errorText(boards.error)}
-        onReorder={reorderNavigation}
-        onCreate={() => setBoardEditor('new')}
-        onRetry={() => void boards.refetch()}
-      />
-      <ProjectNavigation
-        projects={
-          projectOrder.isPending
-            ? orderSubset(projectList, projectOrder.variables)
-            : projectList
-        }
-        current={currentProjectId}
-        collapsed={compactSidebar}
-        reordering={projectOrder.isPending}
-        error={errorText(projects.error)}
-        onSelect={goToProject}
-        onExpand={() => setSidebarCollapsed(false)}
-        onCreate={() => setProjectEditor('new')}
-        onEdit={(id) => setProjectEditor(projectsById.get(id) ?? null)}
-        onReorder={(ids) => projectOrder.mutate(ids)}
-        onRetry={() => void projects.refetch()}
-      />
+      <div className="sidebar-scroll">
+        <PrimaryNavigation
+          items={visibleNavItems}
+          error={errorText(boards.error)}
+          onReorder={reorderNavigation}
+          onCreate={() => setBoardEditor('new')}
+          onRetry={() => void boards.refetch()}
+        />
+        <ProjectNavigation
+          projects={
+            projectOrder.isPending
+              ? orderSubset(projectList, projectOrder.variables)
+              : projectList
+          }
+          current={currentProjectId}
+          reordering={projectOrder.isPending}
+          error={errorText(projects.error)}
+          onSelect={goToProject}
+          onCreate={() => setProjectEditor('new')}
+          onEdit={(id) => setProjectEditor(projectsById.get(id) ?? null)}
+          onReorder={(ids) => projectOrder.mutate(ids)}
+          onRetry={() => void projects.refetch()}
+        />
+      </div>
       <SidebarResizeHandle
         width={sidebarWidth}
         onResize={setResizingWidth}
@@ -797,13 +791,11 @@ function App() {
   )
   return (
     <div
-      className={compactSidebar ? 'app-shell sidebar-collapsed' : 'app-shell'}
+      className="app-shell"
       data-mobile-workspace={narrowCloud || undefined}
       data-has-batch-selection={chosenTasks.length > 0 || undefined}
       data-resizing-sidebar={resizingWidth !== null || undefined}
-      style={
-        { '--expanded-sidebar-width': `${sidebarWidth}px` } as CSSProperties
-      }
+      style={{ '--sidebar-width': `${sidebarWidth}px` } as CSSProperties}
     >
       <div className="window-titlebar" aria-hidden="true" />
       {!narrowCloud && (
@@ -813,26 +805,15 @@ function App() {
               <span className="brand-mark" aria-hidden="true" />
               <span className="brand-name">famo</span>
             </a>
-            <Button
-              className="sidebar-toggle"
-              variant="ghost"
-              size="icon"
-              aria-label={sidebarAction}
-              aria-expanded={!sidebarCollapsed}
-              aria-keyshortcuts="Meta+D Control+D"
-              title={`${sidebarAction} (⌘D)`}
-              onClick={() => setSidebarCollapsed((collapsed) => !collapsed)}
-            >
-              <SidebarIcon />
-            </Button>
-            <div className="app-sync-status">
-              <SyncStatusIndicator />
-            </div>
+            <SyncStatusIndicator />
           </div>
           {sidebarNavigation}
         </aside>
       )}
-      <main onClick={narrowCloud ? undefined : selection.onBackgroundClick}>
+      <main
+        ref={mainContent}
+        onClick={narrowCloud ? undefined : selection.onBackgroundClick}
+      >
         {narrowCloud && (
           <MobileHeading
             title={
